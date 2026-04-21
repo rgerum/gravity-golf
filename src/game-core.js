@@ -22,6 +22,7 @@ const DEFAULT_PLANET_LANDING_SPEED = 3.2;
 const LAUNCH_BASE_SPEED = 1.9;
 const LAUNCH_DRAG_SPEED = 3.4;
 const LAUNCH_MAX_SPEED = 11.8;
+const DEFAULT_LAUNCH_PRESET = { angleDeg: 0, power: 1.8 };
 
 export const LEVELS = [
   {
@@ -100,7 +101,10 @@ export const LEVELS = [
     name: 'Orbital Relay',
     summary: 'Skim into the relay world to wake the hole, then fire the finishing burn.',
     requiredLandings: 1,
-    launchPreset: { angleDeg: 34.4, power: 1.76 },
+    launchPresets: [
+      { angleDeg: 94.5, power: 0.64 },
+      { angleDeg: -28.2, power: 2.22 },
+    ],
     start: [-6.8, -2.15],
     goal: [6.85, 2.05],
     planets: [
@@ -126,7 +130,10 @@ export const LEVELS = [
     name: 'Periapsis Hop',
     summary: 'Touch down on the inner moon to wake the hole, then ride the last arc.',
     requiredLandings: 1,
-    launchPreset: { angleDeg: 17.8, power: 1.84 },
+    launchPresets: [
+      { angleDeg: -78.4, power: 1.26 },
+      { angleDeg: -66.4, power: 2.05 },
+    ],
     start: [-6.95, 2.45],
     goal: [6.95, -2.05],
     planets: [
@@ -191,10 +198,18 @@ export function normalize(vector) {
 
 export function createLevelRuntime(index) {
   const source = LEVELS[index];
+  const launchPresets = (source.launchPresets?.length ? source.launchPresets : [source.launchPreset ?? DEFAULT_LAUNCH_PRESET])
+    .map((preset) => ({
+      angleDeg: preset.angleDeg,
+      power: preset.power,
+    }));
+
   return {
     ...source,
     start: vec(source.start[0], source.start[1]),
     goal: vec(source.goal[0], source.goal[1]),
+    launchPreset: { ...launchPresets[0] },
+    launchPresets,
     goalRadius: source.goalRadius ?? COURSE.goalRadius,
     goalPullRadius: source.goalPullRadius ?? COURSE.goalPullRadius,
     goalStrength: source.goalStrength ?? COURSE.goalStrength,
@@ -210,6 +225,7 @@ export function createBallState(level) {
     position: cloneVec(level.start),
     velocity: vec(0, 0),
     landingCount: 0,
+    launchGracePlanetIndex: null,
   };
 }
 
@@ -234,6 +250,64 @@ function landBallOnPlanet(ball, planet) {
   ball.velocity.x = 0;
   ball.velocity.y = 0;
   ball.landingCount = (ball.landingCount ?? 0) + 1;
+  ball.launchGracePlanetIndex = null;
+}
+
+function findContainingLandingPlanetIndex(level, position) {
+  for (let index = 0; index < level.planets.length; index += 1) {
+    const planet = level.planets[index];
+    if (!planet.landable) {
+      continue;
+    }
+
+    const landingRadius = planet.landingRadius ?? planet.radius + COURSE.ballRadius + PLANET_LANDING_PADDING;
+    if (distanceBetween(position, planet.position) <= landingRadius) {
+      return index;
+    }
+  }
+
+  return null;
+}
+
+function resolvePlanetContact(level, ball) {
+  for (let index = 0; index < level.planets.length; index += 1) {
+    const planet = level.planets[index];
+    const toPlanet = vec(
+      planet.position.x - ball.position.x,
+      planet.position.y - ball.position.y,
+    );
+    const distance = Math.max(length(toPlanet), 0.001);
+    const touchRadius = planet.radius + COURSE.ballRadius * PLANET_COLLISION_PADDING;
+    const landingRadius = planet.landingRadius ?? planet.radius + COURSE.ballRadius + PLANET_LANDING_PADDING;
+
+    if (
+      ball.launchGracePlanetIndex === index &&
+      distance > landingRadius + PLANET_LANDING_PADDING
+    ) {
+      ball.launchGracePlanetIndex = null;
+    }
+
+    if (
+      planet.landable &&
+      ball.launchGracePlanetIndex !== index &&
+      distance <= landingRadius
+    ) {
+      landBallOnPlanet(ball, planet);
+      return {
+        type: 'landed',
+        planetIndex: index,
+        planetName: planet.name ?? 'relay world',
+      };
+    }
+
+    if (distance <= touchRadius) {
+      ball.velocity.x = 0;
+      ball.velocity.y = 0;
+      return { type: 'crash', reason: 'planet' };
+    }
+  }
+
+  return null;
 }
 
 export function launchSpeedForDrag(dragPower) {
@@ -276,36 +350,6 @@ export function stepBall(level, ball, delta) {
     return { type: 'settled' };
   }
 
-  for (const planet of level.planets) {
-    const toPlanet = vec(
-      planet.position.x - ball.position.x,
-      planet.position.y - ball.position.y,
-    );
-    const distance = Math.max(length(toPlanet), 0.001);
-    const touchRadius = planet.radius + COURSE.ballRadius * PLANET_COLLISION_PADDING;
-    const landingRadius = planet.landingRadius ?? planet.radius + COURSE.ballRadius + PLANET_LANDING_PADDING;
-
-    if (
-      planet.landable &&
-      distance < landingRadius &&
-      length(ball.velocity) <= (planet.landingSpeed ?? DEFAULT_PLANET_LANDING_SPEED)
-    ) {
-      landBallOnPlanet(ball, planet);
-      return {
-        type: 'landed',
-        planetIndex: level.planets.indexOf(planet),
-        planetName: planet.name ?? 'relay world',
-      };
-    }
-
-    if (distance < touchRadius) {
-      ball.velocity.x = 0;
-      ball.velocity.y = 0;
-      return { type: 'crash', reason: 'planet' };
-    }
-
-  }
-
   const planetGravity = samplePlanetGravity(level, ball.position);
   ball.velocity.x += planetGravity.x * delta;
   ball.velocity.y += planetGravity.y * delta;
@@ -330,6 +374,11 @@ export function stepBall(level, ball, delta) {
   }
 
   addScaledVec(ball.position, ball.velocity, delta);
+
+  const contactResult = resolvePlanetContact(level, ball);
+  if (contactResult) {
+    return contactResult;
+  }
 
   const friction = Math.pow(BALL_FRICTION_BASE, delta * 60);
   ball.velocity.x *= friction;
@@ -361,6 +410,7 @@ export function simulateShot(level, shot, options = {}) {
     position: cloneVec(startPosition),
     velocity: vec(0, 0),
     landingCount: options.landingCount ?? 0,
+    launchGracePlanetIndex: findContainingLandingPlanetIndex(level, startPosition),
   };
   ball.velocity = launchVelocity(
     vec(Math.cos(shot.angle), Math.sin(shot.angle)),

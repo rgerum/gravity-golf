@@ -51,13 +51,33 @@ app.innerHTML = `
         <span>Land and relaunch</span>
       </div>
       <div class="launch-controls">
-        <div class="slider-field">
-          <label for="angleSlider">Angle <strong id="angleValue">0.0 deg</strong></label>
-          <input id="angleSlider" type="range" min="-90" max="90" step="0.1" value="0" />
+        <div class="shot-control" data-shot-panel="0">
+          <div class="shot-control-header">
+            <span class="shot-control-title">Shot 1</span>
+            <span class="shot-control-state" id="shotState0">Start</span>
+          </div>
+          <div class="slider-field">
+            <label for="angleSlider0">Angle <strong id="angleValue0">0.0 deg</strong></label>
+            <input id="angleSlider0" data-shot-index="0" data-shot-axis="angle" type="range" min="-180" max="180" step="0.1" value="0" />
+          </div>
+          <div class="slider-field">
+            <label for="powerSlider0">Power <strong id="powerValue0">0.20</strong></label>
+            <input id="powerSlider0" data-shot-index="0" data-shot-axis="power" type="range" min="0.2" max="2.75" step="0.01" value="0.2" />
+          </div>
         </div>
-        <div class="slider-field">
-          <label for="powerSlider">Power <strong id="powerValue">0.20</strong></label>
-          <input id="powerSlider" type="range" min="0.2" max="2.75" step="0.01" value="0.2" />
+        <div class="shot-control" data-shot-panel="1">
+          <div class="shot-control-header">
+            <span class="shot-control-title">Shot 2</span>
+            <span class="shot-control-state" id="shotState1">Relay</span>
+          </div>
+          <div class="slider-field">
+            <label for="angleSlider1">Angle <strong id="angleValue1">0.0 deg</strong></label>
+            <input id="angleSlider1" data-shot-index="1" data-shot-axis="angle" type="range" min="-180" max="180" step="0.1" value="0" />
+          </div>
+          <div class="slider-field">
+            <label for="powerSlider1">Power <strong id="powerValue1">0.20</strong></label>
+            <input id="powerSlider1" data-shot-index="1" data-shot-axis="power" type="range" min="0.2" max="2.75" step="0.01" value="0.2" />
+          </div>
         </div>
         <button id="launchButton" type="button">Go</button>
       </div>
@@ -92,10 +112,12 @@ const statusLine = document.querySelector('#statusLine');
 const statusHint = document.querySelector('#statusHint');
 const powerFill = document.querySelector('#powerFill');
 const levelChip = document.querySelector('#levelChip');
-const angleSlider = document.querySelector('#angleSlider');
-const powerSlider = document.querySelector('#powerSlider');
-const angleValue = document.querySelector('#angleValue');
-const powerValue = document.querySelector('#powerValue');
+const shotControlPanels = [...document.querySelectorAll('[data-shot-panel]')];
+const shotControlStates = [0, 1].map((index) => document.querySelector(`#shotState${index}`));
+const angleSliders = [0, 1].map((index) => document.querySelector(`#angleSlider${index}`));
+const powerSliders = [0, 1].map((index) => document.querySelector(`#powerSlider${index}`));
+const angleValues = [0, 1].map((index) => document.querySelector(`#angleValue${index}`));
+const powerValues = [0, 1].map((index) => document.querySelector(`#powerValue${index}`));
 const launchButton = document.querySelector('#launchButton');
 const sceneHost = document.querySelector('#scene');
 
@@ -143,9 +165,12 @@ const gravityFieldPalette = {
   high: new THREE.Color(0xffdd97),
 };
 
+const PHYSICS_STEP = 1 / 120;
+const MAX_PHYSICS_STEPS_PER_FRAME = 4;
 const ballRestY = COURSE.ballRadius + 0.04;
-const CONTROL_MIN_ANGLE = -90;
-const CONTROL_MAX_ANGLE = 90;
+const CONTROL_MIN_ANGLE = -180;
+const CONTROL_MAX_ANGLE = 180;
+const DEFAULT_CONTROL_SHOT = { angleDeg: 0, power: 1.8 };
 
 const ambientLight = new THREE.HemisphereLight(0x8bd5ff, 0x03070c, 1.18);
 scene.add(ambientLight);
@@ -406,8 +431,7 @@ const state = {
   dragAnchor: { x: 0, y: 0 },
   lastDragAnchor: { x: 0, y: 0 },
   hasLastDrag: false,
-  controlAngleDeg: 0,
-  controlPower: 0.2,
+  controlShots: [],
   dragActive: false,
   dragPower: 0,
   roundSettled: true,
@@ -417,6 +441,8 @@ const state = {
 
 let planetVisuals = [];
 let gravityFieldVisuals = null;
+let physicsAccumulator = 0;
+const planetTextureCache = new Map();
 
 function goalUnlocked() {
   return state.ball.landingCount >= (state.level.requiredLandings ?? 0);
@@ -424,6 +450,27 @@ function goalUnlocked() {
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
+}
+
+function clampControlShot(shot) {
+  return {
+    angleDeg: clamp(wrapSignedAngleDeg(shot.angleDeg), CONTROL_MIN_ANGLE, CONTROL_MAX_ANGLE),
+    power: clamp(shot.power, Number.parseFloat(powerSliders[0].min), MAX_DRAG_DISTANCE),
+  };
+}
+
+function createControlShots(level) {
+  const presets = level.launchPresets?.length ? level.launchPresets : [DEFAULT_CONTROL_SHOT];
+  return presets.map((preset) => clampControlShot(preset));
+}
+
+function getActiveStageIndex() {
+  return Math.min(state.ball.landingCount, Math.max(0, state.controlShots.length - 1));
+}
+
+function getControlShot(stageIndex = getActiveStageIndex()) {
+  return state.controlShots[Math.min(Math.max(0, stageIndex), Math.max(0, state.controlShots.length - 1))]
+    ?? clampControlShot(DEFAULT_CONTROL_SHOT);
 }
 
 function normalizeAngleDeg(angleDeg) {
@@ -447,27 +494,364 @@ function angleDegFromDirection(direction) {
   return wrapSignedAngleDeg(Math.atan2(direction.y, direction.x) * 180 / Math.PI);
 }
 
+function colorHex(color) {
+  return `#${color.getHexString()}`;
+}
+
+function mixColors(from, to, amount) {
+  return from.clone().lerp(to, amount);
+}
+
+function createSeededRandom(seed) {
+  let value = seed >>> 0;
+  return () => {
+    value += 0x6d2b79f5;
+    let result = value;
+    result = Math.imul(result ^ (result >>> 15), result | 1);
+    result ^= result + Math.imul(result ^ (result >>> 7), result | 61);
+    return ((result ^ (result >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function createPlanetSeed(planet, salt = 0) {
+  const x = Math.round((planet.position.x + 20) * 1000);
+  const y = Math.round((planet.position.y + 20) * 1000);
+  const radius = Math.round(planet.radius * 1000);
+  return ((x * 73856093) ^ (y * 19349663) ^ (radius * 83492791) ^ salt) >>> 0;
+}
+
+function createCanvasTexture(width, height, draw) {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  draw(ctx, width, height);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+function drawEllipse(ctx, x, y, rx, ry, rotation, fillStyle, alpha = 1) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = fillStyle;
+  ctx.beginPath();
+  ctx.ellipse(x, y, rx, ry, rotation, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function getRockyBiome(planet) {
+  const hsl = {};
+  new THREE.Color(planet.core).getHSL(hsl);
+  if (hsl.h >= 0.48 && hsl.h <= 0.7) {
+    return 'oceanic';
+  }
+  if (hsl.h <= 0.12 || hsl.h >= 0.92) {
+    return 'desert';
+  }
+  return 'moon';
+}
+
+function createRockyPlanetTexture(planet) {
+  return createCanvasTexture(1024, 512, (ctx, width, height) => {
+    const random = createSeededRandom(createPlanetSeed(planet, 17));
+    const biome = getRockyBiome(planet);
+
+    let deepColor;
+    let midColor;
+    let accentColor;
+    let brightColor;
+
+    if (biome === 'oceanic') {
+      deepColor = new THREE.Color(0x163b69);
+      midColor = new THREE.Color(0x2d6da3);
+      accentColor = new THREE.Color(0x6db06b);
+      brightColor = new THREE.Color(0xe9f5f2);
+    } else if (biome === 'desert') {
+      deepColor = new THREE.Color(0x7d4027);
+      midColor = new THREE.Color(0xb86937);
+      accentColor = new THREE.Color(0xd7a15e);
+      brightColor = new THREE.Color(0xf0dcc4);
+    } else {
+      deepColor = new THREE.Color(0x656870);
+      midColor = new THREE.Color(0x8a8f98);
+      accentColor = new THREE.Color(0xb7bcc4);
+      brightColor = new THREE.Color(0xe4e7eb);
+    }
+
+    deepColor.lerp(new THREE.Color(planet.core), 0.28);
+    midColor.lerp(new THREE.Color(planet.core), 0.34);
+    accentColor.lerp(new THREE.Color(planet.glow), 0.2);
+
+    const background = ctx.createLinearGradient(0, 0, 0, height);
+    background.addColorStop(0, colorHex(mixColors(brightColor, midColor, 0.3)));
+    background.addColorStop(0.45, colorHex(midColor));
+    background.addColorStop(1, colorHex(deepColor));
+    ctx.fillStyle = background;
+    ctx.fillRect(0, 0, width, height);
+
+    for (let index = 0; index < 7; index += 1) {
+      const haze = ctx.createLinearGradient(0, height * random(), width, height * random());
+      haze.addColorStop(0, colorHex(mixColors(brightColor, accentColor, random() * 0.3)));
+      haze.addColorStop(1, colorHex(mixColors(deepColor, midColor, random() * 0.45)));
+      ctx.save();
+      ctx.globalAlpha = 0.08 + random() * 0.08;
+      ctx.fillStyle = haze;
+      ctx.fillRect(0, 0, width, height);
+      ctx.restore();
+    }
+
+    if (biome === 'oceanic') {
+      for (let index = 0; index < 12; index += 1) {
+        drawEllipse(
+          ctx,
+          random() * width,
+          random() * height,
+          width * (0.05 + random() * 0.08),
+          height * (0.03 + random() * 0.06),
+          random() * Math.PI,
+          colorHex(mixColors(accentColor, brightColor, random() * 0.2)),
+          0.8,
+        );
+      }
+      for (let index = 0; index < 10; index += 1) {
+        drawEllipse(
+          ctx,
+          random() * width,
+          random() * height,
+          width * (0.06 + random() * 0.12),
+          height * (0.012 + random() * 0.025),
+          random() * Math.PI,
+          colorHex(brightColor),
+          0.16 + random() * 0.14,
+        );
+      }
+    } else if (biome === 'desert') {
+      for (let index = 0; index < 16; index += 1) {
+        drawEllipse(
+          ctx,
+          random() * width,
+          random() * height,
+          width * (0.04 + random() * 0.09),
+          height * (0.02 + random() * 0.05),
+          random() * Math.PI,
+          colorHex(mixColors(accentColor, brightColor, random() * 0.4)),
+          0.4 + random() * 0.25,
+        );
+      }
+      for (let index = 0; index < 10; index += 1) {
+        drawEllipse(
+          ctx,
+          random() * width,
+          random() * height,
+          width * (0.025 + random() * 0.05),
+          height * (0.015 + random() * 0.03),
+          random() * Math.PI,
+          colorHex(mixColors(deepColor, new THREE.Color(0x1f1614), 0.35)),
+          0.16 + random() * 0.14,
+        );
+      }
+    } else {
+      for (let index = 0; index < 22; index += 1) {
+        const craterX = random() * width;
+        const craterY = random() * height;
+        const craterRx = width * (0.015 + random() * 0.045);
+        const craterRy = height * (0.015 + random() * 0.04);
+        drawEllipse(
+          ctx,
+          craterX,
+          craterY,
+          craterRx * 1.08,
+          craterRy * 1.08,
+          random() * Math.PI,
+          colorHex(mixColors(deepColor, new THREE.Color(0x22242a), 0.45)),
+          0.18 + random() * 0.14,
+        );
+        drawEllipse(
+          ctx,
+          craterX,
+          craterY,
+          craterRx,
+          craterRy,
+          random() * Math.PI,
+          colorHex(mixColors(accentColor, brightColor, 0.25)),
+          0.22 + random() * 0.18,
+        );
+      }
+    }
+
+    const shade = ctx.createLinearGradient(0, 0, width, 0);
+    shade.addColorStop(0, '#000000');
+    shade.addColorStop(0.22, 'rgba(0, 0, 0, 0)');
+    shade.addColorStop(0.78, 'rgba(255, 255, 255, 0)');
+    shade.addColorStop(1, '#ffffff');
+    ctx.save();
+    ctx.globalAlpha = 0.12;
+    ctx.fillStyle = shade;
+    ctx.fillRect(0, 0, width, height);
+    ctx.restore();
+  });
+}
+
+function createGasGiantTexture(planet) {
+  return createCanvasTexture(1024, 512, (ctx, width, height) => {
+    const random = createSeededRandom(createPlanetSeed(planet, 29));
+    const core = new THREE.Color(planet.core);
+    const glow = new THREE.Color(planet.glow);
+    const cream = new THREE.Color(0xf3dfb6);
+    const rose = new THREE.Color(0xc88e63);
+    const slate = new THREE.Color(0x6e7497);
+    const bands = 18;
+
+    for (let index = 0; index < bands; index += 1) {
+      const startY = (height / bands) * index;
+      const bandHeight = height / bands + 2;
+      const mixAmount = index / Math.max(1, bands - 1);
+      const bandColor = mixColors(
+        mixColors(cream, core, 0.28 + random() * 0.14),
+        mixColors(rose, glow, 0.24 + random() * 0.2),
+        0.2 + mixAmount * 0.55,
+      );
+      bandColor.offsetHSL((random() - 0.5) * 0.04, 0, (random() - 0.5) * 0.08);
+      ctx.fillStyle = colorHex(bandColor);
+      ctx.fillRect(0, startY, width, bandHeight);
+    }
+
+    for (let index = 0; index < bands - 1; index += 1) {
+      const y = (height / bands) * (index + 1);
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      for (let x = 0; x <= width; x += 18) {
+        const wave = Math.sin(x * 0.02 + index * 0.85) * (4 + random() * 7);
+        ctx.lineTo(x, y + wave);
+      }
+      ctx.strokeStyle = colorHex(mixColors(core, slate, 0.42));
+      ctx.globalAlpha = 0.16;
+      ctx.lineWidth = 4 + random() * 3;
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+
+    for (let index = 0; index < 28; index += 1) {
+      drawEllipse(
+        ctx,
+        random() * width,
+        random() * height,
+        width * (0.04 + random() * 0.1),
+        height * (0.006 + random() * 0.016),
+        (random() - 0.5) * 0.2,
+        colorHex(mixColors(glow, cream, 0.4 + random() * 0.2)),
+        0.08 + random() * 0.08,
+      );
+    }
+
+    drawEllipse(
+      ctx,
+      width * (0.62 + random() * 0.12),
+      height * (0.54 + random() * 0.12),
+      width * 0.12,
+      height * 0.055,
+      -0.18,
+      colorHex(mixColors(new THREE.Color(0xd88a59), glow, 0.18)),
+      0.58,
+    );
+    drawEllipse(
+      ctx,
+      width * 0.66,
+      height * 0.59,
+      width * 0.06,
+      height * 0.022,
+      -0.18,
+      colorHex(mixColors(cream, new THREE.Color(0xffffff), 0.35)),
+      0.28,
+    );
+
+    const vignette = ctx.createLinearGradient(0, 0, width, 0);
+    vignette.addColorStop(0, '#000000');
+    vignette.addColorStop(0.14, 'rgba(0, 0, 0, 0)');
+    vignette.addColorStop(0.86, 'rgba(0, 0, 0, 0)');
+    vignette.addColorStop(1, '#000000');
+    ctx.save();
+    ctx.globalAlpha = 0.18;
+    ctx.fillStyle = vignette;
+    ctx.fillRect(0, 0, width, height);
+    ctx.restore();
+  });
+}
+
+function getPlanetTexture(planet) {
+  const key = [
+    planet.landable ? 'landable' : 'hazard',
+    planet.position.x,
+    planet.position.y,
+    planet.radius,
+    planet.core,
+    planet.glow,
+  ].join(':');
+
+  if (!planetTextureCache.has(key)) {
+    planetTextureCache.set(
+      key,
+      planet.landable ? createRockyPlanetTexture(planet) : createGasGiantTexture(planet),
+    );
+  }
+
+  return planetTextureCache.get(key);
+}
+
+state.controlShots = createControlShots(state.level);
+
 function getPreviewDirection() {
-  return directionFromAngleDeg(state.controlAngleDeg);
+  return directionFromAngleDeg(getControlShot().angleDeg);
 }
 
 function getPreviewAnchor() {
   const anchor = cloneVec(state.ball.position);
-  addScaledVec(anchor, getPreviewDirection(), state.controlPower);
+  addScaledVec(anchor, getPreviewDirection(), getControlShot().power);
   return anchor;
 }
 
+function getShotControlStateLabel(stageIndex, activeStageIndex) {
+  if (stageIndex < activeStageIndex) {
+    return 'Locked';
+  }
+
+  if (stageIndex === activeStageIndex) {
+    return stageIndex === 0 ? 'Active' : 'Ready';
+  }
+
+  return 'Queued';
+}
+
 function syncLaunchControls() {
-  angleSlider.value = state.controlAngleDeg.toFixed(1);
-  powerSlider.value = state.controlPower.toFixed(2);
-  angleValue.textContent = `${state.controlAngleDeg.toFixed(1)} deg`;
-  powerValue.textContent = state.controlPower.toFixed(2);
+  const activeStageIndex = getActiveStageIndex();
+
+  shotControlPanels.forEach((panel, index) => {
+    const shot = state.controlShots[index];
+    const visible = Boolean(shot);
+    panel.hidden = !visible;
+    if (!visible) {
+      return;
+    }
+
+    panel.classList.toggle('is-active', index === activeStageIndex);
+    angleSliders[index].value = shot.angleDeg.toFixed(1);
+    powerSliders[index].value = shot.power.toFixed(2);
+    angleValues[index].textContent = `${shot.angleDeg.toFixed(1)} deg`;
+    powerValues[index].textContent = shot.power.toFixed(2);
+    shotControlStates[index].textContent = getShotControlStateLabel(index, activeStageIndex);
+  });
+
+  launchButton.textContent = `Go${state.controlShots.length > 1 ? ` · Shot ${activeStageIndex + 1}` : ''}`;
   launchButton.disabled = ballIsMoving() || state.dragActive;
 }
 
-function setControlShot(angleDeg, power) {
-  state.controlAngleDeg = clamp(wrapSignedAngleDeg(angleDeg), CONTROL_MIN_ANGLE, CONTROL_MAX_ANGLE);
-  state.controlPower = clamp(power, Number.parseFloat(powerSlider.min), MAX_DRAG_DISTANCE);
+function setControlShot(stageIndex, angleDeg, power) {
+  state.controlShots[stageIndex] = clampControlShot({ angleDeg, power });
   syncLaunchControls();
 }
 
@@ -638,13 +1022,16 @@ function rebuildPlanets() {
 
   planetVisuals = state.level.planets.map((planet) => {
     const group = new THREE.Group();
+    const coreColor = new THREE.Color(planet.core);
+    const glowColor = new THREE.Color(planet.glow);
+    const surfaceTexture = getPlanetTexture(planet);
 
     const halo = new THREE.Mesh(
       new THREE.RingGeometry(planet.radius + 0.52, planet.falloff, 72),
       new THREE.MeshBasicMaterial({
-        color: planet.glow,
+        color: planet.landable ? mixColors(glowColor, new THREE.Color(0x88f5e1), 0.42) : glowColor,
         transparent: true,
-        opacity: 0.08,
+        opacity: planet.landable ? 0.1 : 0.08,
         side: THREE.DoubleSide,
       }),
     );
@@ -652,29 +1039,90 @@ function rebuildPlanets() {
     group.add(halo);
 
     const glow = new THREE.Mesh(
-      new THREE.CircleGeometry(planet.radius + 0.38, 48),
+      new THREE.CircleGeometry(planet.radius + (planet.landable ? 0.32 : 0.48), 48),
       new THREE.MeshBasicMaterial({
-        color: planet.glow,
+        color: planet.landable ? mixColors(glowColor, new THREE.Color(0x9ce9ff), 0.16) : mixColors(glowColor, new THREE.Color(0xffe3ba), 0.12),
         transparent: true,
-        opacity: 0.14,
+        opacity: planet.landable ? 0.16 : 0.18,
       }),
     );
     glow.rotation.x = -Math.PI / 2;
     glow.position.y = 0.04;
     group.add(glow);
 
+    const bodyMaterial = planet.landable
+      ? new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        map: surfaceTexture,
+        emissive: mixColors(coreColor, glowColor, 0.14),
+        emissiveIntensity: 0.08,
+        roughness: 0.98,
+        metalness: 0.02,
+      })
+      : new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        map: surfaceTexture,
+        emissive: mixColors(coreColor, glowColor, 0.1),
+        emissiveIntensity: 0.12,
+        roughness: 0.9,
+        metalness: 0,
+      });
+
     const body = new THREE.Mesh(
       new THREE.SphereGeometry(planet.radius, 48, 48),
-      new THREE.MeshStandardMaterial({
-        color: planet.core,
-        emissive: planet.core,
-        emissiveIntensity: 0.12,
-        roughness: 0.72,
-        metalness: 0.08,
-      }),
+      bodyMaterial,
     );
     body.position.y = planet.radius * 0.74;
+    if (!planet.landable) {
+      body.scale.y = 0.94;
+    }
     group.add(body);
+
+    let atmosphereShell = null;
+    let accentBand = null;
+
+    if (planet.landable) {
+      atmosphereShell = new THREE.Mesh(
+        new THREE.SphereGeometry(planet.radius * 1.045, 48, 48),
+        new THREE.MeshPhongMaterial({
+          color: mixColors(glowColor, new THREE.Color(0xc7fff7), 0.38),
+          transparent: true,
+          opacity: 0.16,
+          blending: THREE.AdditiveBlending,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+        }),
+      );
+    } else {
+      atmosphereShell = new THREE.Mesh(
+        new THREE.SphereGeometry(planet.radius * 1.065, 48, 48),
+        new THREE.MeshPhongMaterial({
+          color: mixColors(glowColor, new THREE.Color(0xffe2b3), 0.24),
+          transparent: true,
+          opacity: 0.12,
+          blending: THREE.AdditiveBlending,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+        }),
+      );
+      atmosphereShell.scale.y = 0.95;
+
+      accentBand = new THREE.Mesh(
+        new THREE.TorusGeometry(planet.radius * 1.16, 0.045, 12, 96),
+        new THREE.MeshBasicMaterial({
+          color: mixColors(glowColor, new THREE.Color(0xffd489), 0.42),
+          transparent: true,
+          opacity: 0.3,
+        }),
+      );
+      accentBand.rotation.x = Math.PI / 2.7;
+      accentBand.rotation.z = 0.34;
+      accentBand.position.y = body.position.y;
+      group.add(accentBand);
+    }
+
+    atmosphereShell.position.copy(body.position);
+    group.add(atmosphereShell);
 
     const orbitRing = new THREE.Mesh(
       new THREE.TorusGeometry(planet.radius + 0.16, 0.035, 12, 72),
@@ -707,13 +1155,45 @@ function rebuildPlanets() {
     group.position.set(planet.position.x, 0, planet.position.y);
     planetsRoot.add(group);
 
-    return { group, body, halo, glow, orbitRing, landingRing, planet };
+    return {
+      group,
+      body,
+      halo,
+      glow,
+      atmosphereShell,
+      accentBand,
+      orbitRing,
+      landingRing,
+      planet,
+    };
   });
+}
+
+function syncLevelQueryParam(levelIndex) {
+  const url = new URL(window.location.href);
+  url.searchParams.set('level', String(levelIndex + 1));
+  window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+}
+
+function getInitialLevelIndex() {
+  const url = new URL(window.location.href);
+  const rawLevel = url.searchParams.get('level');
+  if (!rawLevel) {
+    return 0;
+  }
+
+  const parsedLevel = Number.parseInt(rawLevel, 10);
+  if (!Number.isFinite(parsedLevel)) {
+    return 0;
+  }
+
+  return clamp(parsedLevel - 1, 0, LEVELS.length - 1);
 }
 
 function applyLevel(index) {
   state.levelIndex = index % LEVELS.length;
   state.level = createLevelRuntime(state.levelIndex);
+  state.controlShots = createControlShots(state.level);
   state.hasLastDrag = false;
   setVec(state.lastDragAnchor, state.level.start);
 
@@ -721,8 +1201,8 @@ function applyLevel(index) {
   startCore.position.set(state.level.start.x, 0.06, state.level.start.y);
   goalGroup.position.set(state.level.goal.x, 0.06, state.level.goal.y);
 
-  const preset = state.level.launchPreset ?? { angleDeg: 0, power: 1.8 };
-  setControlShot(preset.angleDeg, preset.power);
+  syncLevelQueryParam(state.levelIndex);
+  syncLaunchControls();
 
   levelChip.textContent = `Level ${state.levelIndex + 1}/${LEVELS.length} · ${state.level.name}`;
   rebuildGravityField();
@@ -735,7 +1215,7 @@ function syncHud() {
   resetValue.textContent = String(state.resets);
   statusLine.textContent = state.message;
   statusHint.textContent = state.hint;
-  const shownPower = state.dragActive ? state.dragPower : state.controlPower;
+  const shownPower = state.dragActive ? state.dragPower : getControlShot().power;
   powerFill.style.transform = `scaleX(${Math.max(0.04, shownPower / MAX_DRAG_DISTANCE)})`;
   syncLaunchControls();
 }
@@ -761,12 +1241,12 @@ function resetBall(message, hint, options = {}) {
   state.ball.transition = 0;
   state.ball.crashReason = '';
   state.ball.landingCount = 0;
+  state.ball.launchGracePlanetIndex = null;
   state.ball.landedPlanetIndex = null;
   state.ball.landedPlanetName = '';
   setVec(state.dragAnchor, state.level.start);
-  if (!state.hasLastDrag) {
-    setVec(state.lastDragAnchor, state.level.start);
-  }
+  setVec(state.lastDragAnchor, state.level.start);
+  state.hasLastDrag = false;
   state.dragActive = false;
   state.dragPower = 0;
   state.roundSettled = true;
@@ -808,9 +1288,12 @@ function beginLanding(result) {
   state.ball.goaling = false;
   state.ball.crashed = false;
   state.ball.transition = 0;
+  state.ball.launchGracePlanetIndex = null;
   state.ball.landedPlanetIndex = result.planetIndex ?? null;
   state.ball.landedPlanetName = result.planetName ?? 'relay world';
   setVec(state.dragAnchor, state.ball.position);
+  setVec(state.lastDragAnchor, state.ball.position);
+  state.hasLastDrag = false;
   state.dragActive = false;
   state.dragPower = 0;
   state.roundSettled = true;
@@ -839,6 +1322,8 @@ function ballIsMoving() {
 }
 
 function updateDragState(worldPoint) {
+  const activeStageIndex = getActiveStageIndex();
+  const activeShot = getControlShot(activeStageIndex);
   const pullVector = {
     x: worldPoint.x - state.ball.position.x,
     y: worldPoint.y - state.ball.position.y,
@@ -848,7 +1333,7 @@ function updateDragState(worldPoint) {
   if (stretch < 0.0001) {
     setVec(state.dragAnchor, state.ball.position);
     state.dragPower = 0;
-    setControlShot(state.controlAngleDeg, 0.2);
+    setControlShot(activeStageIndex, activeShot.angleDeg, 0.2);
     return;
   }
 
@@ -857,7 +1342,7 @@ function updateDragState(worldPoint) {
   setVec(state.dragAnchor, state.ball.position);
   addScaledVec(state.dragAnchor, direction, stretch);
   state.dragPower = stretch;
-  setControlShot(angleDegFromDirection(direction), stretch);
+  setControlShot(activeStageIndex, angleDegFromDirection(direction), stretch);
 }
 
 function updateBallTransforms() {
@@ -936,17 +1421,19 @@ function updateCueVisual() {
 }
 
 function launchShot(direction, power, anchor) {
+  const activeStageIndex = getActiveStageIndex();
   const velocity = launchVelocity(direction, power);
   setVec(state.lastDragAnchor, anchor);
   state.hasLastDrag = true;
   state.ball.velocity.x = velocity.x;
   state.ball.velocity.y = velocity.y;
+  state.ball.launchGracePlanetIndex = state.ball.landedPlanetIndex;
   state.ball.landedPlanetIndex = null;
   state.ball.landedPlanetName = '';
   state.shots += 1;
   state.dragActive = false;
   state.dragPower = 0;
-  setControlShot(angleDegFromDirection(direction), power);
+  setControlShot(activeStageIndex, angleDegFromDirection(direction), power);
   setVec(state.dragAnchor, state.ball.position);
   state.roundSettled = false;
   state.message = `Flight underway. ${state.level.name}.`;
@@ -1014,21 +1501,28 @@ function launchFromControls() {
     return;
   }
 
+  const activeShot = getControlShot();
   const direction = getPreviewDirection();
   const anchor = getPreviewAnchor();
-  launchShot(direction, state.controlPower, anchor);
+  launchShot(direction, activeShot.power, anchor);
 }
 
-angleSlider.addEventListener('input', (event) => {
-  const nextAngle = Number.parseFloat(event.target.value);
-  setControlShot(nextAngle, state.controlPower);
-  syncHud();
+angleSliders.forEach((slider, index) => {
+  slider.addEventListener('input', (event) => {
+    const nextAngle = Number.parseFloat(event.target.value);
+    const shot = getControlShot(index);
+    setControlShot(index, nextAngle, shot.power);
+    syncHud();
+  });
 });
 
-powerSlider.addEventListener('input', (event) => {
-  const nextPower = Number.parseFloat(event.target.value);
-  setControlShot(state.controlAngleDeg, nextPower);
-  syncHud();
+powerSliders.forEach((slider, index) => {
+  slider.addEventListener('input', (event) => {
+    const nextPower = Number.parseFloat(event.target.value);
+    const shot = getControlShot(index);
+    setControlShot(index, shot.angleDeg, nextPower);
+    syncHud();
+  });
 });
 
 launchButton.addEventListener('click', launchFromControls);
@@ -1135,16 +1629,31 @@ function updateDecor(time) {
 
   planetVisuals.forEach((visual, index) => {
     const pulse = 1 + Math.sin(time * (1.5 + index * 0.35) + index) * 0.05;
+    const isLandable = Boolean(visual.planet.landable);
     visual.halo.scale.setScalar(pulse);
-    visual.glow.material.opacity = 0.1 + Math.sin(time * 2 + index) * 0.03;
+    visual.glow.material.opacity = isLandable
+      ? 0.13 + Math.sin(time * 2 + index) * 0.03
+      : 0.16 + Math.sin(time * 1.7 + index) * 0.04;
     visual.orbitRing.rotation.z = time * (0.35 + index * 0.12);
-    visual.body.rotation.y = time * (0.45 + index * 0.18);
+    visual.body.rotation.y = time * (isLandable ? 0.28 + index * 0.06 : 0.52 + index * 0.11);
+    if (visual.atmosphereShell) {
+      visual.atmosphereShell.rotation.y = time * (isLandable ? 0.16 + index * 0.04 : -0.34 - index * 0.05);
+      visual.atmosphereShell.material.opacity = isLandable
+        ? 0.13 + Math.sin(time * 2.8 + index) * 0.025
+        : 0.11 + Math.sin(time * 1.9 + index) * 0.02;
+    }
+    if (visual.accentBand) {
+      visual.accentBand.rotation.z = 0.34 + time * (0.24 + index * 0.03);
+      visual.accentBand.material.opacity = 0.24 + Math.sin(time * 2.2 + index) * 0.04;
+    }
     if (visual.landingRing) {
       const selected = state.ball.landedPlanetIndex === index;
       visual.landingRing.material.opacity = selected
         ? 0.34 + Math.sin(time * 4.4) * 0.06
         : 0.16 + Math.sin(time * 3 + index) * 0.03;
       visual.orbitRing.material.opacity = selected ? 0.9 : 0.62 + Math.sin(time * 2.5 + index) * 0.06;
+    } else {
+      visual.orbitRing.material.opacity = 0.38 + Math.sin(time * 1.8 + index) * 0.04;
     }
   });
 }
@@ -1168,7 +1677,16 @@ function animate() {
   const delta = Math.min(clock.getDelta(), 0.033);
   const time = clock.elapsedTime;
 
-  updatePhysics(delta);
+  physicsAccumulator = Math.min(
+    physicsAccumulator + delta,
+    PHYSICS_STEP * MAX_PHYSICS_STEPS_PER_FRAME,
+  );
+
+  while (physicsAccumulator >= PHYSICS_STEP) {
+    updatePhysics(PHYSICS_STEP);
+    physicsAccumulator -= PHYSICS_STEP;
+  }
+
   updateBallTransforms();
   updateCueVisual();
   updateDecor(time);
@@ -1177,8 +1695,8 @@ function animate() {
   requestAnimationFrame(animate);
 }
 
-applyLevel(0);
-resetBall(`Level 1: ${state.level.name}.`, state.level.summary);
+applyLevel(getInitialLevelIndex());
+resetBall(`Level ${state.levelIndex + 1}: ${state.level.name}.`, state.level.summary);
 setVec(state.lastDragAnchor, state.level.start);
 resize();
 animate();
