@@ -10,11 +10,17 @@ import {
   createBallState,
   createLevelRuntime,
   distanceBetween,
+  advanceBallAnchor,
+  getSolarGravityStrength,
+  getPlanetVelocity,
+  getPlanetSurfaceVelocity,
   length,
   lengthSq,
   launchVelocity,
   normalize,
   samplePlanetGravity,
+  setSolarGravityStrength,
+  setLevelTime,
   setVec,
   stepBall,
 } from './game-core.js';
@@ -48,7 +54,7 @@ app.innerHTML = `
       <div class="mini-guide">
         <span>Grab ball</span>
         <span>Pull line</span>
-        <span>Land and relaunch</span>
+        <span>Wait to align</span>
       </div>
       <div class="launch-controls">
         <div class="shot-control" data-shot-panel="0">
@@ -78,6 +84,17 @@ app.innerHTML = `
             <label for="powerSlider1">Power <strong id="powerValue1">0.20</strong></label>
             <input id="powerSlider1" data-shot-index="1" data-shot-axis="power" type="range" min="0.2" max="2.75" step="0.01" value="0.2" />
           </div>
+        </div>
+        <div class="shot-control tuning-control">
+          <div class="shot-control-header">
+            <span class="shot-control-title">System</span>
+            <span class="shot-control-state">Live</span>
+          </div>
+          <div class="slider-field">
+            <label for="solarGravitySlider">Sun Pull <strong id="solarGravityValue">20.0</strong></label>
+            <input id="solarGravitySlider" type="range" min="0" max="20" step="0.1" value="20" />
+          </div>
+          <p class="control-note">Applies immediately to ball flight and the field preview.</p>
         </div>
         <button id="launchButton" type="button">Go</button>
       </div>
@@ -118,6 +135,8 @@ const angleSliders = [0, 1].map((index) => document.querySelector(`#angleSlider$
 const powerSliders = [0, 1].map((index) => document.querySelector(`#powerSlider${index}`));
 const angleValues = [0, 1].map((index) => document.querySelector(`#angleValue${index}`));
 const powerValues = [0, 1].map((index) => document.querySelector(`#powerValue${index}`));
+const solarGravitySlider = document.querySelector('#solarGravitySlider');
+const solarGravityValue = document.querySelector('#solarGravityValue');
 const launchButton = document.querySelector('#launchButton');
 const sceneHost = document.querySelector('#scene');
 
@@ -129,6 +148,7 @@ sceneHost.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x040812);
 scene.fog = new THREE.Fog(0x040812, 14, 30);
+const CAMERA_VIEW_SIZE = 19.4;
 
 const camera = new THREE.OrthographicCamera();
 camera.position.set(0, 18, 0);
@@ -153,8 +173,8 @@ const palette = {
 };
 
 const gravityGridConfig = {
-  columns: 30,
-  rows: 18,
+  columns: 38,
+  rows: 22,
   insetX: 0.9,
   insetY: 0.75,
 };
@@ -212,33 +232,46 @@ world.add(courseHalo);
 const gravityFieldRoot = new THREE.Group();
 world.add(gravityFieldRoot);
 
-const laneArc = new THREE.Mesh(
-  new THREE.RingGeometry(2.9, 3.05, 80),
-  new THREE.MeshBasicMaterial({
-    color: 0x74aaff,
-    transparent: true,
-    opacity: 0.08,
-    side: THREE.DoubleSide,
-  }),
-);
-laneArc.rotation.x = -Math.PI / 2;
-laneArc.position.set(0.9, 0.05, 0.2);
-laneArc.scale.set(1.95, 1.15, 1);
-world.add(laneArc);
+const sunGroup = new THREE.Group();
+world.add(sunGroup);
 
-const laneArc2 = new THREE.Mesh(
-  new THREE.RingGeometry(1.8, 1.92, 72),
+const sunGlow = new THREE.Mesh(
+  new THREE.CircleGeometry(1.35, 56),
   new THREE.MeshBasicMaterial({
-    color: 0xffaf6d,
+    color: 0xffcf70,
     transparent: true,
-    opacity: 0.06,
+    opacity: 0.18,
+  }),
+);
+sunGlow.rotation.x = -Math.PI / 2;
+sunGlow.position.y = 0.03;
+sunGroup.add(sunGlow);
+
+const sunCorona = new THREE.Mesh(
+  new THREE.RingGeometry(0.62, 1.05, 72),
+  new THREE.MeshBasicMaterial({
+    color: 0xffa54f,
+    transparent: true,
+    opacity: 0.34,
     side: THREE.DoubleSide,
   }),
 );
-laneArc2.rotation.x = -Math.PI / 2;
-laneArc2.position.set(4.55, 0.05, 0.25);
-laneArc2.scale.set(1.45, 1.85, 1);
-world.add(laneArc2);
+sunCorona.rotation.x = -Math.PI / 2;
+sunCorona.position.y = 0.04;
+sunGroup.add(sunCorona);
+
+const sunCore = new THREE.Mesh(
+  new THREE.SphereGeometry(0.42, 36, 36),
+  new THREE.MeshStandardMaterial({
+    color: 0xffdd8f,
+    emissive: 0xffb347,
+    emissiveIntensity: 1.2,
+    roughness: 0.55,
+    metalness: 0.02,
+  }),
+);
+sunCore.position.y = 0.42;
+sunGroup.add(sunCore);
 
 const startPad = new THREE.Mesh(
   new THREE.RingGeometry(0.62, 0.98, 48),
@@ -287,18 +320,6 @@ const blackHoleRing = new THREE.Mesh(
 blackHoleRing.rotation.x = -Math.PI / 2;
 goalGroup.add(blackHoleRing);
 
-const blackHoleHalo = new THREE.Mesh(
-  new THREE.RingGeometry(COURSE.goalRadius + 0.75, COURSE.goalPullRadius, 96),
-  new THREE.MeshBasicMaterial({
-    color: 0x6e53ff,
-    transparent: true,
-    opacity: 0.08,
-    side: THREE.DoubleSide,
-  }),
-);
-blackHoleHalo.rotation.x = -Math.PI / 2;
-goalGroup.add(blackHoleHalo);
-
 const starsGeometry = new THREE.BufferGeometry();
 const starPositions = [];
 for (let i = 0; i < 240; i += 1) {
@@ -321,6 +342,9 @@ const stars = new THREE.Points(
   }),
 );
 world.add(stars);
+
+const orbitPathsRoot = new THREE.Group();
+world.add(orbitPathsRoot);
 
 const planetsRoot = new THREE.Group();
 world.add(planetsRoot);
@@ -411,21 +435,24 @@ lastDragHandle.position.y = 0.14;
 lastDragHandle.renderOrder = 9;
 world.add(lastDragHandle);
 
+const initialLevel = createLevelRuntime(0);
+const initialBall = createBallState(initialLevel);
+
 const state = {
   score: 0,
   shots: 0,
   resets: 0,
   levelIndex: 0,
-  level: createLevelRuntime(0),
+  level: initialLevel,
   ball: {
-    ...createBallState(createLevelRuntime(0)),
+    ...initialBall,
     goaling: false,
     crashed: false,
     transition: 0,
     crashReason: '',
     landingCount: 0,
-    landedPlanetIndex: null,
-    landedPlanetName: '',
+    landedPlanetIndex: initialBall.anchorPlanetIndex ?? null,
+    landedPlanetName: initialLevel.planets[initialBall.anchorPlanetIndex ?? 0]?.name ?? 'launch world',
   },
   aimDirection: normalize({ x: 1, y: 0 }),
   dragAnchor: { x: 0, y: 0 },
@@ -443,13 +470,44 @@ let planetVisuals = [];
 let gravityFieldVisuals = null;
 let physicsAccumulator = 0;
 const planetTextureCache = new Map();
+let lastGravityFieldRefreshTime = Number.NEGATIVE_INFINITY;
 
 function goalUnlocked() {
   return state.ball.landingCount >= (state.level.requiredLandings ?? 0);
 }
 
+function getAnchoredPlanet() {
+  if (state.ball.anchorPlanetIndex === null || state.ball.anchorPlanetIndex === undefined) {
+    return null;
+  }
+
+  return state.level.planets[state.ball.anchorPlanetIndex] ?? null;
+}
+
+function updateLaunchMarker() {
+  const anchoredPlanet = getAnchoredPlanet();
+  const visible = Boolean(anchoredPlanet);
+  startPad.visible = visible;
+  startCore.visible = visible;
+
+  if (!visible) {
+    return;
+  }
+
+  startPad.position.set(anchoredPlanet.position.x, 0.08, anchoredPlanet.position.y);
+  startCore.position.set(anchoredPlanet.position.x, 0.06, anchoredPlanet.position.y);
+}
+
+function updateSunVisual() {
+  sunGroup.position.set(state.level.sun.x, 0, state.level.sun.y);
+}
+
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
+}
+
+function dot(a, b) {
+  return a.x * b.x + a.y * b.y;
 }
 
 function clampControlShot(shot) {
@@ -806,13 +864,57 @@ function getPlanetTexture(planet) {
 state.controlShots = createControlShots(state.level);
 
 function getPreviewDirection() {
-  return directionFromAngleDeg(getControlShot().angleDeg);
+  const shot = getControlShot();
+  return constrainLaunchDirection(directionFromAngleDeg(shot.angleDeg), shot.power);
 }
 
 function getPreviewAnchor() {
+  const shot = getControlShot();
   const anchor = cloneVec(state.ball.position);
-  addScaledVec(anchor, getPreviewDirection(), getControlShot().power);
+  addScaledVec(anchor, getPreviewDirection(), shot.power);
   return anchor;
+}
+
+function constrainLaunchDirection(direction, power) {
+  const normalizedDirection = normalize(direction);
+  if (state.ball.anchorPlanetIndex === null || state.ball.anchorPlanetIndex === undefined) {
+    return normalizedDirection;
+  }
+
+  const anchorNormal = normalize(state.ball.anchorNormal ?? { x: 1, y: 0 });
+  const tangent = { x: -anchorNormal.y, y: anchorNormal.x };
+  const relativeVelocity = launchVelocity(normalizedDirection, power);
+  const relativeSpeed = Math.max(0.0001, length(relativeVelocity));
+  const inheritedVelocity = {
+    x:
+      getPlanetVelocity(state.level, state.ball.anchorPlanetIndex, state.ball.time ?? state.level.time ?? 0).x
+      + getPlanetSurfaceVelocity(state.level, state.ball.anchorPlanetIndex, state.ball.anchorNormal).x,
+    y:
+      getPlanetVelocity(state.level, state.ball.anchorPlanetIndex, state.ball.time ?? state.level.time ?? 0).y
+      + getPlanetSurfaceVelocity(state.level, state.ball.anchorPlanetIndex, state.ball.anchorNormal).y,
+  };
+  const maxInwardLaunchAngleDeg = 30;
+  const minimumSafeNormalVelocity = -relativeSpeed * Math.sin(maxInwardLaunchAngleDeg * Math.PI / 180);
+  const requiredNormalComponent = (minimumSafeNormalVelocity - dot(inheritedVelocity, anchorNormal)) / relativeSpeed;
+
+  if (requiredNormalComponent <= -1) {
+    return normalizedDirection;
+  }
+
+  if (requiredNormalComponent >= 1) {
+    return anchorNormal;
+  }
+
+  const requestedRelativeAngle = Math.atan2(
+    dot(normalizedDirection, tangent),
+    dot(normalizedDirection, anchorNormal),
+  );
+  const maxRelativeAngle = Math.acos(clamp(requiredNormalComponent, -1, 1));
+  const clampedRelativeAngle = clamp(requestedRelativeAngle, -maxRelativeAngle, maxRelativeAngle);
+  return normalize({
+    x: anchorNormal.x * Math.cos(clampedRelativeAngle) + tangent.x * Math.sin(clampedRelativeAngle),
+    y: anchorNormal.y * Math.cos(clampedRelativeAngle) + tangent.y * Math.sin(clampedRelativeAngle),
+  });
 }
 
 function getShotControlStateLabel(stageIndex, activeStageIndex) {
@@ -846,6 +948,8 @@ function syncLaunchControls() {
     shotControlStates[index].textContent = getShotControlStateLabel(index, activeStageIndex);
   });
 
+  solarGravitySlider.value = getSolarGravityStrength().toFixed(1);
+  solarGravityValue.textContent = getSolarGravityStrength().toFixed(1);
   launchButton.textContent = `Go${state.controlShots.length > 1 ? ` · Shot ${activeStageIndex + 1}` : ''}`;
   launchButton.disabled = ballIsMoving() || state.dragActive;
 }
@@ -1018,6 +1122,7 @@ function rebuildGravityField() {
 }
 
 function rebuildPlanets() {
+  clearGroup(orbitPathsRoot);
   clearGroup(planetsRoot);
 
   planetVisuals = state.level.planets.map((planet) => {
@@ -1025,6 +1130,48 @@ function rebuildPlanets() {
     const coreColor = new THREE.Color(planet.core);
     const glowColor = new THREE.Color(planet.glow);
     const surfaceTexture = getPlanetTexture(planet);
+    const orbitPathColor = planet.landable
+      ? mixColors(glowColor, new THREE.Color(0x9feedd), 0.35)
+      : mixColors(glowColor, new THREE.Color(0xffdfa9), 0.22);
+
+    const orbitPathPoints = [];
+    for (let step = 0; step <= 128; step += 1) {
+      const anomaly = (step / 128) * Math.PI * 2;
+      const eccentricity = planet.orbitEccentricity ?? 0;
+      const eccentricAnomaly = eccentricity < 0.000001
+        ? anomaly
+        : (() => {
+          let estimate = anomaly;
+          for (let iteration = 0; iteration < 8; iteration += 1) {
+            const delta =
+              (estimate - eccentricity * Math.sin(estimate) - anomaly)
+              / Math.max(0.000001, 1 - eccentricity * Math.cos(estimate));
+            estimate -= delta;
+            if (Math.abs(delta) < 0.000001) {
+              break;
+            }
+          }
+          return estimate;
+        })();
+      const localX = planet.orbitSemiMajor * (Math.cos(eccentricAnomaly) - eccentricity);
+      const localY = planet.orbitSemiMinor * Math.sin(eccentricAnomaly);
+      const rotation = planet.orbitRotation ?? 0;
+      const x = localX * Math.cos(rotation) - localY * Math.sin(rotation);
+      const y = localX * Math.sin(rotation) + localY * Math.cos(rotation);
+      orbitPathPoints.push(new THREE.Vector3(x, 0.028, y));
+    }
+    const orbitPath = new THREE.LineLoop(
+      new THREE.BufferGeometry().setFromPoints(orbitPathPoints),
+      new THREE.LineBasicMaterial({
+        color: orbitPathColor,
+        transparent: true,
+        opacity: planet.landable ? 0.24 : 0.16,
+        depthWrite: false,
+      }),
+    );
+    orbitPath.renderOrder = 1;
+    orbitPath.position.set(planet.orbitCenter.x, 0, planet.orbitCenter.y);
+    orbitPathsRoot.add(orbitPath);
 
     const halo = new THREE.Mesh(
       new THREE.RingGeometry(planet.radius + 0.52, planet.falloff, 72),
@@ -1157,6 +1304,7 @@ function rebuildPlanets() {
 
     return {
       group,
+      orbitPath,
       body,
       halo,
       glow,
@@ -1195,10 +1343,8 @@ function applyLevel(index) {
   state.level = createLevelRuntime(state.levelIndex);
   state.controlShots = createControlShots(state.level);
   state.hasLastDrag = false;
-  setVec(state.lastDragAnchor, state.level.start);
 
-  startPad.position.set(state.level.start.x, 0.08, state.level.start.y);
-  startCore.position.set(state.level.start.x, 0.06, state.level.start.y);
+  updateSunVisual();
   goalGroup.position.set(state.level.goal.x, 0.06, state.level.goal.y);
 
   syncLevelQueryParam(state.levelIndex);
@@ -1206,6 +1352,7 @@ function applyLevel(index) {
 
   levelChip.textContent = `Level ${state.levelIndex + 1}/${LEVELS.length} · ${state.level.name}`;
   rebuildGravityField();
+  lastGravityFieldRefreshTime = state.level.time ?? 0;
   rebuildPlanets();
 }
 
@@ -1233,19 +1380,26 @@ function resetBall(message, hint, options = {}) {
     applyLevel((state.levelIndex + 1) % LEVELS.length);
   }
 
-  setVec(state.ball.position, state.level.start);
-  state.ball.velocity.x = 0;
-  state.ball.velocity.y = 0;
+  setLevelTime(state.level, state.level.startTime ?? 0);
+  rebuildGravityField();
+  lastGravityFieldRefreshTime = state.level.time ?? 0;
+  const freshBall = createBallState(state.level);
+  setVec(state.ball.position, freshBall.position);
+  state.ball.velocity.x = freshBall.velocity.x;
+  state.ball.velocity.y = freshBall.velocity.y;
+  state.ball.time = freshBall.time;
   state.ball.goaling = false;
   state.ball.crashed = false;
   state.ball.transition = 0;
   state.ball.crashReason = '';
-  state.ball.landingCount = 0;
-  state.ball.launchGracePlanetIndex = null;
-  state.ball.landedPlanetIndex = null;
-  state.ball.landedPlanetName = '';
-  setVec(state.dragAnchor, state.level.start);
-  setVec(state.lastDragAnchor, state.level.start);
+  state.ball.landingCount = freshBall.landingCount;
+  state.ball.launchGracePlanetIndex = freshBall.launchGracePlanetIndex;
+  state.ball.anchorPlanetIndex = freshBall.anchorPlanetIndex;
+  state.ball.anchorNormal = cloneVec(freshBall.anchorNormal);
+  state.ball.landedPlanetIndex = freshBall.anchorPlanetIndex ?? null;
+  state.ball.landedPlanetName = state.level.planets[freshBall.anchorPlanetIndex ?? 0]?.name ?? 'launch world';
+  setVec(state.dragAnchor, state.ball.position);
+  setVec(state.lastDragAnchor, state.ball.position);
   state.hasLastDrag = false;
   state.dragActive = false;
   state.dragPower = 0;
@@ -1337,7 +1491,7 @@ function updateDragState(worldPoint) {
     return;
   }
 
-  const direction = normalize(pullVector);
+  const direction = constrainLaunchDirection(pullVector, stretch);
   setVec(state.aimDirection, direction);
   setVec(state.dragAnchor, state.ball.position);
   addScaledVec(state.dragAnchor, direction, stretch);
@@ -1422,18 +1576,32 @@ function updateCueVisual() {
 
 function launchShot(direction, power, anchor) {
   const activeStageIndex = getActiveStageIndex();
-  const velocity = launchVelocity(direction, power);
-  setVec(state.lastDragAnchor, anchor);
+  const launchPlanetIndex = state.ball.anchorPlanetIndex;
+  const launchDirection = constrainLaunchDirection(direction, power);
+  const relativeVelocity = launchVelocity(launchDirection, power);
+  const launchBodyVelocity = launchPlanetIndex !== null
+    ? getPlanetVelocity(state.level, launchPlanetIndex, state.ball.time ?? state.level.time ?? 0)
+    : { x: 0, y: 0 };
+  const launchSurfaceVelocity = launchPlanetIndex !== null
+    ? getPlanetSurfaceVelocity(state.level, launchPlanetIndex, state.ball.anchorNormal)
+    : { x: 0, y: 0 };
+  const velocity = {
+    x: relativeVelocity.x + launchBodyVelocity.x + launchSurfaceVelocity.x,
+    y: relativeVelocity.y + launchBodyVelocity.y + launchSurfaceVelocity.y,
+  };
+  setVec(state.lastDragAnchor, state.ball.position);
+  addScaledVec(state.lastDragAnchor, launchDirection, power);
   state.hasLastDrag = true;
   state.ball.velocity.x = velocity.x;
   state.ball.velocity.y = velocity.y;
-  state.ball.launchGracePlanetIndex = state.ball.landedPlanetIndex;
+  state.ball.launchGracePlanetIndex = launchPlanetIndex;
+  state.ball.anchorPlanetIndex = null;
   state.ball.landedPlanetIndex = null;
   state.ball.landedPlanetName = '';
   state.shots += 1;
   state.dragActive = false;
   state.dragPower = 0;
-  setControlShot(activeStageIndex, angleDegFromDirection(direction), power);
+  setControlShot(activeStageIndex, angleDegFromDirection(launchDirection), power);
   setVec(state.dragAnchor, state.ball.position);
   state.roundSettled = false;
   state.message = `Flight underway. ${state.level.name}.`;
@@ -1525,6 +1693,14 @@ powerSliders.forEach((slider, index) => {
   });
 });
 
+solarGravitySlider.addEventListener('input', (event) => {
+  const nextStrength = Number.parseFloat(event.target.value);
+  setSolarGravityStrength(nextStrength);
+  solarGravityValue.textContent = getSolarGravityStrength().toFixed(1);
+  rebuildGravityField();
+  lastGravityFieldRefreshTime = state.level.time ?? 0;
+});
+
 launchButton.addEventListener('click', launchFromControls);
 
 function updatePhysics(delta) {
@@ -1568,6 +1744,13 @@ function updatePhysics(delta) {
   if (lengthSq(state.ball.velocity) < 0.000001) {
     state.ball.velocity.x = 0;
     state.ball.velocity.y = 0;
+    if (state.ball.anchorPlanetIndex !== null && state.ball.anchorPlanetIndex !== undefined) {
+      const nextTime = (state.ball.time ?? state.level.time ?? 0) + delta;
+      setLevelTime(state.level, nextTime);
+      state.ball.time = nextTime;
+      advanceBallAnchor(state.level, state.ball, delta);
+      return;
+    }
     if (!state.roundSettled) {
       resetBall(
         'Drift expired.',
@@ -1609,8 +1792,21 @@ function updatePhysics(delta) {
 }
 
 function updateDecor(time) {
+  const worldTime = state.level.time ?? 0;
+  updateSunVisual();
+  updateLaunchMarker();
   startPad.scale.setScalar(1 + Math.sin(time * 2.7) * 0.06);
   startCore.material.opacity = 0.58 + Math.sin(time * 3.8) * 0.12;
+  sunGlow.scale.setScalar(1 + Math.sin(time * 1.2) * 0.08);
+  sunGlow.material.opacity = 0.16 + Math.sin(time * 1.6) * 0.03;
+  sunCorona.rotation.z = time * 0.28;
+  sunCorona.material.opacity = 0.3 + Math.sin(time * 2.1) * 0.04;
+  sunCore.rotation.y = time * 0.22;
+
+  if (worldTime < lastGravityFieldRefreshTime || worldTime - lastGravityFieldRefreshTime >= 0.16) {
+    rebuildGravityField();
+    lastGravityFieldRefreshTime = worldTime;
+  }
 
   if (gravityFieldVisuals) {
     gravityFieldVisuals.glow.material.opacity = 0.16 + Math.sin(time * 1.6) * 0.03;
@@ -1622,22 +1818,19 @@ function updateDecor(time) {
   blackHoleRing.material.opacity = goalUnlocked()
     ? 0.5 + Math.sin(time * 4.2) * 0.04
     : 0.16 + Math.sin(time * 2.4) * 0.02;
-  blackHoleHalo.material.opacity = goalUnlocked()
-    ? 0.06 + Math.sin(time * 1.7) * 0.025
-    : 0.018 + Math.sin(time * 1.4) * 0.008;
-  blackHoleHalo.rotation.z = -time * 0.32;
 
   planetVisuals.forEach((visual, index) => {
     const pulse = 1 + Math.sin(time * (1.5 + index * 0.35) + index) * 0.05;
     const isLandable = Boolean(visual.planet.landable);
+    visual.group.position.set(visual.planet.position.x, 0, visual.planet.position.y);
     visual.halo.scale.setScalar(pulse);
     visual.glow.material.opacity = isLandable
       ? 0.13 + Math.sin(time * 2 + index) * 0.03
       : 0.16 + Math.sin(time * 1.7 + index) * 0.04;
     visual.orbitRing.rotation.z = time * (0.35 + index * 0.12);
-    visual.body.rotation.y = time * (isLandable ? 0.28 + index * 0.06 : 0.52 + index * 0.11);
+    visual.body.rotation.y = -worldTime * (visual.planet.spinSpeed ?? 0);
     if (visual.atmosphereShell) {
-      visual.atmosphereShell.rotation.y = time * (isLandable ? 0.16 + index * 0.04 : -0.34 - index * 0.05);
+      visual.atmosphereShell.rotation.y = -worldTime * (visual.planet.spinSpeed ?? 0) * 0.85;
       visual.atmosphereShell.material.opacity = isLandable
         ? 0.13 + Math.sin(time * 2.8 + index) * 0.025
         : 0.11 + Math.sin(time * 1.9 + index) * 0.02;
@@ -1652,24 +1845,32 @@ function updateDecor(time) {
         ? 0.34 + Math.sin(time * 4.4) * 0.06
         : 0.16 + Math.sin(time * 3 + index) * 0.03;
       visual.orbitRing.material.opacity = selected ? 0.9 : 0.62 + Math.sin(time * 2.5 + index) * 0.06;
+      visual.orbitPath.material.opacity = selected ? 0.5 : 0.22 + Math.sin(time * 1.6 + index) * 0.025;
     } else {
       visual.orbitRing.material.opacity = 0.38 + Math.sin(time * 1.8 + index) * 0.04;
+      visual.orbitPath.material.opacity = 0.14 + Math.sin(time * 1.4 + index) * 0.02;
     }
+    visual.orbitPath.position.set(visual.planet.orbitCenter.x, 0, visual.planet.orbitCenter.y);
   });
+}
+
+function updateCameraProjection() {
+  const aspect = sceneHost.clientWidth / Math.max(1, sceneHost.clientHeight);
+  const halfHeight = CAMERA_VIEW_SIZE / 2;
+  const halfWidth = halfHeight * aspect;
+  camera.left = -halfWidth;
+  camera.right = halfWidth;
+  camera.top = halfHeight;
+  camera.bottom = -halfHeight;
+  camera.near = 0.1;
+  camera.far = 60;
+  camera.updateProjectionMatrix();
 }
 
 function resize() {
   const width = sceneHost.clientWidth;
   const height = sceneHost.clientHeight;
-  const aspect = width / height;
-  const viewSize = 12;
-  camera.left = (-viewSize * aspect) / 2;
-  camera.right = (viewSize * aspect) / 2;
-  camera.top = viewSize / 2;
-  camera.bottom = -viewSize / 2;
-  camera.near = 0.1;
-  camera.far = 60;
-  camera.updateProjectionMatrix();
+  updateCameraProjection();
   renderer.setSize(width, height);
 }
 
@@ -1697,7 +1898,6 @@ function animate() {
 
 applyLevel(getInitialLevelIndex());
 resetBall(`Level ${state.levelIndex + 1}: ${state.level.name}.`, state.level.summary);
-setVec(state.lastDragAnchor, state.level.start);
 resize();
 animate();
 

@@ -62,31 +62,40 @@ body::after {
 }
 
 .app-shell {
-  min-height: 100vh;
+  height: 100vh;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 14px;
-  padding: 16px;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  padding: 10px;
+  overflow: hidden;
 }
 
 .info-panel,
 .stage-panel {
+  grid-area: 1 / 1;
   position: relative;
 }
 
 .info-panel {
   display: grid;
-  grid-template-columns: minmax(220px, 300px) auto auto minmax(340px, 430px) minmax(260px, 420px);
+  grid-template-columns: minmax(180px, 240px) auto auto minmax(640px, 1.3fr) minmax(220px, 300px);
   align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
+  gap: 10px;
+  padding: 10px 12px;
   border: 1px solid var(--line);
-  border-radius: 20px;
-  background: linear-gradient(180deg, rgba(10, 17, 31, 0.94), rgba(7, 12, 24, 0.88));
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(10, 17, 31, 0.86), rgba(7, 12, 24, 0.78));
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.04),
     0 18px 50px rgba(0, 0, 0, 0.28);
   backdrop-filter: blur(14px);
+  align-self: start;
+  z-index: 8;
+  pointer-events: none;
+}
+
+.info-panel > * {
+  pointer-events: auto;
 }
 
 .brand-block {
@@ -110,7 +119,7 @@ body::after {
 h1 {
   margin: 0;
   font-family: 'Bungee', cursive;
-  font-size: clamp(1.4rem, 2.8vw, 2.1rem);
+  font-size: clamp(1.15rem, 2.2vw, 1.7rem);
   line-height: 0.96;
   color: #f3f6ff;
   text-shadow:
@@ -119,17 +128,17 @@ h1 {
 }
 
 .lede {
-  margin: 8px 0 0;
-  max-width: 34ch;
+  margin: 6px 0 0;
+  max-width: 30ch;
   color: var(--muted);
-  line-height: 1.35;
-  font-size: 0.84rem;
+  line-height: 1.25;
+  font-size: 0.73rem;
 }
 
 .stats {
   display: flex;
   align-items: stretch;
-  gap: 10px;
+  gap: 8px;
 }
 
 .stat-card,
@@ -141,12 +150,12 @@ h1 {
 }
 
 .stat-card {
-  padding: 14px 12px 12px;
+  padding: 12px 10px 10px;
 }
 
 .stat-card.compact {
-  min-width: 86px;
-  padding: 10px 12px 8px;
+  min-width: 72px;
+  padding: 8px 10px 7px;
 }
 
 .label {
@@ -157,16 +166,16 @@ h1 {
 }
 
 .stat-card strong {
-  font-size: 1.45rem;
+  font-size: 1.15rem;
   font-weight: 600;
 }
 
 .mini-guide {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: 0.64rem;
   text-transform: uppercase;
   letter-spacing: 0.12em;
 }
@@ -174,7 +183,7 @@ h1 {
 .mini-guide span {
   display: inline-flex;
   align-items: center;
-  padding: 8px 10px;
+  padding: 6px 8px;
   border-radius: 999px;
   border: 1px solid rgba(137, 168, 255, 0.12);
   background: rgba(255, 255, 255, 0.03);
@@ -182,15 +191,16 @@ h1 {
 
 .launch-controls {
   display: grid;
-  grid-template-columns: minmax(250px, 320px) auto;
+  grid-template-columns: repeat(3, minmax(160px, 1fr)) auto;
   align-items: stretch;
-  gap: 10px 12px;
+  gap: 8px;
+  min-width: 0;
 }
 
 .shot-control {
   min-width: 0;
-  padding: 10px 12px 12px;
-  border-radius: 16px;
+  padding: 8px 10px 9px;
+  border-radius: 14px;
   border: 1px solid rgba(137, 168, 255, 0.12);
   background: rgba(255, 255, 255, 0.035);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
@@ -210,7 +220,7 @@ h1 {
   justify-content: space-between;
   align-items: center;
   gap: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .shot-control-title,
@@ -232,6 +242,10 @@ h1 {
   color: #8df0df;
 }
 
+.tuning-control .shot-control-state {
+  color: #f7d98a;
+}
+
 .slider-field {
   min-width: 0;
 }
@@ -240,8 +254,8 @@ h1 {
   display: flex;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 6px;
-  font-size: 0.68rem;
+  margin-bottom: 4px;
+  font-size: 0.62rem;
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.12em;
@@ -258,23 +272,30 @@ h1 {
   accent-color: var(--accent);
 }
 
+.control-note {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.62rem;
+  line-height: 1.25;
+}
+
 #launchButton {
-  grid-column: 2;
-  grid-row: 1 / span 2;
+  grid-column: 4;
+  grid-row: 1;
   align-self: stretch;
   border: 1px solid rgba(137, 168, 255, 0.28);
   border-radius: 999px;
-  padding: 10px 16px;
+  padding: 10px 14px;
   background: linear-gradient(180deg, rgba(124, 152, 255, 0.3), rgba(68, 98, 203, 0.2));
   color: var(--text);
   font: inherit;
-  font-size: 0.8rem;
+  font-size: 0.72rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.14em;
   cursor: pointer;
   transition: opacity 140ms ease, transform 140ms ease, border-color 140ms ease;
-  min-width: 132px;
+  min-width: 100px;
 }
 
 #launchButton:hover:not(:disabled) {
@@ -289,13 +310,15 @@ h1 {
 
 .stage-panel {
   min-width: 0;
+  min-height: 0;
+  z-index: 1;
 }
 
 .table-frame {
   position: relative;
-  height: calc(100vh - 126px);
-  min-height: 520px;
-  border-radius: 34px;
+  height: 100%;
+  min-height: 360px;
+  border-radius: 28px;
   border: 1px solid rgba(118, 146, 255, 0.12);
   background:
     linear-gradient(180deg, rgba(8, 13, 26, 0.84), rgba(4, 8, 18, 0.94)),
@@ -309,9 +332,9 @@ h1 {
 .table-frame::before {
   content: '';
   position: absolute;
-  inset: 14px;
+  inset: 12px;
   border: 1px solid rgba(118, 146, 255, 0.08);
-  border-radius: 26px;
+  border-radius: 22px;
   pointer-events: none;
 }
 
@@ -363,16 +386,16 @@ h1 {
 
 .status-card {
   align-self: flex-start;
-  max-width: min(460px, 100%);
-  padding: 18px 18px 16px;
+  max-width: min(360px, 100%);
+  padding: 12px 14px 11px;
   background: rgba(7, 12, 24, 0.72);
 }
 
 .hud-status {
   width: 100%;
-  max-width: 460px;
+  max-width: 360px;
   justify-self: end;
-  padding: 12px 14px 10px;
+  padding: 10px 12px 9px;
   border-radius: 16px;
 }
 
@@ -385,21 +408,21 @@ h1 {
 .status-card h2 {
   margin: 0;
   font-family: 'Bungee', cursive;
-  font-size: clamp(0.95rem, 1.3vw, 1.15rem);
+  font-size: clamp(0.82rem, 1.05vw, 1rem);
   line-height: 1.06;
   color: #f3f6ff;
 }
 
 .status-card p:last-child {
-  margin: 8px 0 0;
+  margin: 6px 0 0;
   color: var(--muted);
-  line-height: 1.35;
-  font-size: 0.78rem;
+  line-height: 1.25;
+  font-size: 0.7rem;
 }
 
 .meter {
-  margin-top: 10px;
-  height: 8px;
+  margin-top: 8px;
+  height: 6px;
   border-radius: 999px;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.06);
@@ -416,18 +439,41 @@ h1 {
   box-shadow: 0 0 18px rgba(244, 213, 106, 0.35);
 }
 
+@media (max-width: 1380px) {
+  .info-panel {
+    grid-template-columns: minmax(180px, 240px) auto minmax(150px, 190px) minmax(460px, 1fr) minmax(210px, 260px);
+  }
+
+  .launch-controls {
+    grid-template-columns: repeat(2, minmax(160px, 1fr));
+  }
+
+  .tuning-control {
+    grid-column: 1 / -1;
+  }
+
+  #launchButton {
+    grid-column: 1 / -1;
+    min-height: 42px;
+  }
+}
+
 @media (max-width: 980px) {
   body {
     overflow: auto;
   }
 
   .app-shell {
-    gap: 12px;
+    height: auto;
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow: visible;
   }
 
   .info-panel {
+    grid-area: auto;
     grid-template-columns: 1fr;
     align-items: start;
+    pointer-events: auto;
   }
 
   .launch-controls {
@@ -448,6 +494,10 @@ h1 {
   .table-frame {
     height: min(78vh, 760px);
     min-height: 420px;
+  }
+
+  .stage-panel {
+    grid-area: auto;
   }
 }
 

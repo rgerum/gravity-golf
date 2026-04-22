@@ -2,6 +2,7 @@ import {
   LEVELS,
   MAX_DRAG_DISTANCE,
   createLevelRuntime,
+  directionFromAngleDeg,
   simulateShot,
 } from '../src/game-core.js';
 
@@ -13,6 +14,8 @@ function parseArgs(argv) {
     top: 5,
     maxTime: 18,
     maxShots: 2,
+    waits: 8,
+    maxWait: 5,
     maxLandingsPerPlanet: 4,
     minPower: 0.2,
     robustAngleDeg: 4,
@@ -42,6 +45,12 @@ function parseArgs(argv) {
       index += 1;
     } else if (arg === '--max-shots' && value) {
       options.maxShots = Number.parseInt(value, 10);
+      index += 1;
+    } else if (arg === '--waits' && value) {
+      options.waits = Number.parseInt(value, 10);
+      index += 1;
+    } else if (arg === '--max-wait' && value) {
+      options.maxWait = Number.parseFloat(value);
       index += 1;
     } else if (arg === '--max-landings-per-planet' && value) {
       options.maxLandingsPerPlanet = Number.parseInt(value, 10);
@@ -80,6 +89,8 @@ Options:
   --top N               Number of best scoring shots to print (default: 5)
   --max-time SECONDS    Max simulated flight time per shot (default: 18)
   --max-shots N         Maximum shots to chain together (default: 2)
+  --waits N             Number of launch wait samples from 0 to max-wait (default: 8)
+  --max-wait SECONDS    Maximum pre-launch wait to test (default: 5)
   --max-landings-per-planet N
                         Landing candidates to keep per relay world (default: 4)
   --min-power VALUE     Minimum pull strength to test (default: 0.2)
@@ -130,6 +141,9 @@ function mergeMisses(target, source) {
 
 function simulateSequence(level, shots, options) {
   let startPosition = level.start;
+  let startTime = 0;
+  let anchorPlanetIndex = level.startPlanetIndex ?? null;
+  let anchorNormal = directionFromAngleDeg(level.startAngleDeg ?? 180);
   let landingCount = 0;
   let totalTime = 0;
   let totalSteps = 0;
@@ -143,10 +157,13 @@ function simulateSequence(level, shots, options) {
     const result = simulateShot(level, shots[index], {
       maxTime: options.maxTime,
       startPosition,
+      startTime,
+      anchorPlanetIndex,
+      anchorNormal,
       landingCount,
     });
 
-    totalTime += result.time;
+    totalTime += result.time + result.waitTime;
     totalSteps += result.steps;
     minGoalDistance = Math.min(minGoalDistance, result.minGoalDistance);
     minPlanetClearance = Math.min(minPlanetClearance, result.minPlanetClearance);
@@ -181,6 +198,9 @@ function simulateSequence(level, shots, options) {
 
     landedPlanets = [...landedPlanets, result.planetName];
     startPosition = result.finalPosition;
+    startTime = result.finalTime;
+    anchorPlanetIndex = result.anchorPlanetIndex;
+    anchorNormal = result.anchorNormal;
     landingCount = result.landingCount;
   }
 
@@ -217,6 +237,7 @@ function evaluateRobustness(level, solution, options) {
                   options.minPower,
                   MAX_DRAG_DISTANCE,
                 ),
+                waitTime: shot.waitTime,
               }
             : shot
         ));
@@ -236,8 +257,8 @@ function evaluateRobustness(level, solution, options) {
   };
 }
 
-function buildShot(angle, dragPower) {
-  return { angle, dragPower };
+function buildShot(angle, dragPower, waitTime) {
+  return { angle, dragPower, waitTime };
 }
 
 function chooseLandingCandidates(candidates, options) {
@@ -267,6 +288,9 @@ function chooseLandingCandidates(candidates, options) {
 function searchSolutions(
   level,
   startPosition,
+  startTime,
+  anchorPlanetIndex,
+  anchorNormal,
   landingCount,
   options,
   remainingShots,
@@ -288,30 +312,36 @@ function searchSolutions(
         MAX_DRAG_DISTANCE,
       );
 
-      const shot = buildShot(angle, dragPower);
-      const result = simulateShot(level, shot, {
-        maxTime: options.maxTime,
-        startPosition,
-        landingCount,
-      });
+      for (let waitIndex = 0; waitIndex < options.waits; waitIndex += 1) {
+        const waitTime = sampleValue(waitIndex, options.waits, 0, options.maxWait);
+        const shot = buildShot(angle, dragPower, waitTime);
+        const result = simulateShot(level, shot, {
+          maxTime: options.maxTime,
+          startPosition,
+          startTime,
+          anchorPlanetIndex,
+          anchorNormal,
+          landingCount,
+        });
 
-      if (result.outcome === 'goal') {
-        directSolutions.push({ shots: [...pathShots, shot] });
-      } else if (result.outcome === 'landed') {
-        misses.landed += 1;
-        if (
-          remainingShots > 1 &&
-          result.planetIndex !== null &&
-          !visitedPlanets.has(result.planetIndex)
-        ) {
-          landingCandidates.push({ shot, result });
+        if (result.outcome === 'goal') {
+          directSolutions.push({ shots: [...pathShots, shot] });
+        } else if (result.outcome === 'landed') {
+          misses.landed += 1;
+          if (
+            remainingShots > 1 &&
+            result.planetIndex !== null &&
+            !visitedPlanets.has(result.planetIndex)
+          ) {
+            landingCandidates.push({ shot, result });
+          }
+        } else if (result.outcome === 'crash') {
+          misses[result.reason] += 1;
+        } else if (result.outcome === 'settled') {
+          misses.settled += 1;
+        } else {
+          misses.timeout += 1;
         }
-      } else if (result.outcome === 'crash') {
-        misses[result.reason] += 1;
-      } else if (result.outcome === 'settled') {
-        misses.settled += 1;
-      } else {
-        misses.timeout += 1;
       }
     }
   }
@@ -323,6 +353,9 @@ function searchSolutions(
     const nested = searchSolutions(
       level,
       candidate.result.finalPosition,
+      candidate.result.finalTime,
+      candidate.result.anchorPlanetIndex,
+      candidate.result.anchorNormal,
       candidate.result.landingCount,
       options,
       remainingShots - 1,
@@ -345,7 +378,7 @@ function dedupeSolutions(solutions) {
 
   for (const solution of solutions) {
     const key = solution.shots
-      .map((shot) => `${shot.angle.toFixed(4)}:${shot.dragPower.toFixed(3)}`)
+      .map((shot) => `${shot.angle.toFixed(4)}:${shot.dragPower.toFixed(3)}:${shot.waitTime.toFixed(3)}`)
       .join('|');
 
     if (!seen.has(key)) {
@@ -359,7 +392,16 @@ function dedupeSolutions(solutions) {
 
 function testLevel(levelIndex, options) {
   const level = createLevelRuntime(levelIndex);
-  const search = searchSolutions(level, level.start, 0, options, options.maxShots);
+  const search = searchSolutions(
+    level,
+    level.start,
+    0,
+    level.startPlanetIndex ?? null,
+    directionFromAngleDeg(level.startAngleDeg ?? 180),
+    0,
+    options,
+    options.maxShots,
+  );
   const solutions = [];
   const robustSolutions = [];
   const misses = search.misses;
@@ -401,7 +443,7 @@ function formatAngle(angle) {
 
 function formatShotSequence(solution) {
   return solution.shots
-    .map((shot, index) => `S${index + 1} ${formatAngle(shot.angle)} @ ${shot.dragPower.toFixed(2)}`)
+    .map((shot, index) => `S${index + 1} wait ${shot.waitTime.toFixed(2)}s, ${formatAngle(shot.angle)} @ ${shot.dragPower.toFixed(2)}`)
     .join(' -> ');
 }
 
@@ -418,7 +460,7 @@ function main() {
 
   for (const levelIndex of levelIndexes) {
     const { level, solutions, robustSolutions, misses } = testLevel(levelIndex, options);
-    const sampleCount = options.angles * options.powers;
+    const sampleCount = options.angles * options.powers * options.waits;
 
     console.log(`Level ${levelIndex + 1}/${LEVELS.length}: ${level.name}`);
     console.log(`  ${level.summary}`);
