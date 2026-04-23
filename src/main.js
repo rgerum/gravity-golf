@@ -567,6 +567,9 @@ const planetTextureCache = new Map();
 let lastGravityFieldRefreshTime = Number.NEGATIVE_INFINITY;
 let lastGoalTimerFraction = Number.NaN;
 const gravityFieldTintColor = new THREE.Color();
+let lastSceneWidth = 0;
+let lastSceneHeight = 0;
+let pendingResizeFrame = 0;
 
 function getViewportMetrics() {
   const aspect = sceneHost.clientWidth / Math.max(1, sceneHost.clientHeight);
@@ -2907,6 +2910,14 @@ function updateCameraProjection() {
 function resize() {
   const width = sceneHost.clientWidth;
   const height = sceneHost.clientHeight;
+  if (width <= 0 || height <= 0) {
+    return;
+  }
+  if (width === lastSceneWidth && height === lastSceneHeight) {
+    return;
+  }
+  lastSceneWidth = width;
+  lastSceneHeight = height;
   updateCameraProjection();
   updateCourseSurfaceVisuals();
   rebuildGravityField();
@@ -2914,9 +2925,28 @@ function resize() {
   renderer.setSize(width, height);
 }
 
+function scheduleResize(frames = 3) {
+  if (pendingResizeFrame) {
+    cancelAnimationFrame(pendingResizeFrame);
+  }
+
+  const tick = (remainingFrames) => {
+    resize();
+    if (remainingFrames > 0) {
+      pendingResizeFrame = requestAnimationFrame(() => tick(remainingFrames - 1));
+      return;
+    }
+    pendingResizeFrame = 0;
+  };
+
+  pendingResizeFrame = requestAnimationFrame(() => tick(frames));
+}
+
 function animate() {
   const delta = Math.min(clock.getDelta(), 0.033);
   const time = clock.elapsedTime;
+
+  resize();
 
   if (state.debug.fpsVisible) {
     state.debug.fpsFrameCount += 1;
@@ -2955,4 +2985,13 @@ resetBall(`Level ${state.levelIndex + 1}: ${state.level.name}.`, state.level.sum
 resize();
 animate();
 
-window.addEventListener('resize', resize);
+window.addEventListener('resize', () => scheduleResize());
+window.addEventListener('orientationchange', () => scheduleResize(5));
+window.addEventListener('pageshow', () => scheduleResize(5));
+window.visualViewport?.addEventListener('resize', () => scheduleResize(5));
+window.visualViewport?.addEventListener('scroll', () => scheduleResize(2));
+
+const sceneResizeObserver = new ResizeObserver(() => {
+  scheduleResize(2);
+});
+sceneResizeObserver.observe(sceneHost);
