@@ -32,87 +32,34 @@ const app = document.querySelector('#app');
 
 app.innerHTML = `
   <div class="app-shell">
-    <header class="info-panel">
-      <div class="brand-block">
-        <p class="eyebrow">Orbital Course</p>
-        <h1>Gravity Billiard</h1>
-        <p class="lede">
-          Slingshot from the launch pad, surf the gravity wells, and drop into the black hole.
-        </p>
-      </div>
-      <div class="stats">
-        <div class="stat-card compact">
-          <span class="label">Score</span>
-          <strong id="scoreValue">0</strong>
-        </div>
-        <div class="stat-card compact">
-          <span class="label">Shots</span>
-          <strong id="shotsValue">0</strong>
-        </div>
-        <div class="stat-card compact">
-          <span class="label">Resets</span>
-          <strong id="resetValue">0</strong>
-        </div>
-      </div>
-      <div class="mini-guide">
-        <span>Grab ball</span>
-        <span>Pull line</span>
-        <span>Wait to align</span>
-      </div>
-      <div class="launch-controls">
-        <div class="shot-control" data-shot-panel="0">
-          <div class="shot-control-header">
-            <span class="shot-control-title">Shot 1</span>
-            <span class="shot-control-state" id="shotState0">Start</span>
-          </div>
-          <div class="slider-field">
-            <label for="angleSlider0">Angle <strong id="angleValue0">0.0 deg</strong></label>
-            <input id="angleSlider0" data-shot-index="0" data-shot-axis="angle" type="range" min="-180" max="180" step="0.1" value="0" />
-          </div>
-          <div class="slider-field">
-            <label for="powerSlider0">Power <strong id="powerValue0">0.20</strong></label>
-            <input id="powerSlider0" data-shot-index="0" data-shot-axis="power" type="range" min="0.2" max="2.75" step="0.01" value="0.2" />
-          </div>
-        </div>
-        <div class="shot-control" data-shot-panel="1">
-          <div class="shot-control-header">
-            <span class="shot-control-title">Shot 2</span>
-            <span class="shot-control-state" id="shotState1">Relay</span>
-          </div>
-          <div class="slider-field">
-            <label for="angleSlider1">Angle <strong id="angleValue1">0.0 deg</strong></label>
-            <input id="angleSlider1" data-shot-index="1" data-shot-axis="angle" type="range" min="-180" max="180" step="0.1" value="0" />
-          </div>
-          <div class="slider-field">
-            <label for="powerSlider1">Power <strong id="powerValue1">0.20</strong></label>
-            <input id="powerSlider1" data-shot-index="1" data-shot-axis="power" type="range" min="0.2" max="2.75" step="0.01" value="0.2" />
-          </div>
-        </div>
-        <button id="undoButton" type="button">Undo</button>
-        <button id="launchButton" type="button">Go</button>
-      </div>
-      <div class="status-card hud-status">
-        <p class="status-label">Flight Call</p>
-        <h2 id="statusLine">Plot the first slingshot.</h2>
-        <div class="run-strip">
-          <span class="status-pill" id="runStatusPill">Shot 1 · Launch Pad</span>
-          <span class="status-pill" id="windowStatusPill">Window live</span>
-        </div>
-        <div class="meter">
-          <span id="powerFill"></span>
-        </div>
-        <p id="statusHint">Use the planets to curve into the event horizon.</p>
-        <p id="approachLine" class="status-note">Best approach this level: no close calls yet.</p>
-      </div>
-    </header>
     <main class="stage-panel">
       <div class="table-frame">
         <div id="scene"></div>
         <div class="stage-overlay">
-          <div class="stage-topline">
-            <span class="chip">Top View</span>
-            <span class="chip" id="levelChip">Level 1</span>
-            <span class="chip chip-live">Black Hole Goal</span>
+          <div class="hud-top">
+            <div class="level-block">
+              <p class="level-kicker">Orbital Course</p>
+              <h1 id="levelLabel">Level 1 / 1</h1>
+              <p class="level-name" id="levelName">Launch Window</p>
+              <div class="hud-pills">
+                <span class="status-pill" id="runStatusPill">Shot 1 · Launch Pad</span>
+                <span class="status-pill" id="windowStatusPill">Window live</span>
+              </div>
+            </div>
+            <div class="action-row">
+              <button id="retryButton" class="hud-button" type="button">Retry</button>
+              <button id="undoButton" class="hud-button hud-button-primary" type="button">Undo</button>
+            </div>
+          </div>
+          <div class="hud-bottom">
+            <div class="status-card">
+              <p class="status-label">Flight Call</p>
+              <h2 id="statusLine">Plot the first slingshot.</h2>
+              <div class="meter">
+                <span id="powerFill"></span>
+              </div>
+              <p id="statusHint">Drag from the ball, then release to launch.</p>
+            </div>
           </div>
         </div>
       </div>
@@ -120,24 +67,15 @@ app.innerHTML = `
   </div>
 `;
 
-const scoreValue = document.querySelector('#scoreValue');
-const shotsValue = document.querySelector('#shotsValue');
-const resetValue = document.querySelector('#resetValue');
+const levelLabel = document.querySelector('#levelLabel');
+const levelName = document.querySelector('#levelName');
 const statusLine = document.querySelector('#statusLine');
 const statusHint = document.querySelector('#statusHint');
-const approachLine = document.querySelector('#approachLine');
 const runStatusPill = document.querySelector('#runStatusPill');
 const windowStatusPill = document.querySelector('#windowStatusPill');
 const powerFill = document.querySelector('#powerFill');
-const levelChip = document.querySelector('#levelChip');
-const shotControlPanels = [...document.querySelectorAll('[data-shot-panel]')];
-const shotControlStates = [0, 1].map((index) => document.querySelector(`#shotState${index}`));
-const angleSliders = [0, 1].map((index) => document.querySelector(`#angleSlider${index}`));
-const powerSliders = [0, 1].map((index) => document.querySelector(`#powerSlider${index}`));
-const angleValues = [0, 1].map((index) => document.querySelector(`#angleValue${index}`));
-const powerValues = [0, 1].map((index) => document.querySelector(`#powerValue${index}`));
+const retryButton = document.querySelector('#retryButton');
 const undoButton = document.querySelector('#undoButton');
-const launchButton = document.querySelector('#launchButton');
 const sceneHost = document.querySelector('#scene');
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -179,6 +117,12 @@ const gravityGridConfig = {
   insetY: 0.75,
 };
 
+const VISUAL_FIELD_PADDING_X = 2.4;
+const VISUAL_FIELD_PADDING_Y = 1.8;
+const LANDSCAPE_CAMERA_ZOOM_MIN = 0.74;
+const LANDSCAPE_CAMERA_ZOOM_START_ASPECT = 1.45;
+const LANDSCAPE_CAMERA_ZOOM_END_ASPECT = 2.35;
+
 const gravityFieldPalette = {
   low: new THREE.Color(0x24507d),
   mid: new THREE.Color(0x78bdff),
@@ -190,6 +134,7 @@ const MAX_PHYSICS_STEPS_PER_FRAME = 4;
 const ballRestY = COURSE.ballRadius + 0.04;
 const CONTROL_MIN_ANGLE = -180;
 const CONTROL_MAX_ANGLE = 180;
+const CONTROL_MIN_POWER = 0.2;
 const ADMIN_STORAGE_KEY = 'gravityBilliardAdminMode';
 const ADMIN_CHEAT_CODE = 'orbitadmin';
 const DEFAULT_CONTROL_SHOT = { angleDeg: 0, power: 1.8 };
@@ -604,6 +549,54 @@ const planetTextureCache = new Map();
 let lastGravityFieldRefreshTime = Number.NEGATIVE_INFINITY;
 let lastGoalTimerFraction = Number.NaN;
 
+function getViewportMetrics() {
+  const aspect = sceneHost.clientWidth / Math.max(1, sceneHost.clientHeight);
+  const landscapeT = clamp(
+    (aspect - LANDSCAPE_CAMERA_ZOOM_START_ASPECT)
+      / (LANDSCAPE_CAMERA_ZOOM_END_ASPECT - LANDSCAPE_CAMERA_ZOOM_START_ASPECT),
+    0,
+    1,
+  );
+  const cameraScale = THREE.MathUtils.lerp(1, LANDSCAPE_CAMERA_ZOOM_MIN, landscapeT);
+  const viewHeight = CAMERA_VIEW_SIZE * cameraScale;
+  const viewWidth = viewHeight * aspect;
+
+  return {
+    aspect,
+    landscapeT,
+    cameraScale,
+    viewWidth,
+    viewHeight,
+    halfWidth: viewWidth / 2,
+    halfHeight: viewHeight / 2,
+  };
+}
+
+function getVisualFieldSize() {
+  const viewport = getViewportMetrics();
+  return {
+    width: Math.max(COURSE.width + VISUAL_FIELD_PADDING_X, viewport.viewWidth + VISUAL_FIELD_PADDING_X),
+    height: Math.max(COURSE.height + VISUAL_FIELD_PADDING_Y, viewport.viewHeight + VISUAL_FIELD_PADDING_Y),
+  };
+}
+
+function replaceMeshGeometry(mesh, geometry) {
+  mesh.geometry.dispose();
+  mesh.geometry = geometry;
+}
+
+function updateCourseSurfaceVisuals() {
+  const visualField = getVisualFieldSize();
+  replaceMeshGeometry(field, new THREE.BoxGeometry(visualField.width, 0.14, visualField.height));
+  replaceMeshGeometry(
+    courseHalo,
+    new THREE.PlaneGeometry(
+      Math.max(0.1, visualField.width - 0.5),
+      Math.max(0.1, visualField.height - 0.5),
+    ),
+  );
+}
+
 function setGoalTimerArc(fraction) {
   const normalizedFraction = clamp(fraction, 0, 1);
   if (
@@ -656,15 +649,6 @@ function formatDistance(value) {
   return value < 1 ? value.toFixed(2) : value.toFixed(1);
 }
 
-function getBestApproachText() {
-  if (!state.bestApproach) {
-    return 'Best approach this level: no close calls yet.';
-  }
-
-  const routeLabel = state.bestApproach.usedRelay ? 'after relay' : 'direct';
-  return `Best approach this level: ${formatDistance(state.bestApproach.minGoalDistance)} from goal, ${routeLabel}.`;
-}
-
 function getAdminSolutions() {
   return Array.isArray(state.level.adminSolutions) ? state.level.adminSolutions : [];
 }
@@ -695,9 +679,9 @@ function persistAdminMode() {
 
 function applyAdminSolutionToControls(solution) {
   state.controlShots = solution.shots
-    .slice(0, angleSliders.length)
+    .slice(0, Math.max(1, state.controlShots.length))
     .map((shot) => clampControlShot({ angleDeg: shot.angleDeg, power: shot.power }));
-  syncLaunchControls();
+  syncActionButtons();
 }
 
 function getAdminSolutionSummary(solution, solutionIndex, total) {
@@ -1194,7 +1178,7 @@ function dot(a, b) {
 function clampControlShot(shot) {
   return {
     angleDeg: clamp(wrapSignedAngleDeg(shot.angleDeg), CONTROL_MIN_ANGLE, CONTROL_MAX_ANGLE),
-    power: clamp(shot.power, Number.parseFloat(powerSliders[0].min), MAX_DRAG_DISTANCE),
+    power: clamp(shot.power, CONTROL_MIN_POWER, MAX_DRAG_DISTANCE),
   };
 }
 
@@ -1544,18 +1528,6 @@ function getPlanetTexture(planet) {
 
 state.controlShots = createControlShots(state.level);
 
-function getPreviewDirection() {
-  const shot = getControlShot();
-  return constrainLaunchDirection(directionFromAngleDeg(shot.angleDeg), shot.power);
-}
-
-function getPreviewAnchor() {
-  const shot = getControlShot();
-  const anchor = cloneVec(state.ball.position);
-  addScaledVec(anchor, getPreviewDirection(), shot.power);
-  return anchor;
-}
-
 function getWindowStatusText() {
   const remaining = getGoalRemainingTime(state.level, state.ball.time ?? state.level.time ?? 0);
   return remaining > 0.05 ? `Window ${remaining.toFixed(1)}s` : 'Window closed';
@@ -1739,50 +1711,18 @@ function constrainLaunchDirection(direction, power) {
   });
 }
 
-function getShotControlStateLabel(stageIndex, activeStageIndex) {
-  if (stageIndex < activeStageIndex) {
-    return 'Locked';
-  }
-
-  if (stageIndex === activeStageIndex) {
-    return stageIndex === 0 ? 'Active' : 'Ready';
-  }
-
-  return 'Queued';
+function canRetryLevel() {
+  return !state.adminReplay.active && !state.undo.active && !state.ball.goaling;
 }
 
-function syncLaunchControls() {
-  const activeStageIndex = getActiveStageIndex();
-  const controlsLocked = state.adminReplay.active || state.undo.active;
-
-  shotControlPanels.forEach((panel, index) => {
-    const shot = state.controlShots[index];
-    const visible = Boolean(shot);
-    panel.hidden = !visible;
-    if (!visible) {
-      return;
-    }
-
-    panel.classList.toggle('is-active', index === activeStageIndex);
-    angleSliders[index].value = shot.angleDeg.toFixed(1);
-    powerSliders[index].value = shot.power.toFixed(2);
-    angleSliders[index].disabled = controlsLocked;
-    powerSliders[index].disabled = controlsLocked;
-    angleValues[index].textContent = `${shot.angleDeg.toFixed(1)} deg`;
-    powerValues[index].textContent = shot.power.toFixed(2);
-    shotControlStates[index].textContent = getShotControlStateLabel(index, activeStageIndex);
-  });
-
-  launchButton.textContent = controlsLocked
-    ? 'Auto'
-    : `Go${state.controlShots.length > 1 ? ` · Shot ${activeStageIndex + 1}` : ''}`;
-  launchButton.disabled = controlsLocked || ballIsMoving() || state.dragActive;
+function syncActionButtons() {
+  retryButton.disabled = !canRetryLevel();
   undoButton.disabled = !canRedo();
 }
 
 function setControlShot(stageIndex, angleDeg, power) {
   state.controlShots[stageIndex] = clampControlShot({ angleDeg, power });
-  syncLaunchControls();
+  syncActionButtons();
 }
 
 function disposeMaterial(material) {
@@ -1879,10 +1819,13 @@ function rebuildGravityField() {
   clearGroup(gravityFieldRoot);
   gravityFieldVisuals = null;
 
-  const columns = gravityGridConfig.columns;
-  const rows = gravityGridConfig.rows;
-  const width = COURSE.width - gravityGridConfig.insetX * 2;
-  const height = COURSE.height - gravityGridConfig.insetY * 2;
+  const visualField = getVisualFieldSize();
+  const width = visualField.width - gravityGridConfig.insetX * 2;
+  const height = visualField.height - gravityGridConfig.insetY * 2;
+  const baseWidth = COURSE.width - gravityGridConfig.insetX * 2;
+  const baseHeight = COURSE.height - gravityGridConfig.insetY * 2;
+  const columns = Math.max(2, Math.round(gravityGridConfig.columns * (width / baseWidth)));
+  const rows = Math.max(2, Math.round(gravityGridConfig.rows * (height / baseHeight)));
   const halfWidth = width / 2;
   const halfHeight = height / 2;
   const samples = [];
@@ -2179,21 +2122,18 @@ function applyLevel(index) {
   goalGroup.position.set(state.level.goalCenter.x, 0.06, state.level.goalCenter.y);
 
   syncLevelQueryParam(state.levelIndex);
-  syncLaunchControls();
+  syncActionButtons();
 
-  levelChip.textContent = `Level ${state.levelIndex + 1}/${LEVELS.length} · ${state.level.name}`;
+  levelLabel.textContent = `Level ${state.levelIndex + 1} / ${LEVELS.length}`;
+  levelName.textContent = state.level.name;
   rebuildGravityField();
   lastGravityFieldRefreshTime = state.level.time ?? 0;
   rebuildPlanets();
 }
 
 function syncHud() {
-  scoreValue.textContent = String(state.score);
-  shotsValue.textContent = String(state.shots);
-  resetValue.textContent = String(state.resets);
   statusLine.textContent = state.message;
   statusHint.textContent = state.hint;
-  approachLine.textContent = getBestApproachText();
   runStatusPill.textContent = getRunStatusText();
   windowStatusPill.textContent = getWindowStatusText();
   runStatusPill.classList.toggle('is-hot', state.ball.anchorPlanetIndex !== null && state.ball.landingCount > 0);
@@ -2203,7 +2143,7 @@ function syncHud() {
   );
   const shownPower = state.dragActive ? state.dragPower : getControlShot().power;
   powerFill.style.transform = `scaleX(${Math.max(0.04, shownPower / MAX_DRAG_DISTANCE)})`;
-  syncLaunchControls();
+  syncActionButtons();
 }
 
 function resetBall(message, hint, options = {}) {
@@ -2493,42 +2433,19 @@ renderer.domElement.addEventListener('pointermove', onPointerMove);
 renderer.domElement.addEventListener('pointerup', onPointerUp);
 renderer.domElement.addEventListener('pointercancel', onPointerUp);
 
-function launchFromControls() {
-  if (ballIsMoving() || state.dragActive || state.adminReplay.active || state.undo.active) {
+function restartLevel() {
+  if (!canRetryLevel()) {
     return;
   }
 
-  const activeShot = getControlShot();
-  const direction = getPreviewDirection();
-  const anchor = getPreviewAnchor();
-  launchShot(direction, activeShot.power, anchor);
+  resetBall(
+    `Level ${state.levelIndex + 1}: ${state.level.name}.`,
+    state.level.summary,
+    { countReset: true },
+  );
 }
 
-angleSliders.forEach((slider, index) => {
-  slider.addEventListener('input', (event) => {
-    if (state.adminReplay.active) {
-      return;
-    }
-    const nextAngle = Number.parseFloat(event.target.value);
-    const shot = getControlShot(index);
-    setControlShot(index, nextAngle, shot.power);
-    syncHud();
-  });
-});
-
-powerSliders.forEach((slider, index) => {
-  slider.addEventListener('input', (event) => {
-    if (state.adminReplay.active) {
-      return;
-    }
-    const nextPower = Number.parseFloat(event.target.value);
-    const shot = getControlShot(index);
-    setControlShot(index, shot.angleDeg, nextPower);
-    syncHud();
-  });
-});
-
-launchButton.addEventListener('click', launchFromControls);
+retryButton.addEventListener('click', restartLevel);
 undoButton.addEventListener('click', startUndo);
 
 window.addEventListener('keydown', (event) => {
@@ -2821,13 +2738,11 @@ function updateDecor(time) {
 }
 
 function updateCameraProjection() {
-  const aspect = sceneHost.clientWidth / Math.max(1, sceneHost.clientHeight);
-  const halfHeight = CAMERA_VIEW_SIZE / 2;
-  const halfWidth = halfHeight * aspect;
-  camera.left = -halfWidth;
-  camera.right = halfWidth;
-  camera.top = halfHeight;
-  camera.bottom = -halfHeight;
+  const viewport = getViewportMetrics();
+  camera.left = -viewport.halfWidth;
+  camera.right = viewport.halfWidth;
+  camera.top = viewport.halfHeight;
+  camera.bottom = -viewport.halfHeight;
   camera.near = 0.1;
   camera.far = 60;
   camera.updateProjectionMatrix();
@@ -2837,6 +2752,9 @@ function resize() {
   const width = sceneHost.clientWidth;
   const height = sceneHost.clientHeight;
   updateCameraProjection();
+  updateCourseSurfaceVisuals();
+  rebuildGravityField();
+  lastGravityFieldRefreshTime = state.level.time ?? 0;
   renderer.setSize(width, height);
 }
 
