@@ -569,6 +569,7 @@ let lastGoalTimerFraction = Number.NaN;
 const gravityFieldTintColor = new THREE.Color();
 let lastSceneWidth = 0;
 let lastSceneHeight = 0;
+let lastViewportHeight = 0;
 let pendingResizeFrame = 0;
 
 function getViewportMetrics() {
@@ -2907,7 +2908,21 @@ function updateCameraProjection() {
   camera.updateProjectionMatrix();
 }
 
+function syncViewportHeight() {
+  const viewportHeight = Math.round(
+    window.visualViewport
+      ? Math.max(window.innerHeight, window.visualViewport.height)
+      : window.innerHeight,
+  );
+  if (viewportHeight <= 0 || viewportHeight === lastViewportHeight) {
+    return;
+  }
+  lastViewportHeight = viewportHeight;
+  document.documentElement.style.setProperty('--app-height', `${viewportHeight}px`);
+}
+
 function resize() {
+  syncViewportHeight();
   const width = sceneHost.clientWidth;
   const height = sceneHost.clientHeight;
   if (width <= 0 || height <= 0) {
@@ -2982,6 +2997,7 @@ function animate() {
 
 applyLevel(getInitialLevelIndex());
 resetBall(`Level ${state.levelIndex + 1}: ${state.level.name}.`, state.level.summary);
+syncViewportHeight();
 resize();
 animate();
 
@@ -2989,7 +3005,6 @@ window.addEventListener('resize', () => scheduleResize());
 window.addEventListener('orientationchange', () => scheduleResize(5));
 window.addEventListener('pageshow', () => scheduleResize(5));
 window.visualViewport?.addEventListener('resize', () => scheduleResize(5));
-window.visualViewport?.addEventListener('scroll', () => scheduleResize(2));
 
 const sceneResizeObserver = new ResizeObserver(() => {
   scheduleResize(2);

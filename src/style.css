@@ -3,6 +3,7 @@
 :root {
   color-scheme: dark;
   font-family: 'IBM Plex Sans', sans-serif;
+  --app-height: 100dvh;
   --bg: #04070f;
   --surface: rgba(8, 14, 28, 0.68);
   --surface-strong: rgba(10, 17, 30, 0.82);
@@ -29,7 +30,7 @@ body,
 }
 
 body {
-  min-height: 100dvh;
+  min-height: var(--app-height);
   background:
     radial-gradient(circle at top, rgba(127, 164, 255, 0.12), transparent 28%),
     radial-gradient(circle at 16% 18%, rgba(76, 146, 255, 0.14), transparent 24%),
@@ -63,7 +64,7 @@ body::after {
 }
 
 .app-shell {
-  height: 100dvh;
+  height: var(--app-height);
   padding:
     calc(12px + env(safe-area-inset-top))
     calc(12px + env(safe-area-inset-right))
