@@ -492,6 +492,7 @@ const state = {
   },
   aimDirection: normalize({ x: 1, y: 0 }),
   dragAnchor: { x: 0, y: 0 },
+  dragStartWorld: { x: 0, y: 0 },
   dragPointerWorld: { x: 0, y: 0 },
   controlShots: [],
   dragActive: false,
@@ -930,6 +931,7 @@ function finishUndo() {
   setVec(state.ball.crashStartPosition, state.ball.position);
   setVec(state.ball.crashTargetPosition, state.ball.position);
   setVec(state.dragAnchor, state.ball.position);
+  setVec(state.dragStartWorld, state.ball.position);
   setVec(state.dragPointerWorld, state.ball.position);
   state.dragActive = false;
   state.dragPower = 0;
@@ -2185,6 +2187,7 @@ function resetBall(message, hint, options = {}) {
   setVec(state.ball.crashStartPosition, freshBall.position);
   setVec(state.ball.crashTargetPosition, freshBall.position);
   setVec(state.dragAnchor, state.ball.position);
+  setVec(state.dragStartWorld, state.ball.position);
   setVec(state.dragPointerWorld, state.ball.position);
   state.dragActive = false;
   state.dragPower = 0;
@@ -2250,6 +2253,7 @@ function beginLanding(result) {
   state.ball.landedPlanetIndex = result.planetIndex ?? null;
   state.ball.landedPlanetName = result.planetName ?? 'relay world';
   setVec(state.dragAnchor, state.ball.position);
+  setVec(state.dragStartWorld, state.ball.position);
   setVec(state.dragPointerWorld, state.ball.position);
   state.dragActive = false;
   state.dragPower = 0;
@@ -2291,8 +2295,8 @@ function updateDragState(worldPoint) {
   const activeStageIndex = getActiveStageIndex();
   const activeShot = getControlShot(activeStageIndex);
   const pullVector = {
-    x: worldPoint.x - state.ball.position.x,
-    y: worldPoint.y - state.ball.position.y,
+    x: worldPoint.x - state.dragStartWorld.x,
+    y: worldPoint.y - state.dragStartWorld.y,
   };
   const stretch = Math.min(length(pullVector), MAX_DRAG_DISTANCE);
 
@@ -2374,6 +2378,7 @@ function launchShot(direction, power, anchor) {
   state.dragPower = 0;
   setControlShot(activeStageIndex, angleDegFromDirection(launchDirection), power);
   setVec(state.dragAnchor, state.ball.position);
+  setVec(state.dragStartWorld, state.ball.position);
   state.roundSettled = false;
   state.message = `Flight underway. ${state.level.name}.`;
   state.hint = state.level.summary;
@@ -2387,6 +2392,7 @@ function onPointerDown(event) {
 
   const point = getWorldPointFromEvent(event);
   state.dragActive = true;
+  setVec(state.dragStartWorld, point);
   setVec(state.dragPointerWorld, point);
   renderer.domElement.setPointerCapture(event.pointerId);
   updateDragState(point);
@@ -2423,6 +2429,7 @@ function onPointerUp(event) {
   state.dragActive = false;
   state.dragPower = 0;
   setVec(state.dragAnchor, state.ball.position);
+  setVec(state.dragStartWorld, state.ball.position);
   state.message = 'Launch cancelled.';
   state.hint = 'Grab the ball and pull back to start the run.';
   syncHud();
