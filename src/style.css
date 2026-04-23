@@ -191,7 +191,7 @@ h1 {
 
 .launch-controls {
   display: grid;
-  grid-template-columns: repeat(3, minmax(160px, 1fr)) auto;
+  grid-template-columns: repeat(2, minmax(160px, 1fr)) auto auto;
   align-items: stretch;
   gap: 8px;
   min-width: 0;
@@ -242,10 +242,6 @@ h1 {
   color: #8df0df;
 }
 
-.tuning-control .shot-control-state {
-  color: #f7d98a;
-}
-
 .slider-field {
   min-width: 0;
 }
@@ -272,15 +268,8 @@ h1 {
   accent-color: var(--accent);
 }
 
-.control-note {
-  margin: 8px 0 0;
-  color: var(--muted);
-  font-size: 0.62rem;
-  line-height: 1.25;
-}
-
+#undoButton,
 #launchButton {
-  grid-column: 4;
   grid-row: 1;
   align-self: stretch;
   border: 1px solid rgba(137, 168, 255, 0.28);
@@ -298,11 +287,22 @@ h1 {
   min-width: 100px;
 }
 
+#undoButton {
+  grid-column: 3;
+  background: linear-gradient(180deg, rgba(101, 127, 214, 0.22), rgba(47, 67, 146, 0.18));
+}
+
+#launchButton {
+  grid-column: 4;
+}
+
+#undoButton:hover:not(:disabled),
 #launchButton:hover:not(:disabled) {
   transform: translateY(-1px);
   border-color: rgba(137, 168, 255, 0.42);
 }
 
+#undoButton:disabled,
 #launchButton:disabled {
   opacity: 0.45;
   cursor: default;
@@ -413,11 +413,46 @@ h1 {
   color: #f3f6ff;
 }
 
-.status-card p:last-child {
+.run-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(137, 168, 255, 0.16);
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--muted);
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+
+.status-pill.is-hot {
+  border-color: rgba(255, 197, 115, 0.42);
+  background: rgba(255, 157, 88, 0.12);
+  color: #fff0c5;
+  box-shadow: 0 0 18px rgba(255, 157, 88, 0.14);
+}
+
+#statusHint {
   margin: 6px 0 0;
   color: var(--muted);
   line-height: 1.25;
   font-size: 0.7rem;
+}
+
+.status-note {
+  margin: 6px 0 0;
+  color: rgba(238, 243, 255, 0.72);
+  line-height: 1.2;
+  font-size: 0.63rem;
+  letter-spacing: 0.04em;
 }
 
 .meter {
@@ -448,10 +483,7 @@ h1 {
     grid-template-columns: repeat(2, minmax(160px, 1fr));
   }
 
-  .tuning-control {
-    grid-column: 1 / -1;
-  }
-
+  #undoButton,
   #launchButton {
     grid-column: 1 / -1;
     min-height: 42px;
@@ -480,6 +512,7 @@ h1 {
     grid-template-columns: 1fr;
   }
 
+  #undoButton,
   #launchButton {
     grid-column: auto;
     grid-row: auto;

@@ -11,18 +11,21 @@ import {
   createLevelRuntime,
   distanceBetween,
   advanceBallAnchor,
-  getSolarGravityStrength,
+  getBallSurfaceRadius,
+  getGoalRemainingFraction,
+  getGoalRemainingTime,
   getPlanetVelocity,
   getPlanetSurfaceVelocity,
+  isGoalOpen,
   length,
   lengthSq,
   launchVelocity,
   normalize,
   samplePlanetGravity,
-  setSolarGravityStrength,
   setLevelTime,
   setVec,
   stepBall,
+  syncBallToAnchor,
 } from './game-core.js';
 
 const app = document.querySelector('#app');
@@ -85,26 +88,21 @@ app.innerHTML = `
             <input id="powerSlider1" data-shot-index="1" data-shot-axis="power" type="range" min="0.2" max="2.75" step="0.01" value="0.2" />
           </div>
         </div>
-        <div class="shot-control tuning-control">
-          <div class="shot-control-header">
-            <span class="shot-control-title">System</span>
-            <span class="shot-control-state">Live</span>
-          </div>
-          <div class="slider-field">
-            <label for="solarGravitySlider">Sun Pull <strong id="solarGravityValue">20.0</strong></label>
-            <input id="solarGravitySlider" type="range" min="0" max="20" step="0.1" value="20" />
-          </div>
-          <p class="control-note">Applies immediately to ball flight and the field preview.</p>
-        </div>
+        <button id="undoButton" type="button">Undo</button>
         <button id="launchButton" type="button">Go</button>
       </div>
       <div class="status-card hud-status">
         <p class="status-label">Flight Call</p>
         <h2 id="statusLine">Plot the first slingshot.</h2>
+        <div class="run-strip">
+          <span class="status-pill" id="runStatusPill">Shot 1 · Launch Pad</span>
+          <span class="status-pill" id="windowStatusPill">Window live</span>
+        </div>
         <div class="meter">
           <span id="powerFill"></span>
         </div>
         <p id="statusHint">Use the planets to curve into the event horizon.</p>
+        <p id="approachLine" class="status-note">Best approach this level: no close calls yet.</p>
       </div>
     </header>
     <main class="stage-panel">
@@ -127,6 +125,9 @@ const shotsValue = document.querySelector('#shotsValue');
 const resetValue = document.querySelector('#resetValue');
 const statusLine = document.querySelector('#statusLine');
 const statusHint = document.querySelector('#statusHint');
+const approachLine = document.querySelector('#approachLine');
+const runStatusPill = document.querySelector('#runStatusPill');
+const windowStatusPill = document.querySelector('#windowStatusPill');
 const powerFill = document.querySelector('#powerFill');
 const levelChip = document.querySelector('#levelChip');
 const shotControlPanels = [...document.querySelectorAll('[data-shot-panel]')];
@@ -135,8 +136,7 @@ const angleSliders = [0, 1].map((index) => document.querySelector(`#angleSlider$
 const powerSliders = [0, 1].map((index) => document.querySelector(`#powerSlider${index}`));
 const angleValues = [0, 1].map((index) => document.querySelector(`#angleValue${index}`));
 const powerValues = [0, 1].map((index) => document.querySelector(`#powerValue${index}`));
-const solarGravitySlider = document.querySelector('#solarGravitySlider');
-const solarGravityValue = document.querySelector('#solarGravityValue');
+const undoButton = document.querySelector('#undoButton');
 const launchButton = document.querySelector('#launchButton');
 const sceneHost = document.querySelector('#scene');
 
@@ -190,6 +190,8 @@ const MAX_PHYSICS_STEPS_PER_FRAME = 4;
 const ballRestY = COURSE.ballRadius + 0.04;
 const CONTROL_MIN_ANGLE = -180;
 const CONTROL_MAX_ANGLE = 180;
+const ADMIN_STORAGE_KEY = 'gravityBilliardAdminMode';
+const ADMIN_CHEAT_CODE = 'orbitadmin';
 const DEFAULT_CONTROL_SHOT = { angleDeg: 0, power: 1.8 };
 
 const ambientLight = new THREE.HemisphereLight(0x8bd5ff, 0x03070c, 1.18);
@@ -320,6 +322,33 @@ const blackHoleRing = new THREE.Mesh(
 blackHoleRing.rotation.x = -Math.PI / 2;
 goalGroup.add(blackHoleRing);
 
+const goalTimerTrack = new THREE.Mesh(
+  new THREE.RingGeometry(COURSE.goalRadius + 0.42, COURSE.goalRadius + 0.58, 96),
+  new THREE.MeshBasicMaterial({
+    color: 0x274149,
+    transparent: true,
+    opacity: 0.26,
+    side: THREE.DoubleSide,
+  }),
+);
+goalTimerTrack.rotation.x = -Math.PI / 2;
+goalTimerTrack.position.y = 0.01;
+goalGroup.add(goalTimerTrack);
+
+const goalTimerArcMaterial = new THREE.MeshBasicMaterial({
+  color: 0x8fffe3,
+  transparent: true,
+  opacity: 0.94,
+  side: THREE.DoubleSide,
+});
+const goalTimerArc = new THREE.Mesh(
+  new THREE.RingGeometry(COURSE.goalRadius + 0.42, COURSE.goalRadius + 0.58, 96, 1, Math.PI / 2, Math.PI * 2),
+  goalTimerArcMaterial,
+);
+goalTimerArc.rotation.x = -Math.PI / 2;
+goalTimerArc.position.y = 0.02;
+goalGroup.add(goalTimerArc);
+
 const starsGeometry = new THREE.BufferGeometry();
 const starPositions = [];
 for (let i = 0; i < 240; i += 1) {
@@ -368,12 +397,74 @@ const ballMesh = new THREE.Mesh(
   new THREE.SphereGeometry(COURSE.ballRadius, 48, 48),
   new THREE.MeshStandardMaterial({
     color: palette.ball,
+    emissive: 0x000000,
+    emissiveIntensity: 0,
     roughness: 0.22,
     metalness: 0.03,
   }),
 );
 ballMesh.position.y = ballRestY;
 ballGroup.add(ballMesh);
+
+const BALL_TRACE_PARTICLE_COUNT = 160;
+const BALL_TRACE_PARTICLE_LIFETIME = 0.5;
+const ballTraceSprite = createCanvasTexture(64, 64, (ctx, width, height) => {
+  const gradient = ctx.createRadialGradient(
+    width * 0.5,
+    height * 0.5,
+    width * 0.06,
+    width * 0.5,
+    height * 0.5,
+    width * 0.5,
+  );
+  gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+  gradient.addColorStop(0.45, 'rgba(255, 255, 255, 0.95)');
+  gradient.addColorStop(0.78, 'rgba(255, 255, 255, 0.45)');
+  gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, width, height);
+});
+const ballTracePositions = new Float32Array(BALL_TRACE_PARTICLE_COUNT * 3);
+const ballTraceColors = new Float32Array(BALL_TRACE_PARTICLE_COUNT * 3);
+const ballTraceStreakPositions = new Float32Array(BALL_TRACE_PARTICLE_COUNT * 2 * 3);
+const ballTraceStreakColors = new Float32Array(BALL_TRACE_PARTICLE_COUNT * 2 * 3);
+const ballTraceGeometry = new THREE.BufferGeometry();
+ballTraceGeometry.setAttribute('position', new THREE.BufferAttribute(ballTracePositions, 3));
+ballTraceGeometry.setAttribute('color', new THREE.BufferAttribute(ballTraceColors, 3));
+const ballTrace = new THREE.Points(
+  ballTraceGeometry,
+  new THREE.PointsMaterial({
+    size: 3,
+    transparent: true,
+    opacity: 0.72,
+    vertexColors: true,
+    map: ballTraceSprite,
+    alphaMap: ballTraceSprite,
+    depthWrite: false,
+    depthTest: false,
+    blending: THREE.AdditiveBlending,
+    sizeAttenuation: false,
+  }),
+);
+ballTrace.renderOrder = 6;
+world.add(ballTrace);
+
+const ballTraceStreakGeometry = new THREE.BufferGeometry();
+ballTraceStreakGeometry.setAttribute('position', new THREE.BufferAttribute(ballTraceStreakPositions, 3));
+ballTraceStreakGeometry.setAttribute('color', new THREE.BufferAttribute(ballTraceStreakColors, 3));
+const ballTraceStreaks = new THREE.LineSegments(
+  ballTraceStreakGeometry,
+  new THREE.LineBasicMaterial({
+    transparent: true,
+    opacity: 0.75,
+    vertexColors: true,
+    depthWrite: false,
+    depthTest: false,
+    blending: THREE.AdditiveBlending,
+  }),
+);
+ballTraceStreaks.renderOrder = 5;
+world.add(ballTraceStreaks);
 
 const aimLine = new THREE.Mesh(
   new THREE.BoxGeometry(1, 0.03, 0.12),
@@ -388,20 +479,6 @@ const aimLine = new THREE.Mesh(
 aimLine.position.y = 0.14;
 aimLine.renderOrder = 10;
 world.add(aimLine);
-
-const lastAimLine = new THREE.Mesh(
-  new THREE.BoxGeometry(1, 0.02, 0.1),
-  new THREE.MeshBasicMaterial({
-    color: 0xffc3b2,
-    transparent: true,
-    opacity: 0.28,
-    depthTest: false,
-    depthWrite: false,
-  }),
-);
-lastAimLine.position.y = 0.12;
-lastAimLine.renderOrder = 9;
-world.add(lastAimLine);
 
 const dragHandle = new THREE.Mesh(
   new THREE.RingGeometry(0.15, 0.24, 40),
@@ -419,21 +496,32 @@ dragHandle.position.y = 0.16;
 dragHandle.renderOrder = 11;
 world.add(dragHandle);
 
-const lastDragHandle = new THREE.Mesh(
-  new THREE.RingGeometry(0.13, 0.21, 40),
-  new THREE.MeshBasicMaterial({
-    color: 0xffdfb3,
+const lastAttemptTrailGlow = new THREE.Line(
+  new THREE.BufferGeometry(),
+  new THREE.LineBasicMaterial({
+    color: 0xffc58a,
     transparent: true,
-    opacity: 0.32,
-    side: THREE.DoubleSide,
+    opacity: 0.16,
+    linewidth: 2,
     depthTest: false,
     depthWrite: false,
   }),
 );
-lastDragHandle.rotation.x = -Math.PI / 2;
-lastDragHandle.position.y = 0.14;
-lastDragHandle.renderOrder = 9;
-world.add(lastDragHandle);
+lastAttemptTrailGlow.renderOrder = 7;
+world.add(lastAttemptTrailGlow);
+
+const lastAttemptTrail = new THREE.Line(
+  new THREE.BufferGeometry(),
+  new THREE.LineBasicMaterial({
+    color: 0xffe0bd,
+    transparent: true,
+    opacity: 0.56,
+    depthTest: false,
+    depthWrite: false,
+  }),
+);
+lastAttemptTrail.renderOrder = 8;
+world.add(lastAttemptTrail);
 
 const initialLevel = createLevelRuntime(0);
 const initialBall = createBallState(initialLevel);
@@ -450,18 +538,61 @@ const state = {
     crashed: false,
     transition: 0,
     crashReason: '',
+    crashKind: '',
+    crashStartPosition: cloneVec(initialBall.position),
+    crashTargetPosition: cloneVec(initialBall.position),
     landingCount: 0,
     landedPlanetIndex: initialBall.anchorPlanetIndex ?? null,
     landedPlanetName: initialLevel.planets[initialBall.anchorPlanetIndex ?? 0]?.name ?? 'launch world',
   },
   aimDirection: normalize({ x: 1, y: 0 }),
   dragAnchor: { x: 0, y: 0 },
-  lastDragAnchor: { x: 0, y: 0 },
-  hasLastDrag: false,
+  dragPointerWorld: { x: 0, y: 0 },
   controlShots: [],
   dragActive: false,
   dragPower: 0,
   roundSettled: true,
+  relayPulse: 0,
+  currentAttemptTrail: [],
+  currentAttemptMinGoalDistance: Number.POSITIVE_INFINITY,
+  lastAttemptTrail: [],
+  lastAttemptOutcome: '',
+  bestApproach: null,
+  adminMode: (() => {
+    try {
+      return window.localStorage.getItem(ADMIN_STORAGE_KEY) === '1';
+    } catch {
+      return false;
+    }
+  })(),
+  adminCodeBuffer: '',
+  adminSolutionIndex: 0,
+  adminReplay: {
+    active: false,
+    solutionIndex: 0,
+    shotIndex: 0,
+    nextLaunchTime: null,
+  },
+  undo: {
+    checkpoints: [],
+    active: false,
+    checkpoint: null,
+    fromPosition: null,
+    toPosition: null,
+    duration: 0,
+    elapsed: 0,
+  },
+  ballTraceParticles: Array.from({ length: BALL_TRACE_PARTICLE_COUNT }, () => ({
+    active: false,
+    x: 0,
+    y: 0,
+    vx: 0,
+    vy: 0,
+    age: 0,
+    life: BALL_TRACE_PARTICLE_LIFETIME,
+  })),
+  ballTraceCursor: 0,
+  ballTraceCarry: 0,
   message: 'Plot the first slingshot.',
   hint: 'Use the planets to curve into the event horizon.',
 };
@@ -471,9 +602,28 @@ let gravityFieldVisuals = null;
 let physicsAccumulator = 0;
 const planetTextureCache = new Map();
 let lastGravityFieldRefreshTime = Number.NEGATIVE_INFINITY;
+let lastGoalTimerFraction = Number.NaN;
 
-function goalUnlocked() {
-  return state.ball.landingCount >= (state.level.requiredLandings ?? 0);
+function setGoalTimerArc(fraction) {
+  const normalizedFraction = clamp(fraction, 0, 1);
+  if (
+    Number.isFinite(lastGoalTimerFraction)
+    && Math.abs(lastGoalTimerFraction - normalizedFraction) < 0.004
+  ) {
+    return;
+  }
+
+  lastGoalTimerFraction = normalizedFraction;
+  goalTimerArc.geometry.dispose();
+  goalTimerArc.geometry = new THREE.RingGeometry(
+    COURSE.goalRadius + 0.42,
+    COURSE.goalRadius + 0.58,
+    96,
+    1,
+    Math.PI / 2,
+    Math.max(0.0001, Math.PI * 2 * normalizedFraction),
+  );
+  goalTimerArc.visible = normalizedFraction > 0.001;
 }
 
 function getAnchoredPlanet() {
@@ -500,6 +650,537 @@ function updateLaunchMarker() {
 
 function updateSunVisual() {
   sunGroup.position.set(state.level.sun.x, 0, state.level.sun.y);
+}
+
+function formatDistance(value) {
+  return value < 1 ? value.toFixed(2) : value.toFixed(1);
+}
+
+function getBestApproachText() {
+  if (!state.bestApproach) {
+    return 'Best approach this level: no close calls yet.';
+  }
+
+  const routeLabel = state.bestApproach.usedRelay ? 'after relay' : 'direct';
+  return `Best approach this level: ${formatDistance(state.bestApproach.minGoalDistance)} from goal, ${routeLabel}.`;
+}
+
+function getAdminSolutions() {
+  return Array.isArray(state.level.adminSolutions) ? state.level.adminSolutions : [];
+}
+
+function getSelectedAdminSolution() {
+  const solutions = getAdminSolutions();
+  if (solutions.length === 0) {
+    return null;
+  }
+
+  const normalizedIndex = ((state.adminSolutionIndex % solutions.length) + solutions.length) % solutions.length;
+  return { solution: solutions[normalizedIndex], solutionIndex: normalizedIndex, total: solutions.length };
+}
+
+function stopAdminReplay() {
+  state.adminReplay.active = false;
+  state.adminReplay.shotIndex = 0;
+  state.adminReplay.nextLaunchTime = null;
+}
+
+function persistAdminMode() {
+  try {
+    window.localStorage.setItem(ADMIN_STORAGE_KEY, state.adminMode ? '1' : '0');
+  } catch {
+    // Ignore persistence errors in restricted contexts.
+  }
+}
+
+function applyAdminSolutionToControls(solution) {
+  state.controlShots = solution.shots
+    .slice(0, angleSliders.length)
+    .map((shot) => clampControlShot({ angleDeg: shot.angleDeg, power: shot.power }));
+  syncLaunchControls();
+}
+
+function getAdminSolutionSummary(solution, solutionIndex, total) {
+  const label = solution.label ?? `Solution ${solutionIndex + 1}`;
+  const robustSummary = Number.isFinite(solution.robustRate)
+    ? `robust ${solution.robustRate.toFixed(2)}`
+    : `${solution.shots.length} shots`;
+  return `${label} · ${solutionIndex + 1}/${total} · ${robustSummary}`;
+}
+
+function previewAdminSolution(delta = 0) {
+  stopAdminReplay();
+  const selected = getSelectedAdminSolution();
+  if (!selected) {
+    state.message = 'No admin solution stored.';
+    state.hint = `Level ${state.levelIndex + 1} has no authored admin replay yet.`;
+    syncHud();
+    return;
+  }
+
+  state.adminSolutionIndex = ((selected.solutionIndex + delta) % selected.total + selected.total) % selected.total;
+  const nextSelected = getSelectedAdminSolution();
+  applyAdminSolutionToControls(nextSelected.solution);
+  state.message = 'Admin solution loaded.';
+  state.hint = getAdminSolutionSummary(nextSelected.solution, nextSelected.solutionIndex, nextSelected.total);
+  syncHud();
+}
+
+function startAdminReplay() {
+  if (!state.adminMode) {
+    return;
+  }
+
+  const selected = getSelectedAdminSolution();
+  if (!selected) {
+    state.message = 'No admin solution stored.';
+    state.hint = `Level ${state.levelIndex + 1} has no authored admin replay yet.`;
+    syncHud();
+    return;
+  }
+
+  stopAdminReplay();
+  state.adminReplay.active = true;
+  state.adminReplay.solutionIndex = selected.solutionIndex;
+  state.adminReplay.shotIndex = 0;
+  state.adminReplay.nextLaunchTime = null;
+  applyAdminSolutionToControls(selected.solution);
+  resetBall(
+    'Admin replay ready.',
+    getAdminSolutionSummary(selected.solution, selected.solutionIndex, selected.total),
+    { keepAdminReplay: true },
+  );
+  state.adminReplay.active = true;
+  state.adminReplay.solutionIndex = selected.solutionIndex;
+  state.adminReplay.shotIndex = 0;
+  state.adminReplay.nextLaunchTime = (state.level.time ?? 0) + selected.solution.shots[0].waitSeconds;
+  state.message = 'Admin replay armed.';
+  state.hint = getAdminSolutionSummary(selected.solution, selected.solutionIndex, selected.total);
+  syncHud();
+}
+
+function maybeLaunchAdminReplayShot() {
+  if (!state.adminReplay.active || state.ball.anchorPlanetIndex === null || state.ball.anchorPlanetIndex === undefined) {
+    return false;
+  }
+
+  const selected = getAdminSolutions()[state.adminReplay.solutionIndex];
+  if (!selected) {
+    stopAdminReplay();
+    return false;
+  }
+
+  if (state.adminReplay.shotIndex >= selected.shots.length) {
+    stopAdminReplay();
+    return false;
+  }
+
+  const launchTime = state.adminReplay.nextLaunchTime;
+  if (launchTime === null || (state.level.time ?? 0) + 0.000001 < launchTime) {
+    return false;
+  }
+
+  const shot = selected.shots[state.adminReplay.shotIndex];
+  applyAdminSolutionToControls(selected);
+  setControlShot(getActiveStageIndex(), shot.angleDeg, shot.power);
+  const direction = directionFromAngleDeg(shot.angleDeg);
+  const anchor = cloneVec(state.ball.position);
+  addScaledVec(anchor, constrainLaunchDirection(direction, shot.power), shot.power);
+  launchShot(direction, shot.power, anchor);
+  state.adminReplay.shotIndex += 1;
+  state.adminReplay.nextLaunchTime = null;
+  state.message = `Admin replay shot ${state.adminReplay.shotIndex}/${selected.shots.length}.`;
+  state.hint = getAdminSolutionSummary(selected, state.adminReplay.solutionIndex, getAdminSolutions().length);
+  syncHud();
+  return true;
+}
+
+function setLineGeometry(line, points, height) {
+  const geometry = line.geometry;
+  if (geometry) {
+    geometry.dispose();
+  }
+
+  const sourcePoints = points.length > 1 ? points : [{ x: 0, y: 0 }, { x: 0, y: 0 }];
+  line.geometry = new THREE.BufferGeometry().setFromPoints(
+    sourcePoints.map((point) => new THREE.Vector3(point.x, height, point.y)),
+  );
+}
+
+function syncLastAttemptTrailVisual() {
+  const visible = !ballIsMoving() && state.lastAttemptTrail.length > 1;
+  lastAttemptTrail.visible = visible;
+  lastAttemptTrailGlow.visible = visible;
+
+  if (!visible) {
+    return;
+  }
+
+  const colorsByOutcome = {
+    landed: { core: 0x9fffe8, glow: 0x49d9bf },
+    goal: { core: 0xf8f2da, glow: 0xf2b86f },
+    settled: { core: 0xffd9a8, glow: 0xff9e64 },
+    crash: { core: 0xffd2b8, glow: 0xff845a },
+  };
+  const paletteForOutcome = colorsByOutcome[state.lastAttemptOutcome] ?? colorsByOutcome.crash;
+
+  lastAttemptTrail.material.color.setHex(paletteForOutcome.core);
+  lastAttemptTrailGlow.material.color.setHex(paletteForOutcome.glow);
+  setLineGeometry(lastAttemptTrail, state.lastAttemptTrail, 0.11);
+  setLineGeometry(lastAttemptTrailGlow, state.lastAttemptTrail, 0.09);
+}
+
+function clearAttemptMemory() {
+  state.currentAttemptTrail = [];
+  state.currentAttemptMinGoalDistance = Number.POSITIVE_INFINITY;
+  state.lastAttemptTrail = [];
+  state.lastAttemptOutcome = '';
+  state.bestApproach = null;
+  setLineGeometry(lastAttemptTrail, [], 0.11);
+  setLineGeometry(lastAttemptTrailGlow, [], 0.09);
+  lastAttemptTrail.visible = false;
+  lastAttemptTrailGlow.visible = false;
+}
+
+function clearUndoCheckpoints() {
+  state.undo.checkpoints = [];
+  state.undo.checkpoint = null;
+  state.undo.fromPosition = null;
+  state.undo.toPosition = null;
+  state.undo.duration = 0;
+  state.undo.elapsed = 0;
+}
+
+function pointsMatch(left, right, tolerance = 0.0001) {
+  return Math.abs(left.x - right.x) <= tolerance && Math.abs(left.y - right.y) <= tolerance;
+}
+
+function getLatestUndoCheckpoint() {
+  return state.undo.checkpoints[state.undo.checkpoints.length - 1] ?? null;
+}
+
+function checkpointMatchesCurrent(checkpoint) {
+  if (!checkpoint) {
+    return false;
+  }
+
+  return (
+    checkpoint.levelIndex === state.levelIndex
+    && checkpoint.anchorPlanetIndex === state.ball.anchorPlanetIndex
+    && checkpoint.landingCount === state.ball.landingCount
+    && Math.abs(checkpoint.levelTime - (state.level.time ?? 0)) <= 0.0001
+    && pointsMatch(checkpoint.position, state.ball.position)
+  );
+}
+
+function canRedo() {
+  if (state.adminReplay.active || state.undo.active || state.ball.goaling || state.ball.crashed) {
+    return false;
+  }
+
+  const checkpoint = getLatestUndoCheckpoint();
+  return Boolean(checkpoint) && !checkpointMatchesCurrent(checkpoint);
+}
+
+function saveUndoCheckpoint() {
+  if (state.ball.anchorPlanetIndex === null || state.ball.anchorPlanetIndex === undefined) {
+    return;
+  }
+
+  const checkpoint = {
+    levelIndex: state.levelIndex,
+    levelTime: state.level.time ?? state.ball.time ?? 0,
+    position: cloneVec(state.ball.position),
+    anchorNormal: cloneVec(state.ball.anchorNormal ?? { x: 1, y: 0 }),
+    anchorPlanetIndex: state.ball.anchorPlanetIndex,
+    landedPlanetIndex: state.ball.landedPlanetIndex ?? state.ball.anchorPlanetIndex,
+    landedPlanetName: state.ball.landedPlanetName || state.level.planets[state.ball.anchorPlanetIndex]?.name || 'launch world',
+    landingCount: state.ball.landingCount ?? 0,
+    shots: state.shots,
+    resets: state.resets,
+    score: state.score,
+    controlShots: state.controlShots.map((shot) => ({ angleDeg: shot.angleDeg, power: shot.power })),
+  };
+
+  const latest = getLatestUndoCheckpoint();
+  if (
+    latest
+    && latest.levelIndex === checkpoint.levelIndex
+    && latest.anchorPlanetIndex === checkpoint.anchorPlanetIndex
+    && latest.landingCount === checkpoint.landingCount
+    && Math.abs(latest.levelTime - checkpoint.levelTime) <= 0.0001
+    && pointsMatch(latest.position, checkpoint.position)
+  ) {
+    state.undo.checkpoints[state.undo.checkpoints.length - 1] = checkpoint;
+    return;
+  }
+
+  state.undo.checkpoints.push(checkpoint);
+  if (state.undo.checkpoints.length > 8) {
+    state.undo.checkpoints.shift();
+  }
+}
+
+function finishUndo() {
+  const checkpoint = state.undo.checkpoint;
+  if (!checkpoint) {
+    state.undo.active = false;
+    return;
+  }
+
+  state.ball.velocity.x = 0;
+  state.ball.velocity.y = 0;
+  state.ball.time = checkpoint.levelTime;
+  state.ball.goaling = false;
+  state.ball.crashed = false;
+  state.ball.transition = 0;
+  state.ball.crashReason = '';
+  state.ball.crashKind = '';
+  state.ball.landingCount = checkpoint.landingCount;
+  state.ball.launchGracePlanetIndex = null;
+  state.ball.anchorPlanetIndex = checkpoint.anchorPlanetIndex;
+  state.ball.anchorNormal = cloneVec(checkpoint.anchorNormal);
+  state.ball.landedPlanetIndex = checkpoint.landedPlanetIndex;
+  state.ball.landedPlanetName = checkpoint.landedPlanetName;
+  syncBallToAnchor(state.level, state.ball);
+  setVec(state.ball.crashStartPosition, state.ball.position);
+  setVec(state.ball.crashTargetPosition, state.ball.position);
+  setVec(state.dragAnchor, state.ball.position);
+  setVec(state.dragPointerWorld, state.ball.position);
+  state.dragActive = false;
+  state.dragPower = 0;
+  state.roundSettled = true;
+  state.relayPulse = 0.8;
+  state.shots = checkpoint.shots;
+  state.resets = checkpoint.resets;
+  state.score = checkpoint.score;
+  if (Array.isArray(checkpoint.controlShots) && checkpoint.controlShots.length > 0) {
+    state.controlShots = checkpoint.controlShots.map((shot) => clampControlShot(shot));
+  }
+  state.currentAttemptTrail = [];
+  state.currentAttemptMinGoalDistance = Number.POSITIVE_INFINITY;
+  resetBallTrace();
+  ballGroup.visible = true;
+  ballGroup.scale.setScalar(1);
+  ballMesh.position.y = ballRestY;
+  ballMesh.material.color.copy(palette.ball);
+  ballMesh.material.emissive.setHex(0x000000);
+  ballMesh.material.emissiveIntensity = 0;
+  ballShadow.material.opacity = 0.28;
+  state.undo.active = false;
+  state.undo.checkpoint = null;
+  state.undo.fromPosition = null;
+  state.undo.toPosition = null;
+  state.undo.duration = 0;
+  state.undo.elapsed = 0;
+  state.message = `Undo restored ${checkpoint.landedPlanetName}.`;
+  state.hint = `Shot ${Math.min(checkpoint.landingCount + 1, state.controlShots.length)} is live again.`;
+  lastGoalTimerFraction = Number.NaN;
+  syncHud();
+}
+
+function startUndo() {
+  const checkpoint = getLatestUndoCheckpoint();
+  if (!checkpoint || checkpointMatchesCurrent(checkpoint)) {
+    return;
+  }
+
+  setLevelTime(state.level, checkpoint.levelTime);
+  rebuildGravityField();
+  lastGravityFieldRefreshTime = state.level.time ?? 0;
+
+  const fromPosition = cloneVec(state.ball.position);
+  const targetBall = {
+    position: cloneVec(checkpoint.position),
+    anchorPlanetIndex: checkpoint.anchorPlanetIndex,
+    anchorNormal: cloneVec(checkpoint.anchorNormal),
+  };
+  syncBallToAnchor(state.level, targetBall);
+  const toPosition = cloneVec(targetBall.position);
+  const rewindDistance = distanceBetween(fromPosition, toPosition);
+
+  state.undo.checkpoints.pop();
+  state.undo.active = true;
+  state.undo.checkpoint = checkpoint;
+  state.undo.fromPosition = fromPosition;
+  state.undo.toPosition = toPosition;
+  state.undo.duration = clamp(0.12 + rewindDistance * 0.03, 0.12, 0.22);
+  state.undo.elapsed = 0;
+
+  stopAdminReplay();
+  state.ball.time = checkpoint.levelTime;
+  state.ball.velocity.x = 0;
+  state.ball.velocity.y = 0;
+  state.ball.goaling = false;
+  state.ball.crashed = false;
+  state.ball.transition = 0;
+  state.ball.crashReason = '';
+  state.ball.crashKind = '';
+  state.ball.anchorPlanetIndex = null;
+  state.ball.landedPlanetIndex = null;
+  state.ball.landedPlanetName = '';
+  state.ball.launchGracePlanetIndex = null;
+  if (Array.isArray(checkpoint.controlShots) && checkpoint.controlShots.length > 0) {
+    state.controlShots = checkpoint.controlShots.map((shot) => clampControlShot(shot));
+  }
+  state.dragActive = false;
+  state.dragPower = 0;
+  state.roundSettled = false;
+  state.relayPulse = 0;
+  resetBallTrace();
+  state.message = 'Undo rewinding.';
+  state.hint = `Rolling back to ${checkpoint.landedPlanetName}.`;
+  lastGoalTimerFraction = Number.NaN;
+  syncHud();
+}
+
+function resetBallTrace() {
+  state.ballTraceCarry = 0;
+  state.ballTraceCursor = 0;
+
+  state.ballTraceParticles.forEach((particle, index) => {
+    particle.active = false;
+    particle.age = 0;
+    particle.life = BALL_TRACE_PARTICLE_LIFETIME;
+    ballTracePositions[index * 3] = 0;
+    ballTracePositions[index * 3 + 1] = -10;
+    ballTracePositions[index * 3 + 2] = 0;
+    const streakOffset = index * 6;
+    ballTraceStreakPositions[streakOffset] = 0;
+    ballTraceStreakPositions[streakOffset + 1] = -10;
+    ballTraceStreakPositions[streakOffset + 2] = 0;
+    ballTraceStreakPositions[streakOffset + 3] = 0;
+    ballTraceStreakPositions[streakOffset + 4] = -10;
+    ballTraceStreakPositions[streakOffset + 5] = 0;
+    ballTraceColors[index * 3] = 0;
+    ballTraceColors[index * 3 + 1] = 0;
+    ballTraceColors[index * 3 + 2] = 0;
+    ballTraceStreakColors[streakOffset] = 0;
+    ballTraceStreakColors[streakOffset + 1] = 0;
+    ballTraceStreakColors[streakOffset + 2] = 0;
+    ballTraceStreakColors[streakOffset + 3] = 0;
+    ballTraceStreakColors[streakOffset + 4] = 0;
+    ballTraceStreakColors[streakOffset + 5] = 0;
+  });
+
+  ballTraceGeometry.attributes.position.needsUpdate = true;
+  ballTraceGeometry.attributes.color.needsUpdate = true;
+  ballTraceStreakGeometry.attributes.position.needsUpdate = true;
+  ballTraceStreakGeometry.attributes.color.needsUpdate = true;
+  ballTrace.visible = false;
+  ballTraceStreaks.visible = false;
+}
+
+function spawnBallTraceParticle(speed, direction, lateral) {
+  const particle = state.ballTraceParticles[state.ballTraceCursor];
+  state.ballTraceCursor = (state.ballTraceCursor + 1) % state.ballTraceParticles.length;
+
+  const spread = (Math.random() - 0.5) * 0.22;
+  const retreat = 0.1 + Math.random() * 0.26;
+  particle.active = true;
+  particle.x = state.ball.position.x - direction.x * retreat + lateral.x * spread;
+  particle.y = state.ball.position.y - direction.y * retreat + lateral.y * spread;
+  particle.vx = -direction.x * (0.22 + speed * 0.026) + lateral.x * spread * 0.9;
+  particle.vy = -direction.y * (0.22 + speed * 0.026) + lateral.y * spread * 0.9;
+  particle.age = 0;
+  particle.life = BALL_TRACE_PARTICLE_LIFETIME * (0.8 + Math.min(0.5, speed * 0.03));
+}
+
+function updateBallTrace(delta) {
+  const speed = length(state.ball.velocity);
+  const freeFlight = (
+    state.ball.anchorPlanetIndex === null
+    && !state.ball.goaling
+    && !state.ball.crashed
+    && speed > 0.4
+  );
+
+  if (freeFlight) {
+    const direction = normalize(state.ball.velocity);
+    const lateral = { x: -direction.y, y: direction.x };
+    const emitRate = 42 + Math.min(88, speed * 11.5);
+    state.ballTraceCarry += delta * emitRate;
+    while (state.ballTraceCarry >= 1) {
+      spawnBallTraceParticle(speed, direction, lateral);
+      state.ballTraceCarry -= 1;
+    }
+  } else {
+    state.ballTraceCarry = 0;
+  }
+
+  let anyActive = false;
+  for (let index = 0; index < state.ballTraceParticles.length; index += 1) {
+    const particle = state.ballTraceParticles[index];
+    const positionOffset = index * 3;
+    const colorOffset = index * 3;
+    const streakOffset = index * 6;
+
+    if (!particle.active) {
+      ballTraceColors[colorOffset] = 0;
+      ballTraceColors[colorOffset + 1] = 0;
+      ballTraceColors[colorOffset + 2] = 0;
+      ballTraceStreakColors[streakOffset] = 0;
+      ballTraceStreakColors[streakOffset + 1] = 0;
+      ballTraceStreakColors[streakOffset + 2] = 0;
+      ballTraceStreakColors[streakOffset + 3] = 0;
+      ballTraceStreakColors[streakOffset + 4] = 0;
+      ballTraceStreakColors[streakOffset + 5] = 0;
+      continue;
+    }
+
+    particle.age += delta;
+    if (particle.age >= particle.life) {
+      particle.active = false;
+      ballTraceColors[colorOffset] = 0;
+      ballTraceColors[colorOffset + 1] = 0;
+      ballTraceColors[colorOffset + 2] = 0;
+      ballTracePositions[positionOffset + 1] = -10;
+      ballTraceStreakColors[streakOffset] = 0;
+      ballTraceStreakColors[streakOffset + 1] = 0;
+      ballTraceStreakColors[streakOffset + 2] = 0;
+      ballTraceStreakColors[streakOffset + 3] = 0;
+      ballTraceStreakColors[streakOffset + 4] = 0;
+      ballTraceStreakColors[streakOffset + 5] = 0;
+      ballTraceStreakPositions[streakOffset + 1] = -10;
+      ballTraceStreakPositions[streakOffset + 4] = -10;
+      continue;
+    }
+
+    const lifeT = 1 - particle.age / particle.life;
+    particle.x += particle.vx * delta;
+    particle.y += particle.vy * delta;
+    ballTracePositions[positionOffset] = particle.x;
+    ballTracePositions[positionOffset + 1] = 0.08 + (1 - lifeT) * 0.06;
+    ballTracePositions[positionOffset + 2] = particle.y;
+    const speed = Math.max(0.001, Math.hypot(particle.vx, particle.vy));
+    const directionX = particle.vx / speed;
+    const directionY = particle.vy / speed;
+    const streakLength = (0.18 + speed * 0.32) * (0.35 + lifeT * 0.65);
+    ballTraceStreakPositions[streakOffset] = particle.x;
+    ballTraceStreakPositions[streakOffset + 1] = 0.08 + (1 - lifeT) * 0.04;
+    ballTraceStreakPositions[streakOffset + 2] = particle.y;
+    ballTraceStreakPositions[streakOffset + 3] = particle.x + directionX * streakLength;
+    ballTraceStreakPositions[streakOffset + 4] = 0.08 + (1 - lifeT) * 0.04;
+    ballTraceStreakPositions[streakOffset + 5] = particle.y + directionY * streakLength;
+    const brightness = 0.72 + lifeT * 0.28;
+    ballTraceColors[colorOffset] = 1.0 * brightness;
+    ballTraceColors[colorOffset + 1] = 0.9 * brightness;
+    ballTraceColors[colorOffset + 2] = 0.66 * brightness;
+    ballTraceStreakColors[streakOffset] = 1.0 * brightness;
+    ballTraceStreakColors[streakOffset + 1] = 0.88 * brightness;
+    ballTraceStreakColors[streakOffset + 2] = 0.64 * brightness;
+    ballTraceStreakColors[streakOffset + 3] = 0.45 * brightness;
+    ballTraceStreakColors[streakOffset + 4] = 0.36 * brightness;
+    ballTraceStreakColors[streakOffset + 5] = 0.2 * brightness;
+    anyActive = true;
+  }
+
+  ballTrace.visible = anyActive;
+  ballTraceStreaks.visible = anyActive;
+  ballTraceGeometry.attributes.position.needsUpdate = true;
+  ballTraceGeometry.attributes.color.needsUpdate = true;
+  ballTraceStreakGeometry.attributes.position.needsUpdate = true;
+  ballTraceStreakGeometry.attributes.color.needsUpdate = true;
 }
 
 function clamp(value, min, max) {
@@ -875,6 +1556,147 @@ function getPreviewAnchor() {
   return anchor;
 }
 
+function getWindowStatusText() {
+  const remaining = getGoalRemainingTime(state.level, state.ball.time ?? state.level.time ?? 0);
+  return remaining > 0.05 ? `Window ${remaining.toFixed(1)}s` : 'Window closed';
+}
+
+function getRunStatusText() {
+  if (state.ball.goaling) {
+    return 'Capture sequence';
+  }
+
+  if (state.ball.crashed) {
+    return 'Retry armed';
+  }
+
+  if (state.ball.anchorPlanetIndex !== null && state.ball.landingCount > 0) {
+    return `Shot ${Math.min(state.ball.landingCount + 1, state.controlShots.length)} · Relay locked`;
+  }
+
+  if (state.ball.anchorPlanetIndex !== null) {
+    return `Shot ${Math.min(getActiveStageIndex() + 1, state.controlShots.length)} · Launch Pad`;
+  }
+
+  return `Shot ${Math.min(getActiveStageIndex() + 1, state.controlShots.length)} · In flight`;
+}
+
+function describeClosestLandingMiss() {
+  let bestPlanet = null;
+  let bestClearance = Number.POSITIVE_INFINITY;
+
+  for (const planet of state.level.planets) {
+    if (!planet.landable) {
+      continue;
+    }
+
+    const landingRadius = planet.landingRadius ?? getBallSurfaceRadius(planet);
+    const clearance = distanceBetween(state.ball.position, planet.position) - landingRadius;
+    if (clearance < bestClearance) {
+      bestClearance = clearance;
+      bestPlanet = planet;
+    }
+  }
+
+  if (!bestPlanet || bestClearance > 0.85) {
+    return '';
+  }
+
+  return `Missed ${bestPlanet.name} by ${formatDistance(Math.max(0, bestClearance))}.`;
+}
+
+function describeFailureHint(reason) {
+  if (reason === 'goal-closed') {
+    const closeTime = (state.level.startTimeSeconds ?? 0) + (state.level.goalOpenSeconds ?? 0);
+    const lateBy = Math.max(0, (state.ball.time ?? state.level.time ?? closeTime) - closeTime);
+    const goalClearance = Math.max(
+      0,
+      distanceBetween(state.ball.position, state.level.goalCenter) - state.level.goalRadius,
+    );
+    return `Retry ${state.level.name}. Late by ${lateBy.toFixed(1)}s with ${formatDistance(goalClearance)} to spare.`;
+  }
+
+  if (reason === 'sun') {
+    return `Retry ${state.level.name}. Skim the well, don't drop into it.`;
+  }
+
+  const closestLandingMiss = describeClosestLandingMiss();
+  if (closestLandingMiss) {
+    return `Retry ${state.level.name}. ${closestLandingMiss}`;
+  }
+
+  const goalDistance = Math.max(
+    0,
+    distanceBetween(state.ball.position, state.level.goalCenter) - state.level.goalRadius,
+  );
+  if (goalDistance < state.level.goalPullRadius) {
+    return `Retry ${state.level.name}. You reached the event well but missed capture by ${formatDistance(goalDistance)}.`;
+  }
+
+  if (reason === 'planet') {
+    return `Retry ${state.level.name}. Slingshot wider around the wells.`;
+  }
+
+  if (reason === 'settled') {
+    return `Retry ${state.level.name}. Carry more speed or catch a relay sooner.`;
+  }
+
+  return `Retry ${state.level.name}. The route drifted off the course.`;
+}
+
+function beginAttemptTrail() {
+  state.currentAttemptTrail = [cloneVec(state.ball.position)];
+  state.currentAttemptMinGoalDistance = Math.max(
+    0,
+    distanceBetween(state.ball.position, state.level.goalCenter) - state.level.goalRadius,
+  );
+}
+
+function recordAttemptTrailPoint(force = false) {
+  if (state.currentAttemptTrail.length === 0) {
+    return;
+  }
+
+  const currentPoint = cloneVec(state.ball.position);
+  const lastPoint = state.currentAttemptTrail[state.currentAttemptTrail.length - 1];
+  if (force || distanceBetween(lastPoint, currentPoint) >= 0.14) {
+    state.currentAttemptTrail.push(currentPoint);
+  }
+
+  state.currentAttemptMinGoalDistance = Math.min(
+    state.currentAttemptMinGoalDistance,
+    Math.max(0, distanceBetween(state.ball.position, state.level.goalCenter) - state.level.goalRadius),
+  );
+}
+
+function finalizeAttemptTrail(outcome) {
+  if (state.currentAttemptTrail.length === 0) {
+    return;
+  }
+
+  recordAttemptTrailPoint(true);
+  state.lastAttemptTrail = state.currentAttemptTrail.map((point) => cloneVec(point));
+  state.lastAttemptOutcome = outcome;
+
+  if (
+    Number.isFinite(state.currentAttemptMinGoalDistance)
+    && (
+      !state.bestApproach
+      || state.currentAttemptMinGoalDistance < state.bestApproach.minGoalDistance - 0.01
+    )
+  ) {
+    state.bestApproach = {
+      minGoalDistance: state.currentAttemptMinGoalDistance,
+      usedRelay: (state.ball.landingCount ?? 0) > 0 || outcome === 'landed',
+      outcome,
+    };
+  }
+
+  state.currentAttemptTrail = [];
+  state.currentAttemptMinGoalDistance = Number.POSITIVE_INFINITY;
+  syncLastAttemptTrailVisual();
+}
+
 function constrainLaunchDirection(direction, power) {
   const normalizedDirection = normalize(direction);
   if (state.ball.anchorPlanetIndex === null || state.ball.anchorPlanetIndex === undefined) {
@@ -931,6 +1753,7 @@ function getShotControlStateLabel(stageIndex, activeStageIndex) {
 
 function syncLaunchControls() {
   const activeStageIndex = getActiveStageIndex();
+  const controlsLocked = state.adminReplay.active || state.undo.active;
 
   shotControlPanels.forEach((panel, index) => {
     const shot = state.controlShots[index];
@@ -943,15 +1766,18 @@ function syncLaunchControls() {
     panel.classList.toggle('is-active', index === activeStageIndex);
     angleSliders[index].value = shot.angleDeg.toFixed(1);
     powerSliders[index].value = shot.power.toFixed(2);
+    angleSliders[index].disabled = controlsLocked;
+    powerSliders[index].disabled = controlsLocked;
     angleValues[index].textContent = `${shot.angleDeg.toFixed(1)} deg`;
     powerValues[index].textContent = shot.power.toFixed(2);
     shotControlStates[index].textContent = getShotControlStateLabel(index, activeStageIndex);
   });
 
-  solarGravitySlider.value = getSolarGravityStrength().toFixed(1);
-  solarGravityValue.textContent = getSolarGravityStrength().toFixed(1);
-  launchButton.textContent = `Go${state.controlShots.length > 1 ? ` · Shot ${activeStageIndex + 1}` : ''}`;
-  launchButton.disabled = ballIsMoving() || state.dragActive;
+  launchButton.textContent = controlsLocked
+    ? 'Auto'
+    : `Go${state.controlShots.length > 1 ? ` · Shot ${activeStageIndex + 1}` : ''}`;
+  launchButton.disabled = controlsLocked || ballIsMoving() || state.dragActive;
+  undoButton.disabled = !canRedo();
 }
 
 function setControlShot(stageIndex, angleDeg, power) {
@@ -1339,13 +2165,18 @@ function getInitialLevelIndex() {
 }
 
 function applyLevel(index) {
+  stopAdminReplay();
   state.levelIndex = index % LEVELS.length;
   state.level = createLevelRuntime(state.levelIndex);
   state.controlShots = createControlShots(state.level);
-  state.hasLastDrag = false;
+  state.adminSolutionIndex = 0;
+  clearAttemptMemory();
+  clearUndoCheckpoints();
+  resetBallTrace();
+  lastGoalTimerFraction = Number.NaN;
 
   updateSunVisual();
-  goalGroup.position.set(state.level.goal.x, 0.06, state.level.goal.y);
+  goalGroup.position.set(state.level.goalCenter.x, 0.06, state.level.goalCenter.y);
 
   syncLevelQueryParam(state.levelIndex);
   syncLaunchControls();
@@ -1362,6 +2193,14 @@ function syncHud() {
   resetValue.textContent = String(state.resets);
   statusLine.textContent = state.message;
   statusHint.textContent = state.hint;
+  approachLine.textContent = getBestApproachText();
+  runStatusPill.textContent = getRunStatusText();
+  windowStatusPill.textContent = getWindowStatusText();
+  runStatusPill.classList.toggle('is-hot', state.ball.anchorPlanetIndex !== null && state.ball.landingCount > 0);
+  windowStatusPill.classList.toggle(
+    'is-hot',
+    getGoalRemainingTime(state.level, state.ball.time ?? state.level.time ?? 0) < 2.5,
+  );
   const shownPower = state.dragActive ? state.dragPower : getControlShot().power;
   powerFill.style.transform = `scaleX(${Math.max(0.04, shownPower / MAX_DRAG_DISTANCE)})`;
   syncLaunchControls();
@@ -1380,7 +2219,11 @@ function resetBall(message, hint, options = {}) {
     applyLevel((state.levelIndex + 1) % LEVELS.length);
   }
 
-  setLevelTime(state.level, state.level.startTime ?? 0);
+  if (!options.keepAdminReplay) {
+    stopAdminReplay();
+  }
+
+  setLevelTime(state.level, state.level.startTimeSeconds ?? 0);
   rebuildGravityField();
   lastGravityFieldRefreshTime = state.level.time ?? 0;
   const freshBall = createBallState(state.level);
@@ -1392,51 +2235,72 @@ function resetBall(message, hint, options = {}) {
   state.ball.crashed = false;
   state.ball.transition = 0;
   state.ball.crashReason = '';
+  state.ball.crashKind = '';
   state.ball.landingCount = freshBall.landingCount;
   state.ball.launchGracePlanetIndex = freshBall.launchGracePlanetIndex;
   state.ball.anchorPlanetIndex = freshBall.anchorPlanetIndex;
   state.ball.anchorNormal = cloneVec(freshBall.anchorNormal);
   state.ball.landedPlanetIndex = freshBall.anchorPlanetIndex ?? null;
   state.ball.landedPlanetName = state.level.planets[freshBall.anchorPlanetIndex ?? 0]?.name ?? 'launch world';
+  setVec(state.ball.crashStartPosition, freshBall.position);
+  setVec(state.ball.crashTargetPosition, freshBall.position);
   setVec(state.dragAnchor, state.ball.position);
-  setVec(state.lastDragAnchor, state.ball.position);
-  state.hasLastDrag = false;
+  setVec(state.dragPointerWorld, state.ball.position);
   state.dragActive = false;
   state.dragPower = 0;
   state.roundSettled = true;
+  state.relayPulse = 0;
+  resetBallTrace();
   ballGroup.visible = true;
   ballGroup.scale.setScalar(1);
   ballMesh.position.y = ballRestY;
+  ballMesh.material.color.copy(palette.ball);
+  ballMesh.material.emissive.setHex(0x000000);
+  ballMesh.material.emissiveIntensity = 0;
   ballShadow.material.opacity = 0.28;
   state.message = message;
   state.hint = hint;
+  lastGoalTimerFraction = Number.NaN;
   syncHud();
 }
 
 function beginGoal() {
+  finalizeAttemptTrail('goal');
+  stopAdminReplay();
   state.ball.goaling = true;
   state.ball.crashed = false;
   state.ball.transition = 0;
   state.ball.velocity.x = 0;
   state.ball.velocity.y = 0;
+  state.relayPulse = 0;
   state.message = 'Event horizon captured.';
   state.hint = 'Course clear. Loading the next route.';
   syncHud();
 }
 
-function beginCrash(reason, hint) {
+function beginCrash(reason, hint, crashKind = 'planet') {
+  finalizeAttemptTrail('crash');
+  stopAdminReplay();
   state.ball.crashed = true;
   state.ball.goaling = false;
   state.ball.transition = 0;
   state.ball.crashReason = reason;
+  state.ball.crashKind = crashKind;
+  setVec(state.ball.crashStartPosition, state.ball.position);
+  setVec(
+    state.ball.crashTargetPosition,
+    state.ball.crashKind === 'sun' ? state.level.sun : state.ball.position,
+  );
   state.ball.velocity.x = 0;
   state.ball.velocity.y = 0;
+  state.relayPulse = 0;
   state.message = reason;
   state.hint = hint;
   syncHud();
 }
 
 function beginLanding(result) {
+  finalizeAttemptTrail('landed');
   state.ball.velocity.x = 0;
   state.ball.velocity.y = 0;
   state.ball.goaling = false;
@@ -1446,19 +2310,27 @@ function beginLanding(result) {
   state.ball.landedPlanetIndex = result.planetIndex ?? null;
   state.ball.landedPlanetName = result.planetName ?? 'relay world';
   setVec(state.dragAnchor, state.ball.position);
-  setVec(state.lastDragAnchor, state.ball.position);
-  state.hasLastDrag = false;
+  setVec(state.dragPointerWorld, state.ball.position);
   state.dragActive = false;
   state.dragPower = 0;
   state.roundSettled = true;
+  state.relayPulse = 1;
   ballGroup.visible = true;
   ballGroup.scale.setScalar(1);
   ballMesh.position.y = ballRestY;
   ballShadow.material.opacity = 0.28;
-  state.message = `Touchdown on ${state.ball.landedPlanetName}.`;
-  state.hint = goalUnlocked()
-    ? 'The black hole is awake. Launch again from the relay world.'
-    : 'Use the planet as an intermediate launch point.';
+  state.message = `Relay locked on ${state.ball.landedPlanetName}.`;
+  state.hint = `Chain ${state.ball.landingCount} armed. Shot ${Math.min(state.ball.landingCount + 1, state.controlShots.length)} is live.`;
+
+  if (state.adminReplay.active) {
+    const selected = getAdminSolutions()[state.adminReplay.solutionIndex];
+    if (selected && state.adminReplay.shotIndex < selected.shots.length) {
+      state.adminReplay.nextLaunchTime = (state.level.time ?? 0) + selected.shots[state.adminReplay.shotIndex].waitSeconds;
+      state.hint = `${getAdminSolutionSummary(selected, state.adminReplay.solutionIndex, getAdminSolutions().length)} · waiting`;
+    } else {
+      stopAdminReplay();
+    }
+  }
   syncHud();
 }
 
@@ -1472,7 +2344,7 @@ function getWorldPointFromEvent(event) {
 }
 
 function ballIsMoving() {
-  return lengthSq(state.ball.velocity) > 0.002 || state.ball.goaling || state.ball.crashed;
+  return lengthSq(state.ball.velocity) > 0.002 || state.ball.goaling || state.ball.crashed || state.undo.active;
 }
 
 function updateDragState(worldPoint) {
@@ -1504,44 +2376,22 @@ function updateBallTransforms() {
 }
 
 function updateCueVisual() {
-  const idlePreview = !state.dragActive && !ballIsMoving();
-  aimLine.visible = !ballIsMoving();
-  dragHandle.visible = !ballIsMoving();
-  lastAimLine.visible = state.hasLastDrag && idlePreview;
-  lastDragHandle.visible = state.hasLastDrag && idlePreview;
+  aimLine.visible = state.dragActive && !ballIsMoving();
+  dragHandle.visible = state.dragActive && !ballIsMoving();
+  syncLastAttemptTrailVisual();
 
   if (!aimLine.visible) {
-    lastAimLine.visible = false;
-    lastDragHandle.visible = false;
     return;
   }
-
-  let bandVector;
-  let guideLength;
-  let bandDirection;
-  let anchor;
-
-  if (state.dragActive) {
-    bandVector = {
-      x: state.dragAnchor.x - state.ball.position.x,
-      y: state.dragAnchor.y - state.ball.position.y,
-    };
-    guideLength = Math.max(0.001, length(bandVector));
-    bandDirection = normalize(bandVector);
-    anchor = state.dragAnchor;
-    aimLine.material.opacity = 0.9;
-    dragHandle.material.opacity = 0.95;
-  } else {
-    anchor = getPreviewAnchor();
-    bandVector = {
-      x: anchor.x - state.ball.position.x,
-      y: anchor.y - state.ball.position.y,
-    };
-    guideLength = Math.max(0.001, length(bandVector));
-    bandDirection = normalize(bandVector);
-    aimLine.material.opacity = 0.48;
-    dragHandle.material.opacity = 0.58;
-  }
+  const bandVector = {
+    x: state.dragAnchor.x - state.ball.position.x,
+    y: state.dragAnchor.y - state.ball.position.y,
+  };
+  const guideLength = Math.max(0.001, length(bandVector));
+  const bandDirection = normalize(bandVector);
+  const anchor = state.dragAnchor;
+  aimLine.material.opacity = 0.9;
+  dragHandle.material.opacity = 0.95;
 
   aimLine.position.set(
     state.ball.position.x + bandDirection.x * guideLength * 0.5,
@@ -1552,29 +2402,12 @@ function updateCueVisual() {
   aimLine.scale.set(guideLength, 1, 1);
 
   dragHandle.position.set(anchor.x, 0.16, anchor.y);
-
-  if (!state.dragActive && lastAimLine.visible) {
-    if (lastAimLine.visible) {
-      const lastBandVector = {
-        x: state.lastDragAnchor.x - state.ball.position.x,
-        y: state.lastDragAnchor.y - state.ball.position.y,
-      };
-      const lastGuideLength = Math.max(0.001, length(lastBandVector));
-      const lastBandDirection = normalize(lastBandVector);
-
-      lastAimLine.position.set(
-        state.ball.position.x + lastBandDirection.x * lastGuideLength * 0.5,
-        0.12,
-        state.ball.position.y + lastBandDirection.y * lastGuideLength * 0.5,
-      );
-      lastAimLine.rotation.y = Math.atan2(-lastBandDirection.y, lastBandDirection.x);
-      lastAimLine.scale.set(lastGuideLength, 1, 1);
-      lastDragHandle.position.set(state.lastDragAnchor.x, 0.14, state.lastDragAnchor.y);
-    }
-  }
 }
 
 function launchShot(direction, power, anchor) {
+  if (!state.adminReplay.active) {
+    saveUndoCheckpoint();
+  }
   const activeStageIndex = getActiveStageIndex();
   const launchPlanetIndex = state.ball.anchorPlanetIndex;
   const launchDirection = constrainLaunchDirection(direction, power);
@@ -1589,9 +2422,6 @@ function launchShot(direction, power, anchor) {
     x: relativeVelocity.x + launchBodyVelocity.x + launchSurfaceVelocity.x,
     y: relativeVelocity.y + launchBodyVelocity.y + launchSurfaceVelocity.y,
   };
-  setVec(state.lastDragAnchor, state.ball.position);
-  addScaledVec(state.lastDragAnchor, launchDirection, power);
-  state.hasLastDrag = true;
   state.ball.velocity.x = velocity.x;
   state.ball.velocity.y = velocity.y;
   state.ball.launchGracePlanetIndex = launchPlanetIndex;
@@ -1599,6 +2429,7 @@ function launchShot(direction, power, anchor) {
   state.ball.landedPlanetIndex = null;
   state.ball.landedPlanetName = '';
   state.shots += 1;
+  beginAttemptTrail();
   state.dragActive = false;
   state.dragPower = 0;
   setControlShot(activeStageIndex, angleDegFromDirection(launchDirection), power);
@@ -1610,16 +2441,13 @@ function launchShot(direction, power, anchor) {
 }
 
 function onPointerDown(event) {
-  if (ballIsMoving()) {
+  if (ballIsMoving() || state.adminReplay.active || state.undo.active) {
     return;
   }
 
   const point = getWorldPointFromEvent(event);
-  if (distanceBetween(point, state.ball.position) > BALL_HIT_RADIUS) {
-    return;
-  }
-
   state.dragActive = true;
+  setVec(state.dragPointerWorld, point);
   renderer.domElement.setPointerCapture(event.pointerId);
   updateDragState(point);
   state.message = 'Stretch and release.';
@@ -1633,6 +2461,7 @@ function onPointerMove(event) {
   }
 
   const point = getWorldPointFromEvent(event);
+  setVec(state.dragPointerWorld, point);
   updateDragState(point);
   state.message = 'Release to launch.';
   state.hint = `Burn loaded: ${state.dragPower.toFixed(2)} / ${MAX_DRAG_DISTANCE.toFixed(1)}`;
@@ -1665,7 +2494,7 @@ renderer.domElement.addEventListener('pointerup', onPointerUp);
 renderer.domElement.addEventListener('pointercancel', onPointerUp);
 
 function launchFromControls() {
-  if (ballIsMoving() || state.dragActive) {
+  if (ballIsMoving() || state.dragActive || state.adminReplay.active || state.undo.active) {
     return;
   }
 
@@ -1677,6 +2506,9 @@ function launchFromControls() {
 
 angleSliders.forEach((slider, index) => {
   slider.addEventListener('input', (event) => {
+    if (state.adminReplay.active) {
+      return;
+    }
     const nextAngle = Number.parseFloat(event.target.value);
     const shot = getControlShot(index);
     setControlShot(index, nextAngle, shot.power);
@@ -1686,6 +2518,9 @@ angleSliders.forEach((slider, index) => {
 
 powerSliders.forEach((slider, index) => {
   slider.addEventListener('input', (event) => {
+    if (state.adminReplay.active) {
+      return;
+    }
     const nextPower = Number.parseFloat(event.target.value);
     const shot = getControlShot(index);
     setControlShot(index, shot.angleDeg, nextPower);
@@ -1693,19 +2528,83 @@ powerSliders.forEach((slider, index) => {
   });
 });
 
-solarGravitySlider.addEventListener('input', (event) => {
-  const nextStrength = Number.parseFloat(event.target.value);
-  setSolarGravityStrength(nextStrength);
-  solarGravityValue.textContent = getSolarGravityStrength().toFixed(1);
-  rebuildGravityField();
-  lastGravityFieldRefreshTime = state.level.time ?? 0;
+launchButton.addEventListener('click', launchFromControls);
+undoButton.addEventListener('click', startUndo);
+
+window.addEventListener('keydown', (event) => {
+  if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key.length === 1) {
+    state.adminCodeBuffer = `${state.adminCodeBuffer}${event.key.toLowerCase()}`.slice(-ADMIN_CHEAT_CODE.length);
+    if (state.adminCodeBuffer === ADMIN_CHEAT_CODE) {
+      state.adminMode = !state.adminMode;
+      state.adminCodeBuffer = '';
+      if (!state.adminMode) {
+        stopAdminReplay();
+      }
+      persistAdminMode();
+      state.message = state.adminMode ? 'Admin mode enabled.' : 'Admin mode disabled.';
+      state.hint = state.adminMode
+        ? 'Use [ and ] to cycle solutions, S to show one, V to replay it.'
+        : `Level ${state.levelIndex + 1}: ${state.level.name}.`;
+      syncHud();
+      return;
+    }
+  }
+
+  if (!state.adminMode) {
+    return;
+  }
+
+  if (event.key === '[') {
+    event.preventDefault();
+    previewAdminSolution(-1);
+    return;
+  }
+
+  if (event.key === ']') {
+    event.preventDefault();
+    previewAdminSolution(1);
+    return;
+  }
+
+  if (event.code === 'KeyS') {
+    event.preventDefault();
+    previewAdminSolution(0);
+    return;
+  }
+
+  if (event.code === 'KeyV') {
+    event.preventDefault();
+    startAdminReplay();
+  }
 });
 
-launchButton.addEventListener('click', launchFromControls);
-
 function updatePhysics(delta) {
+  if (state.undo.active) {
+    state.undo.elapsed += delta;
+    const t = clamp(state.undo.elapsed / Math.max(0.0001, state.undo.duration), 0, 1);
+    const easedT = THREE.MathUtils.smootherstep(t, 0, 1);
+    const fromPosition = state.undo.fromPosition ?? state.ball.position;
+    const toPosition = state.undo.toPosition ?? state.ball.position;
+    setVec(state.ball.position, {
+      x: THREE.MathUtils.lerp(fromPosition.x, toPosition.x, easedT),
+      y: THREE.MathUtils.lerp(fromPosition.y, toPosition.y, easedT),
+    });
+    ballGroup.visible = true;
+    ballGroup.scale.setScalar(1 - Math.sin(easedT * Math.PI) * 0.08);
+    ballMesh.position.y = ballRestY + Math.sin(easedT * Math.PI) * 0.06;
+    ballMesh.material.color.copy(palette.ball).lerp(palette.start, 0.22);
+    ballMesh.material.emissive.copy(palette.start);
+    ballMesh.material.emissiveIntensity = 0.8 * Math.sin(easedT * Math.PI);
+    ballShadow.material.opacity = 0.2 + (1 - easedT) * 0.08;
+
+    if (t >= 1) {
+      finishUndo();
+    }
+    return;
+  }
+
   if (state.ball.goaling) {
-    state.ball.transition += delta * 2.5;
+    state.ball.transition += delta * 3.6;
     const t = Math.min(1, state.ball.transition);
     ballMesh.position.y = THREE.MathUtils.lerp(ballRestY, -0.34, t);
     ballGroup.scale.setScalar(1 - t * 0.9);
@@ -1725,7 +2624,39 @@ function updatePhysics(delta) {
   }
 
   if (state.ball.crashed) {
-    state.ball.transition += delta * 3.6;
+    if (state.ball.crashKind === 'sun') {
+      state.ball.transition += delta * 4.8;
+      const t = Math.min(1, state.ball.transition);
+      state.ball.position.x = THREE.MathUtils.lerp(
+        state.ball.crashStartPosition.x,
+        state.ball.crashTargetPosition.x,
+        t,
+      );
+      state.ball.position.y = THREE.MathUtils.lerp(
+        state.ball.crashStartPosition.y,
+        state.ball.crashTargetPosition.y,
+        t,
+      );
+      updateBallTransforms();
+      ballMesh.position.y = THREE.MathUtils.lerp(ballRestY, -0.18, t);
+      ballGroup.scale.setScalar(Math.max(0.04, 1 - t * 0.94));
+      ballShadow.material.opacity = 0.28 * (1 - t);
+      ballMesh.material.color.copy(palette.ball).lerp(palette.band, Math.min(1, t * 1.1));
+      ballMesh.material.emissive.copy(palette.band);
+      ballMesh.material.emissiveIntensity = THREE.MathUtils.lerp(0, 2.4, t);
+
+      if (t >= 1) {
+        ballGroup.visible = false;
+        resetBall(
+          state.ball.crashReason,
+          state.hint,
+          { countReset: true },
+        );
+      }
+      return;
+    }
+
+    state.ball.transition += delta * 6.2;
     const wobble = 1 + Math.sin(state.ball.transition * 30) * 0.08;
     ballGroup.scale.set(wobble, 1 - state.ball.transition * 0.35, wobble);
     ballShadow.material.opacity = 0.28 * (1 - Math.min(1, state.ball.transition));
@@ -1734,7 +2665,7 @@ function updatePhysics(delta) {
       ballGroup.visible = false;
       resetBall(
         state.ball.crashReason,
-        `Retry ${state.level.name}. ${state.level.summary}`,
+        state.hint,
         { countReset: true },
       );
     }
@@ -1749,12 +2680,25 @@ function updatePhysics(delta) {
       setLevelTime(state.level, nextTime);
       state.ball.time = nextTime;
       advanceBallAnchor(state.level, state.ball, delta);
+      if (maybeLaunchAdminReplayShot()) {
+        return;
+      }
+      if (state.dragActive) {
+        updateDragState(state.dragPointerWorld);
+      }
+      if (!isGoalOpen(state.level, state.ball.time)) {
+        resetBall(
+          'Event horizon collapsed.',
+          describeFailureHint('goal-closed'),
+          { countReset: true },
+        );
+      }
       return;
     }
     if (!state.roundSettled) {
       resetBall(
         'Drift expired.',
-        `Retry ${state.level.name}. Use more pull or a cleaner assist.`,
+        describeFailureHint('settled'),
         { countReset: true },
       );
     }
@@ -1762,6 +2706,7 @@ function updatePhysics(delta) {
   }
 
   const result = stepBall(state.level, state.ball, delta);
+  recordAttemptTrailPoint();
   if (result.type === 'goal') {
     beginGoal();
     return;
@@ -1773,19 +2718,24 @@ function updatePhysics(delta) {
   }
 
   if (result.type === 'crash') {
-    const message = result.reason === 'planet' ? 'Planet impact.' : 'Lost in open space.';
-    const hint =
-      result.reason === 'planet'
-        ? `Retry ${state.level.name}. Slingshot wider around the wells.`
-        : `Retry ${state.level.name}. The route drifted off the course.`;
-    beginCrash(message, hint);
+    const message =
+      result.reason === 'goal-closed'
+        ? 'Event horizon collapsed.'
+        : result.reason === 'sun'
+          ? 'Burned in the sun.'
+          : result.reason === 'planet'
+            ? 'Planet impact.'
+            : 'Lost in open space.';
+    const hint = describeFailureHint(result.reason);
+    beginCrash(message, hint, result.reason === 'sun' ? 'sun' : 'planet');
     return;
   }
 
   if (result.type === 'settled' && !state.roundSettled) {
+    finalizeAttemptTrail('settled');
     resetBall(
       'Drift expired.',
-      `Retry ${state.level.name}. Use more pull or a cleaner assist.`,
+      describeFailureHint('settled'),
       { countReset: true },
     );
   }
@@ -1793,6 +2743,12 @@ function updatePhysics(delta) {
 
 function updateDecor(time) {
   const worldTime = state.level.time ?? 0;
+  const goalOpen = isGoalOpen(state.level, worldTime);
+  const goalTimeLeft = getGoalRemainingTime(state.level, worldTime);
+  const goalTimerFraction = getGoalRemainingFraction(state.level, worldTime);
+  runStatusPill.textContent = getRunStatusText();
+  windowStatusPill.textContent = getWindowStatusText();
+  windowStatusPill.classList.toggle('is-hot', goalTimeLeft < 2.5);
   updateSunVisual();
   updateLaunchMarker();
   startPad.scale.setScalar(1 + Math.sin(time * 2.7) * 0.06);
@@ -1813,19 +2769,28 @@ function updateDecor(time) {
     gravityFieldVisuals.core.material.opacity = 0.38 + Math.sin(time * 2 + 0.6) * 0.04;
   }
 
-  blackHoleRing.rotation.z = time * 0.9;
-  blackHoleRing.scale.setScalar(1 + Math.sin(time * 4.2) * 0.08);
-  blackHoleRing.material.opacity = goalUnlocked()
-    ? 0.5 + Math.sin(time * 4.2) * 0.04
-    : 0.16 + Math.sin(time * 2.4) * 0.02;
+  setGoalTimerArc(goalTimerFraction);
+
+  blackHoleDisc.material.color.setHex(goalOpen ? palette.blackHole.getHex() : 0x191f26);
+  blackHoleRing.rotation.z = time * (goalOpen ? 0.9 : 0.25);
+  blackHoleRing.scale.setScalar(goalOpen ? 1 + Math.sin(time * 4.2) * 0.08 : 0.92);
+  blackHoleRing.material.opacity = goalOpen
+    ? 0.46 + goalTimerFraction * 0.12 + Math.sin(time * 4.2) * 0.04
+    : 0.18;
+  goalTimerTrack.material.opacity = goalOpen ? 0.22 : 0.08;
+  goalTimerArc.material.opacity = goalOpen
+    ? 0.56 + goalTimerFraction * 0.28 + Math.sin(time * 5.6) * 0.03
+    : 0;
+  goalTimerArc.material.color.setHex(goalTimeLeft < 2.5 ? 0xff9f6e : 0x8fffe3);
 
   planetVisuals.forEach((visual, index) => {
     const pulse = 1 + Math.sin(time * (1.5 + index * 0.35) + index) * 0.05;
     const isLandable = Boolean(visual.planet.landable);
+    const relayPulse = state.ball.landedPlanetIndex === index ? state.relayPulse : 0;
     visual.group.position.set(visual.planet.position.x, 0, visual.planet.position.y);
-    visual.halo.scale.setScalar(pulse);
+    visual.halo.scale.setScalar(pulse + relayPulse * 0.16);
     visual.glow.material.opacity = isLandable
-      ? 0.13 + Math.sin(time * 2 + index) * 0.03
+      ? 0.13 + Math.sin(time * 2 + index) * 0.03 + relayPulse * 0.12
       : 0.16 + Math.sin(time * 1.7 + index) * 0.04;
     visual.orbitRing.rotation.z = time * (0.35 + index * 0.12);
     visual.body.rotation.y = -worldTime * (visual.planet.spinSpeed ?? 0);
@@ -1841,8 +2806,9 @@ function updateDecor(time) {
     }
     if (visual.landingRing) {
       const selected = state.ball.landedPlanetIndex === index;
+      visual.landingRing.scale.setScalar(1 + relayPulse * 0.18);
       visual.landingRing.material.opacity = selected
-        ? 0.34 + Math.sin(time * 4.4) * 0.06
+        ? 0.34 + Math.sin(time * 4.4) * 0.06 + relayPulse * 0.28
         : 0.16 + Math.sin(time * 3 + index) * 0.03;
       visual.orbitRing.material.opacity = selected ? 0.9 : 0.62 + Math.sin(time * 2.5 + index) * 0.06;
       visual.orbitPath.material.opacity = selected ? 0.5 : 0.22 + Math.sin(time * 1.6 + index) * 0.025;
@@ -1878,6 +2844,8 @@ function animate() {
   const delta = Math.min(clock.getDelta(), 0.033);
   const time = clock.elapsedTime;
 
+  state.relayPulse = Math.max(0, state.relayPulse - delta * 1.9);
+
   physicsAccumulator = Math.min(
     physicsAccumulator + delta,
     PHYSICS_STEP * MAX_PHYSICS_STEPS_PER_FRAME,
@@ -1888,6 +2856,7 @@ function animate() {
     physicsAccumulator -= PHYSICS_STEP;
   }
 
+  updateBallTrace(delta);
   updateBallTransforms();
   updateCueVisual();
   updateDecor(time);
