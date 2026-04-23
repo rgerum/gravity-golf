@@ -1,0 +1,25 @@
+{
+  "name": "Gravity Billiard",
+  "short_name": "Gravity",
+  "description": "Slingshot through orbital gravity wells and drop into the black hole.",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["fullscreen", "standalone"],
+  "background_color": "#04070f",
+  "theme_color": "#04070f",
+  "icons": [
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
