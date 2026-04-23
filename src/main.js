@@ -60,6 +60,10 @@ app.innerHTML = `
               </div>
               <p id="statusHint">Drag from the ball, then release to launch.</p>
             </div>
+            <div class="perf-panel" id="fpsPanel" hidden>
+              <span class="perf-label">FPS</span>
+              <strong id="fpsValue">--</strong>
+            </div>
           </div>
         </div>
       </div>
@@ -74,6 +78,8 @@ const statusHint = document.querySelector('#statusHint');
 const runStatusPill = document.querySelector('#runStatusPill');
 const windowStatusPill = document.querySelector('#windowStatusPill');
 const powerFill = document.querySelector('#powerFill');
+const fpsPanel = document.querySelector('#fpsPanel');
+const fpsValue = document.querySelector('#fpsValue');
 const retryButton = document.querySelector('#retryButton');
 const undoButton = document.querySelector('#undoButton');
 const sceneHost = document.querySelector('#scene');
@@ -137,6 +143,7 @@ const CONTROL_MAX_ANGLE = 180;
 const CONTROL_MIN_POWER = 0.2;
 const ADMIN_STORAGE_KEY = 'gravityBilliardAdminMode';
 const ADMIN_CHEAT_CODE = 'orbitadmin';
+const FPS_OVERLAY_STORAGE_KEY = 'gravityBilliardFpsOverlay';
 const DEFAULT_CONTROL_SHOT = { angleDeg: 0, power: 1.8 };
 
 const ambientLight = new THREE.HemisphereLight(0x8bd5ff, 0x03070c, 1.18);
@@ -541,6 +548,12 @@ const state = {
   ballTraceCarry: 0,
   message: 'Plot the first slingshot.',
   hint: 'Use the planets to curve into the event horizon.',
+  debug: {
+    fpsVisible: readFpsOverlayPreference(),
+    fpsValue: 0,
+    fpsFrameCount: 0,
+    fpsElapsed: 0,
+  },
 };
 
 let planetVisuals = [];
@@ -596,6 +609,31 @@ function updateCourseSurfaceVisuals() {
       Math.max(0.1, visualField.height - 0.5),
     ),
   );
+}
+
+function readFpsOverlayPreference() {
+  const url = new URL(window.location.href);
+  const fpsQuery = url.searchParams.get('fps');
+  if (fpsQuery === '1') {
+    return true;
+  }
+  if (fpsQuery === '0') {
+    return false;
+  }
+
+  try {
+    return window.localStorage.getItem(FPS_OVERLAY_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function persistFpsOverlayPreference(visible) {
+  try {
+    window.localStorage.setItem(FPS_OVERLAY_STORAGE_KEY, visible ? '1' : '0');
+  } catch {
+    // Ignore persistence errors in restricted contexts.
+  }
 }
 
 function setGoalTimerArc(fraction) {
@@ -1717,6 +1755,25 @@ function canRetryLevel() {
   return !state.adminReplay.active && !state.undo.active && !state.ball.goaling;
 }
 
+function syncPerfOverlay() {
+  fpsPanel.hidden = !state.debug.fpsVisible;
+  fpsValue.textContent = state.debug.fpsValue > 0 ? String(Math.round(state.debug.fpsValue)) : '--';
+}
+
+function toggleFpsOverlay() {
+  state.debug.fpsVisible = !state.debug.fpsVisible;
+  persistFpsOverlayPreference(state.debug.fpsVisible);
+  if (!state.debug.fpsVisible) {
+    state.debug.fpsFrameCount = 0;
+    state.debug.fpsElapsed = 0;
+  }
+  state.message = state.debug.fpsVisible ? 'FPS counter enabled.' : 'FPS counter hidden.';
+  state.hint = state.debug.fpsVisible
+    ? 'Press Shift+F again to hide the performance overlay.'
+    : state.level.summary;
+  syncHud();
+}
+
 function syncActionButtons() {
   retryButton.disabled = !canRetryLevel();
   undoButton.disabled = !canRedo();
@@ -2146,6 +2203,7 @@ function syncHud() {
   const shownPower = state.dragActive ? state.dragPower : getControlShot().power;
   powerFill.style.transform = `scaleX(${Math.max(0.04, shownPower / MAX_DRAG_DISTANCE)})`;
   syncActionButtons();
+  syncPerfOverlay();
 }
 
 function resetBall(message, hint, options = {}) {
@@ -2456,6 +2514,12 @@ retryButton.addEventListener('click', restartLevel);
 undoButton.addEventListener('click', startUndo);
 
 window.addEventListener('keydown', (event) => {
+  if (!event.metaKey && !event.ctrlKey && !event.altKey && event.shiftKey && event.code === 'KeyF') {
+    event.preventDefault();
+    toggleFpsOverlay();
+    return;
+  }
+
   if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key.length === 1) {
     state.adminCodeBuffer = `${state.adminCodeBuffer}${event.key.toLowerCase()}`.slice(-ADMIN_CHEAT_CODE.length);
     if (state.adminCodeBuffer === ADMIN_CHEAT_CODE) {
@@ -2683,7 +2747,10 @@ function updateDecor(time) {
   sunCorona.material.opacity = 0.3 + Math.sin(time * 2.1) * 0.04;
   sunCore.rotation.y = time * 0.22;
 
-  if (worldTime < lastGravityFieldRefreshTime || worldTime - lastGravityFieldRefreshTime >= 0.16) {
+  const gravityFieldRefreshDue =
+    worldTime < lastGravityFieldRefreshTime || worldTime - lastGravityFieldRefreshTime >= 0.16;
+
+  if (gravityFieldRefreshDue && !state.dragActive) {
     rebuildGravityField();
     lastGravityFieldRefreshTime = worldTime;
   }
@@ -2768,6 +2835,17 @@ function resize() {
 function animate() {
   const delta = Math.min(clock.getDelta(), 0.033);
   const time = clock.elapsedTime;
+
+  if (state.debug.fpsVisible) {
+    state.debug.fpsFrameCount += 1;
+    state.debug.fpsElapsed += delta;
+    if (state.debug.fpsElapsed >= 0.25) {
+      state.debug.fpsValue = state.debug.fpsFrameCount / state.debug.fpsElapsed;
+      state.debug.fpsFrameCount = 0;
+      state.debug.fpsElapsed = 0;
+      syncPerfOverlay();
+    }
+  }
 
   state.relayPulse = Math.max(0, state.relayPulse - delta * 1.9);
 
