@@ -3,8 +3,12 @@ import * as THREE from 'three';
 import {
   BALL_HIT_RADIUS,
   COURSE,
+  FIXED_SOLAR_GRAVITY_STRENGTH,
   LEVELS,
   MAX_DRAG_DISTANCE,
+  PLANET_GRAVITY_MULTIPLIER,
+  SOLAR_GRAVITY_MULTIPLIER,
+  SOLAR_GRAVITY_SOFTENING,
   addScaledVec,
   cloneVec,
   createBallState,
@@ -21,7 +25,6 @@ import {
   lengthSq,
   launchVelocity,
   normalize,
-  samplePlanetGravity,
   setLevelTime,
   setVec,
   stepBall,
@@ -558,10 +561,12 @@ const state = {
 
 let planetVisuals = [];
 let gravityFieldVisuals = null;
+let gravityFieldSamples = [];
 let physicsAccumulator = 0;
 const planetTextureCache = new Map();
 let lastGravityFieldRefreshTime = Number.NEGATIVE_INFINITY;
 let lastGoalTimerFraction = Number.NaN;
+const gravityFieldTintColor = new THREE.Color();
 
 function getViewportMetrics() {
   const aspect = sceneHost.clientWidth / Math.max(1, sceneHost.clientHeight);
@@ -1804,80 +1809,183 @@ function clearGroup(group) {
   });
 }
 
-function mixFieldColor(intensity, planetTint) {
-  const color = new THREE.Color();
+function mixFieldColor(target, intensity, tintWeight, tintR, tintG, tintB) {
   if (intensity < 0.55) {
-    color.lerpColors(gravityFieldPalette.low, gravityFieldPalette.mid, intensity / 0.55);
+    target.lerpColors(gravityFieldPalette.low, gravityFieldPalette.mid, intensity / 0.55);
   } else {
-    color.lerpColors(gravityFieldPalette.mid, gravityFieldPalette.high, (intensity - 0.55) / 0.45);
+    target.lerpColors(gravityFieldPalette.mid, gravityFieldPalette.high, (intensity - 0.55) / 0.45);
   }
 
-  if (planetTint) {
-    color.lerp(planetTint, 0.32);
+  if (tintWeight > 0.000001) {
+    gravityFieldTintColor.setRGB(tintR / tintWeight, tintG / tintWeight, tintB / tintWeight);
+    target.lerp(gravityFieldTintColor, 0.32);
   }
-
-  return color;
 }
 
-function createGravityFieldSample(basePoint, halfWidth, halfHeight) {
-  const gravity = samplePlanetGravity(state.level, basePoint);
-  const magnitude = length(gravity);
-  let tintWeight = 0;
-  const tint = new THREE.Color(0x000000);
+function ensureGravityFieldSamples(columns, rows) {
+  if (gravityFieldSamples.length !== rows + 1) {
+    gravityFieldSamples = Array.from({ length: rows + 1 }, () => []);
+  }
 
-  state.level.planets.forEach((planet) => {
-    const distance = distanceBetween(basePoint, planet.position);
+  for (let row = 0; row <= rows; row += 1) {
+    const rowSamples = gravityFieldSamples[row];
+    if (rowSamples.length !== columns + 1) {
+      rowSamples.length = 0;
+      for (let column = 0; column <= columns; column += 1) {
+        rowSamples.push({
+          position: new THREE.Vector3(),
+          color: new THREE.Color(),
+        });
+      }
+    }
+  }
+
+  return gravityFieldSamples;
+}
+
+function createGravityFieldSample(baseX, baseY, halfWidth, halfHeight, target) {
+  let gravityX = 0;
+  let gravityY = 0;
+  let tintWeight = 0;
+  let tintR = 0;
+  let tintG = 0;
+  let tintB = 0;
+
+  for (const planet of state.level.planets) {
+    const deltaX = planet.position.x - baseX;
+    const deltaY = planet.position.y - baseY;
+    const distanceSq = deltaX * deltaX + deltaY * deltaY;
+    const safeDistanceSq = Math.max(distanceSq, 0.000001);
+    const distance = Math.sqrt(safeDistanceSq);
     if (distance >= planet.falloff) {
-      return;
+      continue;
     }
 
-    const influence = Math.pow(1 - distance / planet.falloff, 2) * (planet.gravity / 12);
-    const glow = new THREE.Color(planet.glow);
-    tint.r += glow.r * influence;
-    tint.g += glow.g * influence;
-    tint.b += glow.b * influence;
-    tintWeight += influence;
-  });
+    const inverseDistance = 1 / distance;
+    const pull = planet.gravity * PLANET_GRAVITY_MULTIPLIER / (safeDistanceSq + 0.22);
+    gravityX += deltaX * inverseDistance * pull;
+    gravityY += deltaY * inverseDistance * pull;
 
+    const influence = Math.pow(1 - distance / planet.falloff, 2) * (planet.gravity / 12);
+    const glow = planet.gravityFieldGlowColor ?? (planet.gravityFieldGlowColor = new THREE.Color(planet.glow));
+    tintR += glow.r * influence;
+    tintG += glow.g * influence;
+    tintB += glow.b * influence;
+    tintWeight += influence;
+  }
+
+  if (FIXED_SOLAR_GRAVITY_STRENGTH > 0) {
+    const deltaX = state.level.sun.x - baseX;
+    const deltaY = state.level.sun.y - baseY;
+    const distanceSq = deltaX * deltaX + deltaY * deltaY;
+    const safeDistanceSq = Math.max(distanceSq, 0.000001);
+    const distance = Math.sqrt(safeDistanceSq);
+    const inverseDistance = 1 / distance;
+    const pull = FIXED_SOLAR_GRAVITY_STRENGTH * SOLAR_GRAVITY_MULTIPLIER / (safeDistanceSq + SOLAR_GRAVITY_SOFTENING);
+    gravityX += deltaX * inverseDistance * pull;
+    gravityY += deltaY * inverseDistance * pull;
+  }
+
+  const magnitudeSq = gravityX * gravityX + gravityY * gravityY;
+  const magnitude = Math.sqrt(magnitudeSq);
   const edgeDistance = Math.min(
-    halfWidth - Math.abs(basePoint.x),
-    halfHeight - Math.abs(basePoint.y),
+    halfWidth - Math.abs(baseX),
+    halfHeight - Math.abs(baseY),
   );
   const edgeFade = THREE.MathUtils.smoothstep(edgeDistance, 0.12, 1.45);
   const displacement = Math.min(0.82, Math.log1p(magnitude) * 0.22) * edgeFade;
   const intensity = clamp(Math.log1p(magnitude) / 3.9, 0, 1);
-  const direction = magnitude > 0.0001
-    ? { x: gravity.x / magnitude, y: gravity.y / magnitude }
-    : { x: 0, y: 0 };
-  const planetTint = tintWeight > 0
-    ? tint.multiplyScalar(1 / tintWeight)
-    : null;
+  const inverseMagnitude = magnitude > 0.0001 ? 1 / magnitude : 0;
 
-  return {
-    position: new THREE.Vector3(
-      basePoint.x + direction.x * displacement,
-      0.035 + intensity * 0.05,
-      basePoint.y + direction.y * displacement,
-    ),
-    color: mixFieldColor(intensity, planetTint),
-  };
+  target.position.set(
+    baseX + gravityX * inverseMagnitude * displacement,
+    0.035 + intensity * 0.05,
+    baseY + gravityY * inverseMagnitude * displacement,
+  );
+  mixFieldColor(target.color, intensity, tintWeight, tintR, tintG, tintB);
 }
 
-function pushGravitySegment(positions, colors, from, to) {
-  positions.push(
-    from.position.x, from.position.y, from.position.z,
-    to.position.x, to.position.y, to.position.z,
-  );
-  colors.push(
-    from.color.r, from.color.g, from.color.b,
-    to.color.r, to.color.g, to.color.b,
-  );
+function getGravityFieldValueCount(columns, rows) {
+  const segmentCount = (rows + 1) * columns + rows * (columns + 1);
+  return segmentCount * 6;
+}
+
+function ensureGravityFieldVisuals(valueCount) {
+  if (!gravityFieldVisuals) {
+    const geometry = new THREE.BufferGeometry();
+    const positions = new Float32Array(valueCount);
+    const colors = new Float32Array(valueCount);
+    const positionAttribute = new THREE.BufferAttribute(positions, 3);
+    const colorAttribute = new THREE.BufferAttribute(colors, 3);
+    positionAttribute.setUsage(THREE.DynamicDrawUsage);
+    colorAttribute.setUsage(THREE.DynamicDrawUsage);
+    geometry.setAttribute('position', positionAttribute);
+    geometry.setAttribute('color', colorAttribute);
+
+    const glow = new THREE.LineSegments(
+      geometry,
+      new THREE.LineBasicMaterial({
+        vertexColors: true,
+        transparent: true,
+        opacity: 0.18,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      }),
+    );
+    glow.renderOrder = 2;
+    gravityFieldRoot.add(glow);
+
+    const core = new THREE.LineSegments(
+      geometry,
+      new THREE.LineBasicMaterial({
+        vertexColors: true,
+        transparent: true,
+        opacity: 0.42,
+        depthWrite: false,
+      }),
+    );
+    core.renderOrder = 3;
+    gravityFieldRoot.add(core);
+
+    gravityFieldVisuals = { glow, core, geometry, positions, colors };
+    return gravityFieldVisuals;
+  }
+
+  if (gravityFieldVisuals.positions.length !== valueCount) {
+    const positions = new Float32Array(valueCount);
+    const colors = new Float32Array(valueCount);
+    const positionAttribute = new THREE.BufferAttribute(positions, 3);
+    const colorAttribute = new THREE.BufferAttribute(colors, 3);
+    positionAttribute.setUsage(THREE.DynamicDrawUsage);
+    colorAttribute.setUsage(THREE.DynamicDrawUsage);
+    gravityFieldVisuals.geometry.setAttribute('position', positionAttribute);
+    gravityFieldVisuals.geometry.setAttribute('color', colorAttribute);
+    gravityFieldVisuals.positions = positions;
+    gravityFieldVisuals.colors = colors;
+  }
+
+  return gravityFieldVisuals;
+}
+
+function writeGravitySegment(positions, colors, offset, from, to) {
+  positions[offset] = from.position.x;
+  positions[offset + 1] = from.position.y;
+  positions[offset + 2] = from.position.z;
+  colors[offset] = from.color.r;
+  colors[offset + 1] = from.color.g;
+  colors[offset + 2] = from.color.b;
+
+  positions[offset + 3] = to.position.x;
+  positions[offset + 4] = to.position.y;
+  positions[offset + 5] = to.position.z;
+  colors[offset + 3] = to.color.r;
+  colors[offset + 4] = to.color.g;
+  colors[offset + 5] = to.color.b;
+
+  return offset + 6;
 }
 
 function rebuildGravityField() {
-  clearGroup(gravityFieldRoot);
-  gravityFieldVisuals = null;
-
   const visualField = getVisualFieldSize();
   const width = visualField.width - gravityGridConfig.insetX * 2;
   const height = visualField.height - gravityGridConfig.insetY * 2;
@@ -1887,66 +1995,40 @@ function rebuildGravityField() {
   const rows = Math.max(2, Math.round(gravityGridConfig.rows * (height / baseHeight)));
   const halfWidth = width / 2;
   const halfHeight = height / 2;
-  const samples = [];
-  const positions = [];
-  const colors = [];
+  const samples = ensureGravityFieldSamples(columns, rows);
+  const valueCount = getGravityFieldValueCount(columns, rows);
+  const visuals = ensureGravityFieldVisuals(valueCount);
+  const positions = visuals.positions;
+  const colors = visuals.colors;
+  let offset = 0;
 
   for (let row = 0; row <= rows; row += 1) {
-    const rowSamples = [];
+    const rowSamples = samples[row];
     const yRatio = row / rows;
     const y = -halfHeight + yRatio * height;
 
     for (let column = 0; column <= columns; column += 1) {
       const xRatio = column / columns;
       const x = -halfWidth + xRatio * width;
-      rowSamples.push(createGravityFieldSample({ x, y }, halfWidth, halfHeight));
+      createGravityFieldSample(x, y, halfWidth, halfHeight, rowSamples[column]);
     }
-
-    samples.push(rowSamples);
   }
 
   for (let row = 0; row <= rows; row += 1) {
     for (let column = 0; column < columns; column += 1) {
-      pushGravitySegment(positions, colors, samples[row][column], samples[row][column + 1]);
+      offset = writeGravitySegment(positions, colors, offset, samples[row][column], samples[row][column + 1]);
     }
   }
 
   for (let row = 0; row < rows; row += 1) {
     for (let column = 0; column <= columns; column += 1) {
-      pushGravitySegment(positions, colors, samples[row][column], samples[row + 1][column]);
+      offset = writeGravitySegment(positions, colors, offset, samples[row][column], samples[row + 1][column]);
     }
   }
-
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-
-  const glow = new THREE.LineSegments(
-    geometry,
-    new THREE.LineBasicMaterial({
-      vertexColors: true,
-      transparent: true,
-      opacity: 0.18,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-    }),
-  );
-  glow.renderOrder = 2;
-  gravityFieldRoot.add(glow);
-
-  const core = new THREE.LineSegments(
-    geometry.clone(),
-    new THREE.LineBasicMaterial({
-      vertexColors: true,
-      transparent: true,
-      opacity: 0.42,
-      depthWrite: false,
-    }),
-  );
-  core.renderOrder = 3;
-  gravityFieldRoot.add(core);
-
-  gravityFieldVisuals = { glow, core };
+  visuals.geometry.setDrawRange(0, offset / 3);
+  visuals.geometry.attributes.position.needsUpdate = true;
+  visuals.geometry.attributes.color.needsUpdate = true;
+  gravityFieldVisuals = visuals;
 }
 
 function rebuildPlanets() {
