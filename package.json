@@ -8,7 +8,10 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test:levels": "node scripts/test-levels.js"
+    "test:levels": "node scripts/test-levels.js",
+    "test:rewind": "node scripts/test-rewind.js",
+    "test:rewind:robust": "node scripts/test-rewind-robust.js",
+    "test:rewind:engine": "node scripts/test-rewind-engine.js"
   },
   "dependencies": {
     "three": "^0.184.0",

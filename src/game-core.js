@@ -1503,6 +1503,18 @@ export function getPlanetSurfaceVelocity(level, planetIndex, anchorNormal) {
   return vec(tangent.x * speed, tangent.y * speed);
 }
 
+function cloneBallRuntimeState(ball) {
+  return {
+    position: cloneVec(ball.position),
+    velocity: cloneVec(ball.velocity),
+    time: ball.time ?? 0,
+    landingCount: ball.landingCount ?? 0,
+    launchGracePlanetIndex: ball.launchGracePlanetIndex ?? null,
+    anchorPlanetIndex: ball.anchorPlanetIndex ?? null,
+    anchorNormal: ball.anchorNormal ? cloneVec(ball.anchorNormal) : null,
+  };
+}
+
 function inferStartPlanetIndex(source, planets) {
   if (Number.isInteger(source.startPlanetIndex) && source.startPlanetIndex >= 0 && source.startPlanetIndex < planets.length) {
     return source.startPlanetIndex;
@@ -1687,18 +1699,31 @@ function resolvePlanetContact(level, ball) {
     }
 
     if (planet.landable && distance <= touchRadius) {
+      const landingDirection = getLandingDirection(ball, planet);
+      const surfaceRadius = getBallSurfaceRadius(planet);
+      const eventState = cloneBallRuntimeState(ball);
+      const displayEventState = cloneBallRuntimeState({
+        ...ball,
+        position: vec(
+          planet.position.x + landingDirection.x * surfaceRadius,
+          planet.position.y + landingDirection.y * surfaceRadius,
+        ),
+      });
       landBallOnPlanet(ball, planet, index);
       return {
         type: 'landed',
         planetIndex: index,
         planetName: planet.name ?? 'relay world',
+        eventState,
+        displayEventState,
       };
     }
 
     if (distance <= touchRadius) {
+      const eventState = cloneBallRuntimeState(ball);
       ball.velocity.x = 0;
       ball.velocity.y = 0;
-      return { type: 'crash', reason: 'planet' };
+      return { type: 'crash', reason: 'planet', eventState, displayEventState: cloneBallRuntimeState(eventState) };
     }
   }
 
@@ -1708,9 +1733,10 @@ function resolvePlanetContact(level, ball) {
 function resolveSunContact(level, ball) {
   const touchRadius = SUN_COLLISION_RADIUS + COURSE.ballRadius * PLANET_COLLISION_PADDING;
   if (distanceBetween(ball.position, level.sun) <= touchRadius) {
+    const eventState = cloneBallRuntimeState(ball);
     ball.velocity.x = 0;
     ball.velocity.y = 0;
-    return { type: 'crash', reason: 'sun' };
+    return { type: 'crash', reason: 'sun', eventState, displayEventState: cloneBallRuntimeState(eventState) };
   }
 
   return null;
@@ -1761,6 +1787,23 @@ export function samplePlanetGravity(level, point) {
   return netGravity;
 }
 
+function sampleBallAcceleration(level, point) {
+  const acceleration = samplePlanetGravity(level, point);
+  const toGoal = vec(level.goalCenter.x - point.x, level.goalCenter.y - point.y);
+  const goalDistance = Math.max(length(toGoal), 0.001);
+  if (goalDistance < level.goalPullRadius) {
+    const pull = level.goalPullStrength / (goalDistance * goalDistance + 0.38);
+    const direction = normalize(toGoal);
+    acceleration.x += direction.x * pull;
+    acceleration.y += direction.y * pull;
+  }
+  return acceleration;
+}
+
+function getBallFriction(delta) {
+  return Math.pow(BALL_FRICTION_BASE, delta * 60);
+}
+
 export function stepBall(level, ball, delta) {
   if (lengthSq(ball.velocity) < 0.000001) {
     ball.velocity.x = 0;
@@ -1773,29 +1816,24 @@ export function stepBall(level, ball, delta) {
   ball.time = nextTime;
 
   if (!isGoalOpen(level, ball.time)) {
+    const eventState = cloneBallRuntimeState(ball);
     ball.velocity.x = 0;
     ball.velocity.y = 0;
-    return { type: 'crash', reason: 'goal-closed' };
+    return { type: 'crash', reason: 'goal-closed', eventState, displayEventState: cloneBallRuntimeState(eventState) };
   }
 
-  const planetGravity = samplePlanetGravity(level, ball.position);
-  ball.velocity.x += planetGravity.x * delta;
-  ball.velocity.y += planetGravity.y * delta;
+  const acceleration = sampleBallAcceleration(level, ball.position);
+  ball.velocity.x += acceleration.x * delta;
+  ball.velocity.y += acceleration.y * delta;
 
   const toGoal = vec(level.goalCenter.x - ball.position.x, level.goalCenter.y - ball.position.y);
   const goalDistance = Math.max(length(toGoal), 0.001);
 
   if (goalDistance < level.goalRadius * GOAL_CAPTURE_RATIO) {
+    const eventState = cloneBallRuntimeState(ball);
     ball.velocity.x = 0;
     ball.velocity.y = 0;
-    return { type: 'goal' };
-  }
-
-  if (goalDistance < level.goalPullRadius) {
-    const pull = (level.goalPullStrength / (goalDistance * goalDistance + 0.38)) * delta;
-    const direction = normalize(toGoal);
-    ball.velocity.x += direction.x * pull;
-    ball.velocity.y += direction.y * pull;
+    return { type: 'goal', eventState, displayEventState: cloneBallRuntimeState(eventState) };
   }
 
   addScaledVec(ball.position, ball.velocity, delta);
@@ -1810,7 +1848,7 @@ export function stepBall(level, ball, delta) {
     return contactResult;
   }
 
-  const friction = Math.pow(BALL_FRICTION_BASE, delta * 60);
+  const friction = getBallFriction(delta);
   ball.velocity.x *= friction;
   ball.velocity.y *= friction;
 
@@ -1818,15 +1856,60 @@ export function stepBall(level, ball, delta) {
     Math.abs(ball.position.x) > COURSE.outBoundsX ||
     Math.abs(ball.position.y) > COURSE.outBoundsY
   ) {
+    const eventState = cloneBallRuntimeState(ball);
     ball.velocity.x = 0;
     ball.velocity.y = 0;
-    return { type: 'crash', reason: 'bounds' };
+    return { type: 'crash', reason: 'bounds', eventState, displayEventState: cloneBallRuntimeState(eventState) };
   }
 
   if (length(ball.velocity) < BALL_STOP_SPEED) {
+    const eventState = cloneBallRuntimeState(ball);
     ball.velocity.x = 0;
     ball.velocity.y = 0;
-    return { type: 'settled' };
+    return { type: 'settled', eventState, displayEventState: cloneBallRuntimeState(eventState) };
+  }
+
+  return { type: 'flying' };
+}
+
+export function reverseStepBall(level, ball, delta, options = {}) {
+  const currentTime = ball.time ?? level.time ?? 0;
+  const friction = getBallFriction(delta);
+  const velocityBeforeFriction = vec(
+    ball.velocity.x / friction,
+    ball.velocity.y / friction,
+  );
+  const previousPosition = vec(
+    ball.position.x - velocityBeforeFriction.x * delta,
+    ball.position.y - velocityBeforeFriction.y * delta,
+  );
+  const acceleration = sampleBallAcceleration(level, previousPosition);
+  const previousVelocity = vec(
+    velocityBeforeFriction.x - acceleration.x * delta,
+    velocityBeforeFriction.y - acceleration.y * delta,
+  );
+  const previousTime = currentTime - delta;
+
+  setLevelTime(level, previousTime);
+  ball.time = previousTime;
+  ball.position.x = previousPosition.x;
+  ball.position.y = previousPosition.y;
+  ball.velocity.x = previousVelocity.x;
+  ball.velocity.y = previousVelocity.y;
+  ball.anchorPlanetIndex = null;
+  ball.anchorNormal = ball.anchorNormal ? cloneVec(ball.anchorNormal) : null;
+
+  const launchPlanetIndex = options.launchPlanetIndex ?? null;
+  if (launchPlanetIndex !== null) {
+    const launchPlanet = level.planets[launchPlanetIndex];
+    if (launchPlanet) {
+      const clearanceRadius =
+        (launchPlanet.landingRadius ?? launchPlanet.radius + COURSE.ballRadius + PLANET_LANDING_PADDING)
+        + PLANET_LANDING_PADDING;
+      ball.launchGracePlanetIndex = distanceBetween(ball.position, launchPlanet.position) <= clearanceRadius
+        ? launchPlanetIndex
+        : null;
+    }
   }
 
   return { type: 'flying' };
@@ -1837,6 +1920,7 @@ export function simulateShot(level, shot, options = {}) {
   const maxTime = options.maxTime ?? 20;
   const startTime = options.startTime ?? 0;
   const waitTime = shot.waitTime ?? options.waitTime ?? 0;
+  const captureFrames = options.captureFrames === true;
   const anchorPlanetIndex = options.anchorPlanetIndex ?? level.startPlanetIndex ?? null;
   const anchorNormal = options.anchorNormal ?? directionFromAngleDeg(level.startAngleDeg ?? DEFAULT_START_ANGLE_DEG);
   const startPosition = options.startPosition ?? level.startAnchor;
@@ -1851,17 +1935,49 @@ export function simulateShot(level, shot, options = {}) {
     anchorPlanetIndex,
     anchorNormal: cloneVec(anchorNormal),
   };
+  const frames = captureFrames ? [] : null;
+  let launchState = null;
+
+  function pushFrame() {
+    if (!frames) {
+      return;
+    }
+
+    frames.push({
+      position: cloneVec(ball.position),
+      velocity: cloneVec(ball.velocity),
+      time: ball.time ?? level.time ?? 0,
+      anchorPlanetIndex: ball.anchorPlanetIndex ?? null,
+      landingCount: ball.landingCount ?? 0,
+    });
+  }
 
   if (ball.anchorPlanetIndex !== null) {
     syncBallToAnchor(level, ball);
   }
+  pushFrame();
 
   if (waitTime > 0) {
-    const launchTime = startTime + waitTime;
-    setLevelTime(level, launchTime);
-    ball.time = launchTime;
-    if (ball.anchorPlanetIndex !== null) {
-      advanceBallAnchor(level, ball, waitTime);
+    if (captureFrames) {
+      let remainingWait = waitTime;
+      while (remainingWait > 0.000001) {
+        const step = Math.min(delta, remainingWait);
+        const launchTime = (ball.time ?? startTime) + step;
+        setLevelTime(level, launchTime);
+        ball.time = launchTime;
+        if (ball.anchorPlanetIndex !== null) {
+          advanceBallAnchor(level, ball, step);
+        }
+        pushFrame();
+        remainingWait -= step;
+      }
+    } else {
+      const launchTime = startTime + waitTime;
+      setLevelTime(level, launchTime);
+      ball.time = launchTime;
+      if (ball.anchorPlanetIndex !== null) {
+        advanceBallAnchor(level, ball, waitTime);
+      }
     }
   }
 
@@ -1881,6 +1997,10 @@ export function simulateShot(level, shot, options = {}) {
       minGoalDistance: distanceBetween(ball.position, level.goalCenter),
       minPlanetClearance: Number.POSITIVE_INFINITY,
       finalPosition: cloneVec(ball.position),
+      launchState,
+      eventState: null,
+      displayEventState: null,
+      frames,
     };
   }
 
@@ -1900,6 +2020,9 @@ export function simulateShot(level, shot, options = {}) {
   );
   ball.launchGracePlanetIndex = ball.anchorPlanetIndex;
   ball.anchorPlanetIndex = null;
+  ball.anchorNormal = null;
+  launchState = cloneBallRuntimeState(ball);
+  pushFrame();
 
   let time = 0;
   let steps = 0;
@@ -1919,6 +2042,7 @@ export function simulateShot(level, shot, options = {}) {
     const result = stepBall(level, ball, delta);
     time += delta;
     steps += 1;
+    pushFrame();
 
     if (result.type !== 'flying') {
       return {
@@ -1936,6 +2060,10 @@ export function simulateShot(level, shot, options = {}) {
         minGoalDistance,
         minPlanetClearance,
         finalPosition: cloneVec(ball.position),
+        launchState,
+        eventState: result.eventState ? cloneBallRuntimeState(result.eventState) : null,
+        displayEventState: result.displayEventState ? cloneBallRuntimeState(result.displayEventState) : null,
+        frames,
       };
     }
   }
@@ -1955,5 +2083,9 @@ export function simulateShot(level, shot, options = {}) {
     minGoalDistance,
     minPlanetClearance,
     finalPosition: cloneVec(ball.position),
+    launchState,
+    eventState: null,
+    displayEventState: null,
+    frames,
   };
 }

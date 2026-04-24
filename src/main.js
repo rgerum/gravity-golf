@@ -25,6 +25,7 @@ import {
   lengthSq,
   launchVelocity,
   normalize,
+  reverseStepBall,
   setLevelTime,
   setVec,
   stepBall,
@@ -47,6 +48,18 @@ app.innerHTML = `
               <div class="hud-pills">
                 <span class="status-pill" id="runStatusPill">Shot 1 · Launch Pad</span>
                 <span class="status-pill" id="windowStatusPill">Window live</span>
+              </div>
+              <div class="time-control">
+                <label class="time-control-label" for="timeSpeedSlider">
+                  Time <strong id="timeSpeedValue">1x</strong>
+                </label>
+                <input id="timeSpeedSlider" type="range" min="0" max="3" step="1" value="2" />
+                <div class="time-speed-marks" aria-hidden="true">
+                  <span>-1</span>
+                  <span>0</span>
+                  <span>1</span>
+                  <span>2</span>
+                </div>
               </div>
             </div>
             <div class="action-row">
@@ -80,6 +93,8 @@ const statusLine = document.querySelector('#statusLine');
 const statusHint = document.querySelector('#statusHint');
 const runStatusPill = document.querySelector('#runStatusPill');
 const windowStatusPill = document.querySelector('#windowStatusPill');
+const timeSpeedSlider = document.querySelector('#timeSpeedSlider');
+const timeSpeedValue = document.querySelector('#timeSpeedValue');
 const powerFill = document.querySelector('#powerFill');
 const fpsPanel = document.querySelector('#fpsPanel');
 const fpsValue = document.querySelector('#fpsValue');
@@ -139,6 +154,7 @@ const gravityFieldPalette = {
 };
 
 const PHYSICS_STEP = 1 / 120;
+const UNDO_REWIND_SPEED = -8;
 const MAX_PHYSICS_STEPS_PER_FRAME = 4;
 const ballRestY = COURSE.ballRadius + 0.04;
 const CONTROL_MIN_ANGLE = -180;
@@ -147,7 +163,9 @@ const CONTROL_MIN_POWER = 0.2;
 const ADMIN_STORAGE_KEY = 'gravityBilliardAdminMode';
 const ADMIN_CHEAT_CODE = 'orbitadmin';
 const FPS_OVERLAY_STORAGE_KEY = 'gravityBilliardFpsOverlay';
+const LAST_LEVEL_STORAGE_KEY = 'gravityBilliardLastLevel';
 const DEFAULT_CONTROL_SHOT = { angleDeg: 0, power: 1.8 };
+const TIME_SPEED_VALUES = [-1, 0, 1, 2];
 
 const ambientLight = new THREE.HemisphereLight(0x8bd5ff, 0x03070c, 1.18);
 scene.add(ambientLight);
@@ -505,12 +523,30 @@ const state = {
   dragStartWorld: { x: 0, y: 0 },
   dragPointerWorld: { x: 0, y: 0 },
   controlShots: [],
+  timeSpeedIndex: 2,
   dragActive: false,
   dragPower: 0,
   roundSettled: true,
   relayPulse: 0,
   currentAttemptTrail: [],
   currentAttemptMinGoalDistance: Number.POSITIVE_INFINITY,
+  currentFlightHistory: [],
+  currentFlightStartCheckpoint: null,
+  currentFlightLaunchState: null,
+  rewindHistory: [],
+  rewindPlayback: {
+    active: false,
+    phase: 'before-launch',
+    flightPrimed: false,
+    consumeHistory: true,
+    checkpoint: null,
+    landingCheckpoint: null,
+    endCheckpoint: null,
+    launchState: null,
+    eventState: null,
+    displayEventState: null,
+    launchPlanetIndex: null,
+  },
   lastAttemptTrail: [],
   lastAttemptOutcome: '',
   bestApproach: null,
@@ -640,6 +676,32 @@ function readFpsOverlayPreference() {
 function persistFpsOverlayPreference(visible) {
   try {
     window.localStorage.setItem(FPS_OVERLAY_STORAGE_KEY, visible ? '1' : '0');
+  } catch {
+    // Ignore persistence errors in restricted contexts.
+  }
+}
+
+function readLastLevelIndex() {
+  try {
+    const rawLevel = window.localStorage.getItem(LAST_LEVEL_STORAGE_KEY);
+    if (!rawLevel) {
+      return 0;
+    }
+
+    const parsedLevel = Number.parseInt(rawLevel, 10);
+    if (!Number.isFinite(parsedLevel)) {
+      return 0;
+    }
+
+    return clamp(parsedLevel, 0, LEVELS.length - 1);
+  } catch {
+    return 0;
+  }
+}
+
+function persistLastLevelIndex(levelIndex) {
+  try {
+    window.localStorage.setItem(LAST_LEVEL_STORAGE_KEY, String(levelIndex));
   } catch {
     // Ignore persistence errors in restricted contexts.
   }
@@ -906,20 +968,66 @@ function checkpointMatchesCurrent(checkpoint) {
 }
 
 function canRedo() {
-  if (state.adminReplay.active || state.undo.active || state.ball.goaling || state.ball.crashed) {
+  if (
+    state.adminReplay.active
+    || state.undo.active
+    || state.rewindPlayback.active
+    || state.ball.goaling
+    || state.ball.crashed
+  ) {
     return false;
+  }
+
+  if (state.currentFlightLaunchState && state.currentFlightStartCheckpoint) {
+    return true;
+  }
+
+  if (state.currentFlightStartCheckpoint && !checkpointMatchesCurrent(state.currentFlightStartCheckpoint)) {
+    return true;
+  }
+
+  const rewind = state.rewindHistory[state.rewindHistory.length - 1] ?? null;
+  if (rewind && (matchesLandingPlaybackAnchor(rewind) || matchesLaunchPlaybackAnchor(rewind))) {
+    return true;
   }
 
   const checkpoint = getLatestUndoCheckpoint();
   return Boolean(checkpoint) && !checkpointMatchesCurrent(checkpoint);
 }
 
-function saveUndoCheckpoint() {
-  if (state.ball.anchorPlanetIndex === null || state.ball.anchorPlanetIndex === undefined) {
-    return;
+function cloneCheckpoint(checkpoint) {
+  if (!checkpoint) {
+    return null;
   }
 
-  const checkpoint = {
+  return {
+    ...checkpoint,
+    position: cloneVec(checkpoint.position),
+    anchorNormal: cloneVec(checkpoint.anchorNormal),
+    controlShots: Array.isArray(checkpoint.controlShots)
+      ? checkpoint.controlShots.map((shot) => ({ angleDeg: shot.angleDeg, power: shot.power }))
+      : [],
+  };
+}
+
+function cloneBallPlaybackState(ball) {
+  if (!ball) {
+    return null;
+  }
+
+  return {
+    position: cloneVec(ball.position),
+    velocity: cloneVec(ball.velocity),
+    time: ball.time ?? state.level.time ?? 0,
+    landingCount: ball.landingCount ?? 0,
+    launchGracePlanetIndex: ball.launchGracePlanetIndex ?? null,
+    anchorPlanetIndex: ball.anchorPlanetIndex ?? null,
+    anchorNormal: ball.anchorNormal ? cloneVec(ball.anchorNormal) : null,
+  };
+}
+
+function createCurrentCheckpoint() {
+  return {
     levelIndex: state.levelIndex,
     levelTime: state.level.time ?? state.ball.time ?? 0,
     position: cloneVec(state.ball.position),
@@ -933,6 +1041,14 @@ function saveUndoCheckpoint() {
     score: state.score,
     controlShots: state.controlShots.map((shot) => ({ angleDeg: shot.angleDeg, power: shot.power })),
   };
+}
+
+function saveUndoCheckpoint() {
+  if (state.ball.anchorPlanetIndex === null || state.ball.anchorPlanetIndex === undefined) {
+    return null;
+  }
+
+  const checkpoint = createCurrentCheckpoint();
 
   const latest = getLatestUndoCheckpoint();
   if (
@@ -944,22 +1060,20 @@ function saveUndoCheckpoint() {
     && pointsMatch(latest.position, checkpoint.position)
   ) {
     state.undo.checkpoints[state.undo.checkpoints.length - 1] = checkpoint;
-    return;
+    return checkpoint;
   }
 
   state.undo.checkpoints.push(checkpoint);
   if (state.undo.checkpoints.length > 8) {
     state.undo.checkpoints.shift();
   }
+  return checkpoint;
 }
 
-function finishUndo() {
-  const checkpoint = state.undo.checkpoint;
-  if (!checkpoint) {
-    state.undo.active = false;
-    return;
-  }
-
+function applyCheckpointState(checkpoint) {
+  setLevelTime(state.level, checkpoint.levelTime);
+  rebuildGravityField();
+  lastGravityFieldRefreshTime = state.level.time ?? 0;
   state.ball.velocity.x = 0;
   state.ball.velocity.y = 0;
   state.ball.time = checkpoint.levelTime;
@@ -1000,6 +1114,468 @@ function finishUndo() {
   ballMesh.material.emissive.setHex(0x000000);
   ballMesh.material.emissiveIntensity = 0;
   ballShadow.material.opacity = 0.28;
+  lastGoalTimerFraction = Number.NaN;
+  state.currentFlightStartCheckpoint = cloneCheckpoint(checkpoint);
+  seedFlightHistoryFromCurrentState();
+}
+
+function rewindPastLandingCheckpoint(checkpoint) {
+  applyCheckpointState(checkpoint);
+  if (shouldClampRewindAtCheckpoint(checkpoint)) {
+    clampTimeSpeedToNonNegative();
+  }
+  state.message = `Time rewound to ${checkpoint.landedPlanetName}.`;
+  state.hint = `Shot ${Math.min(checkpoint.landingCount + 1, state.controlShots.length)} is live again.`;
+  syncHud();
+}
+
+function clearFlightHistoryState() {
+  state.currentFlightHistory = [];
+  state.currentFlightStartCheckpoint = null;
+  state.currentFlightLaunchState = null;
+  state.rewindHistory = [];
+  state.rewindPlayback.active = false;
+  state.rewindPlayback.phase = 'before-launch';
+  state.rewindPlayback.flightPrimed = false;
+  state.rewindPlayback.consumeHistory = true;
+  state.rewindPlayback.checkpoint = null;
+  state.rewindPlayback.landingCheckpoint = null;
+  state.rewindPlayback.endCheckpoint = null;
+  state.rewindPlayback.launchState = null;
+  state.rewindPlayback.eventState = null;
+  state.rewindPlayback.displayEventState = null;
+  state.rewindPlayback.launchPlanetIndex = null;
+}
+
+function captureFlightHistorySample() {
+  return {
+    position: cloneVec(state.ball.position),
+    velocity: cloneVec(state.ball.velocity),
+    time: state.ball.time ?? state.level.time ?? 0,
+  };
+}
+
+function seedFlightHistoryFromCurrentState() {
+  state.currentFlightHistory = [captureFlightHistorySample()];
+  if (!state.currentFlightStartCheckpoint && state.ball.anchorPlanetIndex !== null && state.ball.anchorPlanetIndex !== undefined) {
+    state.currentFlightStartCheckpoint = cloneCheckpoint(createCurrentCheckpoint());
+  }
+}
+
+function recordFlightHistorySample() {
+  if (state.currentFlightHistory.length === 0) {
+    return;
+  }
+
+  const sample = captureFlightHistorySample();
+  const lastSample = state.currentFlightHistory[state.currentFlightHistory.length - 1];
+  if (
+    lastSample
+    && Math.abs(lastSample.time - sample.time) <= 0.000001
+    && pointsMatch(lastSample.position, sample.position, 0.0001)
+  ) {
+    state.currentFlightHistory[state.currentFlightHistory.length - 1] = sample;
+    return;
+  }
+
+  state.currentFlightHistory.push(sample);
+}
+
+function finalizeFlightHistory(outcome, eventState = null, displayEventState = null) {
+  if (state.currentFlightHistory.length === 0) {
+    state.currentFlightStartCheckpoint = null;
+    state.currentFlightLaunchState = null;
+    return;
+  }
+
+  recordFlightHistorySample();
+
+  if (outcome === 'landed') {
+    const checkpoint = cloneCheckpoint(state.currentFlightStartCheckpoint);
+    const landingCheckpoint = cloneCheckpoint(createCurrentCheckpoint());
+    const launchState = cloneBallPlaybackState(state.currentFlightLaunchState);
+    const eventPlaybackState = cloneBallPlaybackState(eventState);
+    const displayPlaybackState = cloneBallPlaybackState(displayEventState ?? eventState);
+    if (checkpoint && landingCheckpoint && launchState && eventPlaybackState && displayPlaybackState) {
+      state.rewindHistory.push({
+        checkpoint,
+        landingCheckpoint,
+        launchState,
+        eventState: eventPlaybackState,
+        displayEventState: displayPlaybackState,
+        launchPlanetIndex: checkpoint.anchorPlanetIndex ?? null,
+        landingCount: state.ball.landingCount ?? 0,
+        anchorPlanetIndex: state.ball.anchorPlanetIndex,
+      });
+      if (state.rewindHistory.length > 8) {
+        state.rewindHistory.shift();
+      }
+    }
+  }
+
+  state.currentFlightHistory = [];
+  state.currentFlightStartCheckpoint = null;
+  state.currentFlightLaunchState = null;
+}
+
+function canStartLandingRewindPlayback() {
+  const rewind = state.rewindHistory[state.rewindHistory.length - 1] ?? null;
+  return Boolean(
+    rewind
+    && rewind.checkpoint
+    && rewind.landingCheckpoint
+    && rewind.launchState
+    && rewind.eventState
+    && (
+      matchesLandingPlaybackAnchor(rewind)
+      || matchesLaunchPlaybackAnchor(rewind)
+    ),
+  );
+}
+
+function applyPlaybackBallState(ballState) {
+  setLevelTime(state.level, ballState.time);
+  state.ball.time = ballState.time;
+  setVec(state.ball.position, ballState.position);
+  state.ball.velocity.x = ballState.velocity.x;
+  state.ball.velocity.y = ballState.velocity.y;
+  state.ball.goaling = false;
+  state.ball.crashed = false;
+  state.ball.transition = 0;
+  state.ball.crashReason = '';
+  state.ball.crashKind = '';
+  state.ball.landingCount = ballState.landingCount ?? state.ball.landingCount;
+  state.ball.anchorPlanetIndex = ballState.anchorPlanetIndex ?? null;
+  state.ball.anchorNormal = ballState.anchorNormal ? cloneVec(ballState.anchorNormal) : null;
+  state.ball.launchGracePlanetIndex = ballState.launchGracePlanetIndex ?? null;
+  state.ball.landedPlanetIndex = null;
+  state.ball.landedPlanetName = '';
+  if (state.ball.anchorPlanetIndex !== null) {
+    syncBallToAnchor(state.level, state.ball);
+  }
+  setVec(state.dragAnchor, state.ball.position);
+  setVec(state.dragStartWorld, state.ball.position);
+  setVec(state.dragPointerWorld, state.ball.position);
+  state.dragActive = false;
+  state.dragPower = 0;
+  state.roundSettled = false;
+  state.relayPulse = 0;
+  ballGroup.visible = true;
+  ballGroup.scale.setScalar(1);
+  ballMesh.position.y = ballRestY;
+  ballMesh.material.color.copy(palette.ball);
+  ballMesh.material.emissive.setHex(0x000000);
+  ballMesh.material.emissiveIntensity = 0;
+  ballShadow.material.opacity = 0.28;
+}
+
+function clearRewindPlaybackState() {
+  state.rewindPlayback.active = false;
+  state.rewindPlayback.phase = 'before-launch';
+  state.rewindPlayback.flightPrimed = false;
+  state.rewindPlayback.consumeHistory = true;
+  state.rewindPlayback.checkpoint = null;
+  state.rewindPlayback.landingCheckpoint = null;
+  state.rewindPlayback.endCheckpoint = null;
+  state.rewindPlayback.launchState = null;
+  state.rewindPlayback.eventState = null;
+  state.rewindPlayback.displayEventState = null;
+  state.rewindPlayback.launchPlanetIndex = null;
+}
+
+function matchesLandingPlaybackAnchor(rewind) {
+  const checkpoint = rewind?.landingCheckpoint;
+  if (!checkpoint) {
+    return false;
+  }
+
+  return (
+    checkpoint.anchorPlanetIndex === (state.ball.anchorPlanetIndex ?? null)
+    && checkpoint.landingCount === (state.ball.landingCount ?? 0)
+    && (state.ball.time ?? 0) >= (checkpoint.levelTime ?? 0) - 0.0001
+  );
+}
+
+function matchesLaunchPlaybackAnchor(rewind) {
+  const checkpoint = rewind?.checkpoint;
+  const launchTime = rewind?.launchState?.time ?? checkpoint?.levelTime ?? 0;
+  if (!checkpoint) {
+    return false;
+  }
+
+  return (
+    checkpoint.anchorPlanetIndex === (state.ball.anchorPlanetIndex ?? null)
+    && checkpoint.landingCount === (state.ball.landingCount ?? 0)
+    && (state.ball.time ?? 0) >= (checkpoint.levelTime ?? 0) - 0.0001
+    && (state.ball.time ?? 0) <= launchTime + 0.0001
+  );
+}
+
+function createAnchoredPlaybackState(checkpoint, targetTime) {
+  if (!checkpoint) {
+    return null;
+  }
+
+  const anchoredState = {
+    position: cloneVec(checkpoint.position),
+    velocity: { x: 0, y: 0 },
+    time: checkpoint.levelTime,
+    landingCount: checkpoint.landingCount,
+    launchGracePlanetIndex: null,
+    anchorPlanetIndex: checkpoint.anchorPlanetIndex,
+    anchorNormal: cloneVec(checkpoint.anchorNormal),
+  };
+
+  setLevelTime(state.level, checkpoint.levelTime);
+  syncBallToAnchor(state.level, anchoredState);
+  const delta = targetTime - (checkpoint.levelTime ?? 0);
+  if (Math.abs(delta) > 0.000001) {
+    setLevelTime(state.level, targetTime);
+    anchoredState.time = targetTime;
+    advanceBallAnchor(state.level, anchoredState, delta);
+  }
+
+  return cloneBallPlaybackState(anchoredState);
+}
+
+function configureRewindPlayback({
+  phase = 'before-launch',
+  consumeHistory = true,
+  checkpoint = null,
+  landingCheckpoint = null,
+  endCheckpoint = null,
+  launchState = null,
+  eventState = null,
+  displayEventState = null,
+  launchPlanetIndex = null,
+  message = 'Rewinding flight path.',
+  hint = 'Rolling back to the prior anchor.',
+}) {
+  state.currentFlightHistory = [];
+  state.currentFlightStartCheckpoint = null;
+  state.currentFlightLaunchState = null;
+  state.rewindPlayback.active = true;
+  state.rewindPlayback.phase = phase;
+  state.rewindPlayback.flightPrimed = false;
+  state.rewindPlayback.consumeHistory = consumeHistory;
+  state.rewindPlayback.checkpoint = cloneCheckpoint(checkpoint);
+  state.rewindPlayback.landingCheckpoint = cloneCheckpoint(landingCheckpoint);
+  state.rewindPlayback.endCheckpoint = cloneCheckpoint(endCheckpoint);
+  state.rewindPlayback.launchState = cloneBallPlaybackState(launchState);
+  state.rewindPlayback.eventState = cloneBallPlaybackState(eventState);
+  state.rewindPlayback.displayEventState = cloneBallPlaybackState(displayEventState ?? eventState);
+  state.rewindPlayback.launchPlanetIndex = launchPlanetIndex ?? null;
+  state.message = message;
+  state.hint = hint;
+  syncHud();
+  return true;
+}
+
+function startLandingRewindPlayback() {
+  if (!canStartLandingRewindPlayback()) {
+    return false;
+  }
+
+  const rewind = state.rewindHistory[state.rewindHistory.length - 1];
+  const currentCheckpoint = cloneCheckpoint(createCurrentCheckpoint());
+  return configureRewindPlayback({
+    phase: matchesLandingPlaybackAnchor(rewind) ? 'after-landing' : 'before-launch',
+    consumeHistory: true,
+    checkpoint: rewind.checkpoint,
+    landingCheckpoint: rewind.landingCheckpoint,
+    endCheckpoint: currentCheckpoint,
+    launchState: rewind.launchState,
+    eventState: rewind.eventState,
+    displayEventState: rewind.displayEventState ?? rewind.eventState,
+    launchPlanetIndex: rewind.launchPlanetIndex ?? null,
+    message: 'Rewinding flight path.',
+    hint: `Rolling back from ${state.level.planets[rewind.anchorPlanetIndex]?.name ?? 'relay world'} to the prior anchor.`,
+  });
+}
+
+function completeCheckpointRewind(checkpoint) {
+  if (state.undo.active) {
+    finishUndo(checkpoint);
+    return;
+  }
+
+  rewindPastLandingCheckpoint(checkpoint);
+}
+
+function updateLandingRewindPlayback(speedOverride = null) {
+  if (!state.rewindPlayback.active) {
+    return false;
+  }
+
+  const timeSpeed = speedOverride ?? getTimeSpeedValue();
+  if (timeSpeed === 0) {
+    state.ball.velocity.x = 0;
+    state.ball.velocity.y = 0;
+    return true;
+  }
+
+  const stepCount = Math.max(1, Math.round(Math.abs(timeSpeed)));
+  if (timeSpeed < 0) {
+    for (let step = 0; step < stepCount; step += 1) {
+      if (state.rewindPlayback.phase === 'after-landing') {
+        const landingTime = state.rewindPlayback.landingCheckpoint?.levelTime ?? 0;
+        const currentTime = state.ball.time ?? 0;
+        if (currentTime - PHYSICS_STEP <= landingTime + 0.0001) {
+          applyPlaybackBallState(state.rewindPlayback.displayEventState ?? state.rewindPlayback.eventState);
+          state.rewindPlayback.phase = 'flight';
+          state.rewindPlayback.flightPrimed = true;
+          continue;
+        }
+
+        const nextTime = Math.max(landingTime, currentTime - PHYSICS_STEP);
+        const appliedDelta = nextTime - currentTime;
+        setLevelTime(state.level, nextTime);
+        state.ball.time = nextTime;
+        advanceBallAnchor(state.level, state.ball, appliedDelta);
+        state.ball.velocity.x = 0;
+        state.ball.velocity.y = 0;
+        continue;
+      }
+
+      if (state.rewindPlayback.phase === 'flight') {
+        if (state.rewindPlayback.flightPrimed) {
+          applyPlaybackBallState(state.rewindPlayback.eventState);
+          state.rewindPlayback.flightPrimed = false;
+        }
+        const launchTime = state.rewindPlayback.launchState?.time ?? 0;
+        if ((state.ball.time ?? 0) - PHYSICS_STEP <= launchTime + 0.0001) {
+          const launchCheckpoint = createAnchoredPlaybackState(
+            state.rewindPlayback.checkpoint,
+            launchTime,
+          );
+          if (launchCheckpoint) {
+            applyPlaybackBallState(launchCheckpoint);
+          }
+          state.rewindPlayback.phase = 'before-launch';
+          continue;
+        }
+
+        reverseStepBall(state.level, state.ball, PHYSICS_STEP, {
+          launchPlanetIndex: state.rewindPlayback.launchPlanetIndex,
+        });
+        continue;
+      }
+
+      const checkpoint = state.rewindPlayback.checkpoint;
+      const checkpointTime = checkpoint?.levelTime ?? 0;
+      const currentTime = state.ball.time ?? 0;
+      if (currentTime - PHYSICS_STEP <= checkpointTime + 0.0001) {
+        const consumeHistory = state.rewindPlayback.consumeHistory;
+        state.currentFlightHistory = [];
+        state.currentFlightStartCheckpoint = null;
+        state.currentFlightLaunchState = null;
+        clearRewindPlaybackState();
+        if (consumeHistory) {
+          state.rewindHistory.pop();
+        }
+        if (checkpoint) {
+          completeCheckpointRewind(checkpoint);
+        }
+        return true;
+      }
+
+      const nextTime = Math.max(checkpointTime, currentTime - PHYSICS_STEP);
+      const appliedDelta = nextTime - currentTime;
+      setLevelTime(state.level, nextTime);
+      state.ball.time = nextTime;
+      advanceBallAnchor(state.level, state.ball, appliedDelta);
+      state.ball.velocity.x = 0;
+      state.ball.velocity.y = 0;
+    }
+    return true;
+  }
+
+  for (let step = 0; step < stepCount; step += 1) {
+    if (state.rewindPlayback.phase === 'before-launch') {
+      const launchTime = state.rewindPlayback.launchState?.time ?? 0;
+      const currentTime = state.ball.time ?? 0;
+      if (currentTime + PHYSICS_STEP >= launchTime - 0.0001) {
+        applyPlaybackBallState(state.rewindPlayback.launchState);
+        state.rewindPlayback.phase = 'flight';
+        continue;
+      }
+
+      const nextTime = Math.min(launchTime, currentTime + PHYSICS_STEP);
+      const appliedDelta = nextTime - currentTime;
+      setLevelTime(state.level, nextTime);
+      state.ball.time = nextTime;
+      advanceBallAnchor(state.level, state.ball, appliedDelta);
+      state.ball.velocity.x = 0;
+      state.ball.velocity.y = 0;
+      continue;
+    }
+
+    if (state.rewindPlayback.phase === 'flight') {
+      if (state.rewindPlayback.flightPrimed) {
+        if (state.rewindPlayback.landingCheckpoint) {
+          applyCheckpointState(state.rewindPlayback.landingCheckpoint);
+        }
+        state.rewindPlayback.flightPrimed = false;
+        state.rewindPlayback.phase = 'after-landing';
+        continue;
+      }
+      const eventTime = state.rewindPlayback.eventState?.time ?? 0;
+      if ((state.ball.time ?? 0) + PHYSICS_STEP >= eventTime - 0.0001) {
+        if (state.rewindPlayback.landingCheckpoint) {
+          applyCheckpointState(state.rewindPlayback.landingCheckpoint);
+        }
+        state.rewindPlayback.flightPrimed = false;
+        state.rewindPlayback.phase = 'after-landing';
+        continue;
+      }
+
+      const result = stepBall(state.level, state.ball, PHYSICS_STEP);
+      if (result.type !== 'flying') {
+        if (state.rewindPlayback.landingCheckpoint) {
+          applyCheckpointState(state.rewindPlayback.landingCheckpoint);
+        }
+        state.rewindPlayback.flightPrimed = false;
+        state.rewindPlayback.phase = 'after-landing';
+        continue;
+      }
+      continue;
+    }
+
+    const endCheckpoint = state.rewindPlayback.endCheckpoint ?? state.rewindPlayback.landingCheckpoint;
+    const endTime = endCheckpoint?.levelTime ?? (state.ball.time ?? 0);
+    const currentTime = state.ball.time ?? 0;
+    if (currentTime + PHYSICS_STEP >= endTime - 0.0001) {
+      state.currentFlightHistory = [];
+      state.currentFlightStartCheckpoint = null;
+      state.currentFlightLaunchState = null;
+      clearRewindPlaybackState();
+      if (endCheckpoint) {
+        applyCheckpointState(endCheckpoint);
+        state.message = `Returned to ${endCheckpoint.landedPlanetName}.`;
+        state.hint = `Shot ${Math.min(endCheckpoint.landingCount + 1, state.controlShots.length)} is live again.`;
+        syncHud();
+      }
+      return true;
+    }
+
+    const nextTime = Math.min(endTime, currentTime + PHYSICS_STEP);
+    const appliedDelta = nextTime - currentTime;
+    setLevelTime(state.level, nextTime);
+    state.ball.time = nextTime;
+    advanceBallAnchor(state.level, state.ball, appliedDelta);
+    state.ball.velocity.x = 0;
+    state.ball.velocity.y = 0;
+  }
+  return true;
+}
+
+function finishUndo(checkpoint = state.undo.checkpoint) {
+  if (!checkpoint) {
+    state.undo.active = false;
+    return;
+  }
+
+  applyCheckpointState(checkpoint);
   state.undo.active = false;
   state.undo.checkpoint = null;
   state.undo.fromPosition = null;
@@ -1008,61 +1584,95 @@ function finishUndo() {
   state.undo.elapsed = 0;
   state.message = `Undo restored ${checkpoint.landedPlanetName}.`;
   state.hint = `Shot ${Math.min(checkpoint.landingCount + 1, state.controlShots.length)} is live again.`;
-  lastGoalTimerFraction = Number.NaN;
   syncHud();
 }
 
 function startUndo() {
-  const checkpoint = getLatestUndoCheckpoint();
-  if (!checkpoint || checkpointMatchesCurrent(checkpoint)) {
+  let started = false;
+  const rewind = state.rewindHistory[state.rewindHistory.length - 1] ?? null;
+
+  if (rewind && (matchesLandingPlaybackAnchor(rewind) || matchesLaunchPlaybackAnchor(rewind))) {
+    started = configureRewindPlayback({
+      phase: matchesLandingPlaybackAnchor(rewind) ? 'after-landing' : 'before-launch',
+      consumeHistory: true,
+      checkpoint: rewind.checkpoint,
+      landingCheckpoint: rewind.landingCheckpoint,
+      endCheckpoint: createCurrentCheckpoint(),
+      launchState: rewind.launchState,
+      eventState: rewind.eventState,
+      displayEventState: rewind.displayEventState ?? rewind.eventState,
+      launchPlanetIndex: rewind.launchPlanetIndex ?? null,
+      message: 'Undo rewinding.',
+      hint: `Rolling back to ${rewind.checkpoint?.landedPlanetName ?? 'the prior anchor'}.`,
+    });
+    state.undo.checkpoint = cloneCheckpoint(rewind.checkpoint);
+  } else if (state.currentFlightLaunchState && state.currentFlightStartCheckpoint) {
+    started = configureRewindPlayback({
+      phase: 'flight',
+      consumeHistory: false,
+      checkpoint: state.currentFlightStartCheckpoint,
+      landingCheckpoint: null,
+      endCheckpoint: null,
+      launchState: state.currentFlightLaunchState,
+      eventState: state.ball,
+      displayEventState: state.ball,
+      launchPlanetIndex: state.currentFlightStartCheckpoint.anchorPlanetIndex ?? null,
+      message: 'Undo rewinding.',
+      hint: `Rolling back to ${state.currentFlightStartCheckpoint.landedPlanetName}.`,
+    });
+    state.undo.checkpoint = cloneCheckpoint(state.currentFlightStartCheckpoint);
+  } else if (state.currentFlightStartCheckpoint && !checkpointMatchesCurrent(state.currentFlightStartCheckpoint)) {
+    started = configureRewindPlayback({
+      phase: 'before-launch',
+      consumeHistory: false,
+      checkpoint: state.currentFlightStartCheckpoint,
+      landingCheckpoint: null,
+      endCheckpoint: null,
+      launchState: cloneBallPlaybackState(state.ball),
+      eventState: cloneBallPlaybackState(state.ball),
+      displayEventState: cloneBallPlaybackState(state.ball),
+      launchPlanetIndex: state.currentFlightStartCheckpoint.anchorPlanetIndex ?? null,
+      message: 'Undo rewinding.',
+      hint: `Rolling back to ${state.currentFlightStartCheckpoint.landedPlanetName}.`,
+    });
+    state.undo.checkpoint = cloneCheckpoint(state.currentFlightStartCheckpoint);
+  } else {
+    const checkpoint = getLatestUndoCheckpoint();
+    if (!checkpoint || checkpointMatchesCurrent(checkpoint)) {
+      return;
+    }
+    started = configureRewindPlayback({
+      phase: 'before-launch',
+      consumeHistory: false,
+      checkpoint,
+      landingCheckpoint: null,
+      endCheckpoint: null,
+      launchState: cloneBallPlaybackState(state.ball),
+      eventState: cloneBallPlaybackState(state.ball),
+      displayEventState: cloneBallPlaybackState(state.ball),
+      launchPlanetIndex: checkpoint.anchorPlanetIndex ?? null,
+      message: 'Undo rewinding.',
+      hint: `Rolling back to ${checkpoint.landedPlanetName}.`,
+    });
+    state.undo.checkpoint = cloneCheckpoint(checkpoint);
+  }
+
+  if (!started) {
     return;
   }
 
-  setLevelTime(state.level, checkpoint.levelTime);
-  rebuildGravityField();
-  lastGravityFieldRefreshTime = state.level.time ?? 0;
-
-  const fromPosition = cloneVec(state.ball.position);
-  const targetBall = {
-    position: cloneVec(checkpoint.position),
-    anchorPlanetIndex: checkpoint.anchorPlanetIndex,
-    anchorNormal: cloneVec(checkpoint.anchorNormal),
-  };
-  syncBallToAnchor(state.level, targetBall);
-  const toPosition = cloneVec(targetBall.position);
-  const rewindDistance = distanceBetween(fromPosition, toPosition);
-
-  state.undo.checkpoints.pop();
   state.undo.active = true;
-  state.undo.checkpoint = checkpoint;
-  state.undo.fromPosition = fromPosition;
-  state.undo.toPosition = toPosition;
-  state.undo.duration = clamp(0.12 + rewindDistance * 0.03, 0.12, 0.22);
+  state.undo.fromPosition = null;
+  state.undo.toPosition = null;
+  state.undo.duration = 0;
   state.undo.elapsed = 0;
 
   stopAdminReplay();
-  state.ball.time = checkpoint.levelTime;
-  state.ball.velocity.x = 0;
-  state.ball.velocity.y = 0;
-  state.ball.goaling = false;
-  state.ball.crashed = false;
-  state.ball.transition = 0;
-  state.ball.crashReason = '';
-  state.ball.crashKind = '';
-  state.ball.anchorPlanetIndex = null;
-  state.ball.landedPlanetIndex = null;
-  state.ball.landedPlanetName = '';
-  state.ball.launchGracePlanetIndex = null;
-  if (Array.isArray(checkpoint.controlShots) && checkpoint.controlShots.length > 0) {
-    state.controlShots = checkpoint.controlShots.map((shot) => clampControlShot(shot));
-  }
   state.dragActive = false;
   state.dragPower = 0;
   state.roundSettled = false;
   state.relayPulse = 0;
   resetBallTrace();
-  state.message = 'Undo rewinding.';
-  state.hint = `Rolling back to ${checkpoint.landedPlanetName}.`;
   lastGoalTimerFraction = Number.NaN;
   syncHud();
 }
@@ -1761,7 +2371,7 @@ function constrainLaunchDirection(direction, power) {
 }
 
 function canRetryLevel() {
-  return !state.adminReplay.active && !state.undo.active && !state.ball.goaling;
+  return !state.adminReplay.active && !state.undo.active && !state.rewindPlayback.active && !state.ball.goaling;
 }
 
 function syncPerfOverlay() {
@@ -1786,6 +2396,36 @@ function toggleFpsOverlay() {
 function syncActionButtons() {
   retryButton.disabled = !canRetryLevel();
   undoButton.disabled = !canRedo();
+}
+
+function getTimeSpeedValue() {
+  return TIME_SPEED_VALUES[state.timeSpeedIndex] ?? 1;
+}
+
+function formatTimeSpeedValue(value) {
+  return `${value}x`;
+}
+
+function clampTimeSpeedToNonNegative() {
+  if (getTimeSpeedValue() < 0) {
+    state.timeSpeedIndex = 1;
+  }
+}
+
+function shouldClampRewindAtCheckpoint(checkpoint) {
+  const startTime = state.level.startTimeSeconds ?? 0;
+  return Math.abs((checkpoint?.levelTime ?? startTime) - startTime) <= 0.0001;
+}
+
+function canAdjustTimeSpeed() {
+  return !state.dragActive && !state.adminReplay.active && !state.undo.active;
+}
+
+function syncTimeControl() {
+  const value = getTimeSpeedValue();
+  timeSpeedSlider.value = String(state.timeSpeedIndex);
+  timeSpeedSlider.disabled = !canAdjustTimeSpeed();
+  timeSpeedValue.textContent = formatTimeSpeedValue(value);
 }
 
 function setControlShot(stageIndex, angleDeg, power) {
@@ -2241,7 +2881,7 @@ function getInitialLevelIndex() {
   const url = new URL(window.location.href);
   const rawLevel = url.searchParams.get('level');
   if (!rawLevel) {
-    return 0;
+    return readLastLevelIndex();
   }
 
   const parsedLevel = Number.parseInt(rawLevel, 10);
@@ -2255,6 +2895,7 @@ function getInitialLevelIndex() {
 function applyLevel(index) {
   stopAdminReplay();
   state.levelIndex = index % LEVELS.length;
+  persistLastLevelIndex(state.levelIndex);
   state.level = createLevelRuntime(state.levelIndex);
   state.controlShots = createControlShots(state.level);
   state.adminSolutionIndex = 0;
@@ -2289,6 +2930,7 @@ function syncHud() {
   const shownPower = state.dragActive ? state.dragPower : getControlShot().power;
   powerFill.style.transform = `scaleX(${Math.max(0.04, shownPower / MAX_DRAG_DISTANCE)})`;
   syncActionButtons();
+  syncTimeControl();
   syncPerfOverlay();
 }
 
@@ -2309,6 +2951,8 @@ function resetBall(message, hint, options = {}) {
     stopAdminReplay();
   }
 
+  clampTimeSpeedToNonNegative();
+  clearFlightHistoryState();
   setLevelTime(state.level, state.level.startTimeSeconds ?? 0);
   rebuildGravityField();
   lastGravityFieldRefreshTime = state.level.time ?? 0;
@@ -2345,13 +2989,15 @@ function resetBall(message, hint, options = {}) {
   ballMesh.material.emissive.setHex(0x000000);
   ballMesh.material.emissiveIntensity = 0;
   ballShadow.material.opacity = 0.28;
+  seedFlightHistoryFromCurrentState();
   state.message = message;
   state.hint = hint;
   lastGoalTimerFraction = Number.NaN;
   syncHud();
 }
 
-function beginGoal() {
+function beginGoal(result = null) {
+  finalizeFlightHistory('goal', result?.eventState ?? null, result?.displayEventState ?? null);
   finalizeAttemptTrail('goal');
   stopAdminReplay();
   state.ball.goaling = true;
@@ -2365,7 +3011,8 @@ function beginGoal() {
   syncHud();
 }
 
-function beginCrash(reason, hint, crashKind = 'planet') {
+function beginCrash(reason, hint, crashKind = 'planet', eventState = null, displayEventState = null) {
+  finalizeFlightHistory('crash', eventState, displayEventState);
   finalizeAttemptTrail('crash');
   stopAdminReplay();
   state.ball.crashed = true;
@@ -2387,6 +3034,7 @@ function beginCrash(reason, hint, crashKind = 'planet') {
 }
 
 function beginLanding(result) {
+  finalizeFlightHistory('landed', result?.eventState ?? null, result?.displayEventState ?? null);
   finalizeAttemptTrail('landed');
   state.ball.velocity.x = 0;
   state.ball.velocity.y = 0;
@@ -2419,6 +3067,7 @@ function beginLanding(result) {
       stopAdminReplay();
     }
   }
+  seedFlightHistoryFromCurrentState();
   syncHud();
 }
 
@@ -2432,7 +3081,13 @@ function getWorldPointFromEvent(event) {
 }
 
 function ballIsMoving() {
-  return lengthSq(state.ball.velocity) > 0.002 || state.ball.goaling || state.ball.crashed || state.undo.active;
+  return (
+    lengthSq(state.ball.velocity) > 0.002
+    || state.ball.goaling
+    || state.ball.crashed
+    || state.undo.active
+    || state.rewindPlayback.active
+  );
 }
 
 function updateDragState(worldPoint) {
@@ -2496,6 +3151,9 @@ function launchShot(direction, power, anchor) {
   if (!state.adminReplay.active) {
     saveUndoCheckpoint();
   }
+  if (!state.currentFlightStartCheckpoint) {
+    state.currentFlightStartCheckpoint = cloneCheckpoint(createCurrentCheckpoint());
+  }
   const activeStageIndex = getActiveStageIndex();
   const launchPlanetIndex = state.ball.anchorPlanetIndex;
   const launchDirection = constrainLaunchDirection(direction, power);
@@ -2514,8 +3172,10 @@ function launchShot(direction, power, anchor) {
   state.ball.velocity.y = velocity.y;
   state.ball.launchGracePlanetIndex = launchPlanetIndex;
   state.ball.anchorPlanetIndex = null;
+  state.ball.anchorNormal = null;
   state.ball.landedPlanetIndex = null;
   state.ball.landedPlanetName = '';
+  state.currentFlightLaunchState = cloneBallPlaybackState(state.ball);
   state.shots += 1;
   beginAttemptTrail();
   state.dragActive = false;
@@ -2598,6 +3258,11 @@ function restartLevel() {
 
 retryButton.addEventListener('click', restartLevel);
 undoButton.addEventListener('click', startUndo);
+timeSpeedSlider.addEventListener('input', (event) => {
+  const nextIndex = clamp(Number.parseInt(event.target.value, 10), 0, TIME_SPEED_VALUES.length - 1);
+  state.timeSpeedIndex = nextIndex;
+  syncHud();
+});
 
 window.addEventListener('keydown', (event) => {
   if (!event.metaKey && !event.ctrlKey && !event.altKey && event.shiftKey && event.code === 'KeyF') {
@@ -2654,26 +3319,17 @@ window.addEventListener('keydown', (event) => {
 
 function updatePhysics(delta) {
   if (state.undo.active) {
-    state.undo.elapsed += delta;
-    const t = clamp(state.undo.elapsed / Math.max(0.0001, state.undo.duration), 0, 1);
-    const easedT = THREE.MathUtils.smootherstep(t, 0, 1);
-    const fromPosition = state.undo.fromPosition ?? state.ball.position;
-    const toPosition = state.undo.toPosition ?? state.ball.position;
-    setVec(state.ball.position, {
-      x: THREE.MathUtils.lerp(fromPosition.x, toPosition.x, easedT),
-      y: THREE.MathUtils.lerp(fromPosition.y, toPosition.y, easedT),
-    });
-    ballGroup.visible = true;
-    ballGroup.scale.setScalar(1 - Math.sin(easedT * Math.PI) * 0.08);
-    ballMesh.position.y = ballRestY + Math.sin(easedT * Math.PI) * 0.06;
-    ballMesh.material.color.copy(palette.ball).lerp(palette.start, 0.22);
-    ballMesh.material.emissive.copy(palette.start);
-    ballMesh.material.emissiveIntensity = 0.8 * Math.sin(easedT * Math.PI);
-    ballShadow.material.opacity = 0.2 + (1 - easedT) * 0.08;
-
-    if (t >= 1) {
+    if (!state.rewindPlayback.active) {
       finishUndo();
+      return;
     }
+
+    updateLandingRewindPlayback(UNDO_REWIND_SPEED);
+    return;
+  }
+
+  if (state.rewindPlayback.active) {
+    updateLandingRewindPlayback();
     return;
   }
 
@@ -2750,15 +3406,30 @@ function updatePhysics(delta) {
     state.ball.velocity.x = 0;
     state.ball.velocity.y = 0;
     if (state.ball.anchorPlanetIndex !== null && state.ball.anchorPlanetIndex !== undefined) {
-      const nextTime = (state.ball.time ?? state.level.time ?? 0) + delta;
-      setLevelTime(state.level, nextTime);
-      state.ball.time = nextTime;
-      advanceBallAnchor(state.level, state.ball, delta);
+      if (getTimeSpeedValue() < 0 && startLandingRewindPlayback()) {
+        return;
+      }
+      const currentTime = state.ball.time ?? state.level.time ?? 0;
+      const timeSpeed = state.adminReplay.active ? 1 : getTimeSpeedValue();
+      const minTime = state.level.startTimeSeconds ?? 0;
+      const nextTime = Math.max(minTime, currentTime + delta * timeSpeed);
+      const appliedDelta = nextTime - currentTime;
+      if (Math.abs(appliedDelta) > 0.000001) {
+        setLevelTime(state.level, nextTime);
+        state.ball.time = nextTime;
+        advanceBallAnchor(state.level, state.ball, appliedDelta);
+      }
       if (maybeLaunchAdminReplayShot()) {
         return;
       }
       if (state.dragActive) {
         updateDragState(state.dragPointerWorld);
+      }
+      if (Math.abs(appliedDelta) > 0.000001) {
+        recordFlightHistorySample();
+      }
+      if (timeSpeed < 0 && nextTime <= minTime + 0.0001) {
+        clampTimeSpeedToNonNegative();
       }
       if (!isGoalOpen(state.level, state.ball.time)) {
         resetBall(
@@ -2780,9 +3451,10 @@ function updatePhysics(delta) {
   }
 
   const result = stepBall(state.level, state.ball, delta);
+  recordFlightHistorySample();
   recordAttemptTrailPoint();
   if (result.type === 'goal') {
-    beginGoal();
+    beginGoal(result);
     return;
   }
 
@@ -2801,7 +3473,13 @@ function updatePhysics(delta) {
             ? 'Planet impact.'
             : 'Lost in open space.';
     const hint = describeFailureHint(result.reason);
-    beginCrash(message, hint, result.reason === 'sun' ? 'sun' : 'planet');
+    beginCrash(
+      message,
+      hint,
+      result.reason === 'sun' ? 'sun' : 'planet',
+      result.eventState ?? null,
+      result.displayEventState ?? null,
+    );
     return;
   }
 
@@ -2908,6 +3586,25 @@ function updateCameraProjection() {
   camera.updateProjectionMatrix();
 }
 
+function isStandaloneDisplayMode() {
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+
+function lockLandscapeIfSupported() {
+  if (!isStandaloneDisplayMode()) {
+    return;
+  }
+
+  const orientation = window.screen?.orientation;
+  if (!orientation?.lock) {
+    return;
+  }
+
+  orientation.lock('landscape').catch(() => {
+    // Ignore unsupported or user-agent-restricted orientation locks.
+  });
+}
+
 function syncViewportHeight() {
   const viewportHeight = Math.round(
     window.visualViewport
@@ -2997,13 +3694,18 @@ function animate() {
 
 applyLevel(getInitialLevelIndex());
 resetBall(`Level ${state.levelIndex + 1}: ${state.level.name}.`, state.level.summary);
+lockLandscapeIfSupported();
 syncViewportHeight();
 resize();
 animate();
 
 window.addEventListener('resize', () => scheduleResize());
 window.addEventListener('orientationchange', () => scheduleResize(5));
-window.addEventListener('pageshow', () => scheduleResize(5));
+window.addEventListener('orientationchange', lockLandscapeIfSupported);
+window.addEventListener('pageshow', () => {
+  lockLandscapeIfSupported();
+  scheduleResize(5);
+});
 window.visualViewport?.addEventListener('resize', () => scheduleResize(5));
 
 const sceneResizeObserver = new ResizeObserver(() => {
