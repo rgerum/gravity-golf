@@ -122,6 +122,7 @@ const gameOverHint = document.querySelector('#gameOverHint');
 const gameOverRetryButton = document.querySelector('#gameOverRetryButton');
 const gameOverUndoButton = document.querySelector('#gameOverUndoButton');
 const sceneHost = document.querySelector('#scene');
+let gameOverVisibilityFrame = 0;
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -2504,13 +2505,33 @@ function syncGameOverActionAnchors() {
 
 function syncGameOverModal() {
   const open = state.gameOver.open;
-  gameOverModal.hidden = !open;
-  gameOverModal.classList.toggle('is-visible', open);
   gameOverTitle.textContent = state.gameOver.title;
   gameOverHint.textContent = state.gameOver.hint;
   gameOverRetryButton.disabled = !canRetryLevel();
   gameOverUndoButton.disabled = !canRedo();
+
+  if (!open) {
+    if (gameOverVisibilityFrame) {
+      cancelAnimationFrame(gameOverVisibilityFrame);
+      gameOverVisibilityFrame = 0;
+    }
+    gameOverModal.classList.remove('is-open', 'is-visible');
+    gameOverModal.hidden = true;
+    syncGameOverActionAnchors();
+    return;
+  }
+
+  gameOverModal.hidden = false;
+  gameOverModal.classList.add('is-open');
   syncGameOverActionAnchors();
+
+  if (gameOverVisibilityFrame) {
+    cancelAnimationFrame(gameOverVisibilityFrame);
+  }
+  gameOverVisibilityFrame = requestAnimationFrame(() => {
+    gameOverModal.classList.add('is-visible');
+    gameOverVisibilityFrame = 0;
+  });
 }
 
 function hideGoalCloseAnimation() {
