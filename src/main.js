@@ -82,6 +82,20 @@ app.innerHTML = `
             </div>
           </div>
         </div>
+        <div class="game-over-modal" id="gameOverModal" hidden>
+          <div class="game-over-backdrop"></div>
+          <div class="game-over-panel" role="dialog" aria-modal="true" aria-labelledby="gameOverTitle">
+            <div class="game-over-copy">
+              <p class="game-over-kicker">Failed</p>
+              <h2 id="gameOverTitle">Lost in space.</h2>
+              <p class="game-over-hint" id="gameOverHint">Retry the route or rewind to the previous boundary.</p>
+            </div>
+            <div class="game-over-actions">
+              <button id="gameOverRetryButton" class="hud-button" type="button">Retry</button>
+              <button id="gameOverUndoButton" class="hud-button hud-button-primary" type="button">Undo</button>
+            </div>
+          </div>
+        </div>
       </div>
     </main>
   </div>
@@ -98,8 +112,15 @@ const timeSpeedValue = document.querySelector('#timeSpeedValue');
 const powerFill = document.querySelector('#powerFill');
 const fpsPanel = document.querySelector('#fpsPanel');
 const fpsValue = document.querySelector('#fpsValue');
+const actionRow = document.querySelector('.action-row');
 const retryButton = document.querySelector('#retryButton');
 const undoButton = document.querySelector('#undoButton');
+const gameOverModal = document.querySelector('#gameOverModal');
+const gameOverCopy = document.querySelector('.game-over-copy');
+const gameOverTitle = document.querySelector('#gameOverTitle');
+const gameOverHint = document.querySelector('#gameOverHint');
+const gameOverRetryButton = document.querySelector('#gameOverRetryButton');
+const gameOverUndoButton = document.querySelector('#gameOverUndoButton');
 const sceneHost = document.querySelector('#scene');
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -155,6 +176,8 @@ const gravityFieldPalette = {
 
 const PHYSICS_STEP = 1 / 120;
 const UNDO_REWIND_SPEED = -8;
+const GOAL_CLOSE_ANIMATION_DURATION = 0.46;
+const GOAL_CLOSE_MODAL_DELAY = 0.12;
 const MAX_PHYSICS_STEPS_PER_FRAME = 4;
 const ballRestY = COURSE.ballRadius + 0.04;
 const CONTROL_MIN_ANGLE = -180;
@@ -574,12 +597,27 @@ const state = {
     duration: 0,
     elapsed: 0,
   },
+  gameOver: {
+    open: false,
+    title: '',
+    hint: '',
+    countReset: false,
+  },
+  goalCloseAnimation: {
+    active: false,
+    elapsed: 0,
+    hint: '',
+    countReset: true,
+  },
   ballTraceParticles: Array.from({ length: BALL_TRACE_PARTICLE_COUNT }, () => ({
     active: false,
     x: 0,
     y: 0,
     vx: 0,
     vy: 0,
+    trailX: 0,
+    trailY: 0,
+    trailSpeed: 0,
     age: 0,
     life: BALL_TRACE_PARTICLE_LIFETIME,
   })),
@@ -973,8 +1011,11 @@ function canRedo() {
     || state.undo.active
     || state.rewindPlayback.active
     || state.ball.goaling
-    || state.ball.crashed
   ) {
+    return false;
+  }
+
+  if (state.ball.crashed && !state.gameOver.open) {
     return false;
   }
 
@@ -1588,6 +1629,7 @@ function finishUndo(checkpoint = state.undo.checkpoint) {
 }
 
 function startUndo() {
+  hideGameOverModal();
   let started = false;
   const rewind = state.rewindHistory[state.rewindHistory.length - 1] ?? null;
 
@@ -1714,22 +1756,61 @@ function resetBallTrace() {
   ballTraceStreaks.visible = false;
 }
 
-function spawnBallTraceParticle(speed, direction, lateral) {
+function projectBallTraceReverseAnchor(anticipation) {
+  if (anticipation <= 0.000001) {
+    return cloneVec(state.ball.position);
+  }
+
+  const tempLevel = createLevelRuntime(state.levelIndex);
+  const tempBall = cloneBallPlaybackState(state.ball);
+  if (!tempBall) {
+    return cloneVec(state.ball.position);
+  }
+
+  setLevelTime(tempLevel, tempBall.time);
+  let remaining = anticipation;
+  const launchPlanetIndex = state.rewindPlayback.launchPlanetIndex
+    ?? state.currentFlightStartCheckpoint?.anchorPlanetIndex
+    ?? null;
+
+  while (remaining > 0.000001) {
+    const step = Math.min(PHYSICS_STEP, remaining);
+    reverseStepBall(tempLevel, tempBall, step, { launchPlanetIndex });
+    remaining -= step;
+  }
+
+  return cloneVec(tempBall.position);
+}
+
+function spawnBallTraceParticle(speed, trailDirection, lateral, reverse = false) {
   const particle = state.ballTraceParticles[state.ballTraceCursor];
   state.ballTraceCursor = (state.ballTraceCursor + 1) % state.ballTraceParticles.length;
 
   const spread = (Math.random() - 0.5) * 0.22;
   const retreat = 0.1 + Math.random() * 0.26;
+  const life = BALL_TRACE_PARTICLE_LIFETIME * (0.8 + Math.min(0.5, speed * 0.03));
+  const virtualDriftSpeed = 0.22 + speed * 0.026;
+  const anticipation = reverse
+    ? Math.max(PHYSICS_STEP * 2, Math.random() * life)
+    : 0;
+  const anchor = reverse
+    ? projectBallTraceReverseAnchor(anticipation)
+    : state.ball.position;
   particle.active = true;
-  particle.x = state.ball.position.x - direction.x * retreat + lateral.x * spread;
-  particle.y = state.ball.position.y - direction.y * retreat + lateral.y * spread;
-  particle.vx = -direction.x * (0.22 + speed * 0.026) + lateral.x * spread * 0.9;
-  particle.vy = -direction.y * (0.22 + speed * 0.026) + lateral.y * spread * 0.9;
-  particle.age = 0;
-  particle.life = BALL_TRACE_PARTICLE_LIFETIME * (0.8 + Math.min(0.5, speed * 0.03));
+  particle.vx = 0;
+  particle.vy = 0;
+  particle.trailX = trailDirection.x;
+  particle.trailY = trailDirection.y;
+  particle.trailSpeed = virtualDriftSpeed;
+  particle.life = life;
+  particle.x = anchor.x + trailDirection.x * retreat + lateral.x * spread;
+  particle.y = anchor.y + trailDirection.y * retreat + lateral.y * spread;
+  particle.age = reverse ? anticipation : 0;
 }
 
 function updateBallTrace(delta) {
+  const rewinding = state.undo.active || (state.rewindPlayback.active && getTimeSpeedValue() < 0);
+  const traceDelta = rewinding ? -delta : delta;
   const speed = length(state.ball.velocity);
   const freeFlight = (
     state.ball.anchorPlanetIndex === null
@@ -1739,12 +1820,13 @@ function updateBallTrace(delta) {
   );
 
   if (freeFlight) {
-    const direction = normalize(state.ball.velocity);
-    const lateral = { x: -direction.y, y: direction.x };
+    const velocityDirection = normalize(state.ball.velocity);
+    const trailDirection = { x: -velocityDirection.x, y: -velocityDirection.y };
+    const lateral = { x: -trailDirection.y, y: trailDirection.x };
     const emitRate = 42 + Math.min(88, speed * 11.5);
-    state.ballTraceCarry += delta * emitRate;
+    state.ballTraceCarry += Math.abs(traceDelta) * emitRate;
     while (state.ballTraceCarry >= 1) {
-      spawnBallTraceParticle(speed, direction, lateral);
+      spawnBallTraceParticle(speed, trailDirection, lateral, rewinding);
       state.ballTraceCarry -= 1;
     }
   } else {
@@ -1771,34 +1853,37 @@ function updateBallTrace(delta) {
       continue;
     }
 
-    particle.age += delta;
-    if (particle.age >= particle.life) {
+    particle.age += traceDelta;
+    if (particle.age >= particle.life || particle.age <= 0) {
       particle.active = false;
       ballTraceColors[colorOffset] = 0;
       ballTraceColors[colorOffset + 1] = 0;
       ballTraceColors[colorOffset + 2] = 0;
+      ballTracePositions[positionOffset] = particle.x;
       ballTracePositions[positionOffset + 1] = -10;
+      ballTracePositions[positionOffset + 2] = particle.y;
       ballTraceStreakColors[streakOffset] = 0;
       ballTraceStreakColors[streakOffset + 1] = 0;
       ballTraceStreakColors[streakOffset + 2] = 0;
       ballTraceStreakColors[streakOffset + 3] = 0;
       ballTraceStreakColors[streakOffset + 4] = 0;
       ballTraceStreakColors[streakOffset + 5] = 0;
+      ballTraceStreakPositions[streakOffset] = particle.x;
       ballTraceStreakPositions[streakOffset + 1] = -10;
+      ballTraceStreakPositions[streakOffset + 2] = particle.y;
+      ballTraceStreakPositions[streakOffset + 3] = particle.x;
       ballTraceStreakPositions[streakOffset + 4] = -10;
+      ballTraceStreakPositions[streakOffset + 5] = particle.y;
       continue;
     }
 
     const lifeT = 1 - particle.age / particle.life;
-    particle.x += particle.vx * delta;
-    particle.y += particle.vy * delta;
     ballTracePositions[positionOffset] = particle.x;
     ballTracePositions[positionOffset + 1] = 0.08 + (1 - lifeT) * 0.06;
     ballTracePositions[positionOffset + 2] = particle.y;
-    const speed = Math.max(0.001, Math.hypot(particle.vx, particle.vy));
-    const directionX = particle.vx / speed;
-    const directionY = particle.vy / speed;
-    const streakLength = (0.18 + speed * 0.32) * (0.35 + lifeT * 0.65);
+    const directionX = particle.trailX;
+    const directionY = particle.trailY;
+    const streakLength = (0.18 + particle.trailSpeed * 0.32) * (0.35 + lifeT * 0.65);
     ballTraceStreakPositions[streakOffset] = particle.x;
     ballTraceStreakPositions[streakOffset + 1] = 0.08 + (1 - lifeT) * 0.04;
     ballTraceStreakPositions[streakOffset + 2] = particle.y;
@@ -2371,12 +2456,130 @@ function constrainLaunchDirection(direction, power) {
 }
 
 function canRetryLevel() {
-  return !state.adminReplay.active && !state.undo.active && !state.rewindPlayback.active && !state.ball.goaling;
+  return !state.adminReplay.active
+    && !state.undo.active
+    && !state.rewindPlayback.active
+    && !state.ball.goaling
+    && !state.goalCloseAnimation.active;
 }
 
 function syncPerfOverlay() {
   fpsPanel.hidden = !state.debug.fpsVisible;
   fpsValue.textContent = state.debug.fpsValue > 0 ? String(Math.round(state.debug.fpsValue)) : '--';
+}
+
+function shouldAnchorGameOverActionsToHud() {
+  return window.matchMedia('(orientation: landscape) and (max-height: 560px)').matches;
+}
+
+function syncGameOverActionAnchors() {
+  const useAnchors = state.gameOver.open && shouldAnchorGameOverActionsToHud();
+  gameOverModal.classList.toggle('has-anchored-actions', useAnchors);
+
+  if (!useAnchors) {
+    gameOverModal.style.removeProperty('--game-over-copy-left');
+    gameOverModal.style.removeProperty('--game-over-copy-top');
+    gameOverModal.style.removeProperty('--game-over-copy-width');
+    return;
+  }
+
+  const modalRect = gameOverModal.getBoundingClientRect();
+  const railRect = actionRow.getBoundingClientRect();
+  const railLeft = railRect.left - modalRect.left;
+  const railTop = railRect.top - modalRect.top;
+  const railBottom = railRect.bottom - modalRect.top;
+  const gap = 8;
+  const minLeft = 22;
+  const desiredTextWidth = 280;
+  const copyLeft = Math.max(minLeft, railLeft - gap - desiredTextWidth);
+  const copyRight = 6;
+  const copyWidth = Math.max(220, modalRect.width - copyLeft - copyRight);
+  const copyHeight = gameOverCopy.getBoundingClientRect().height || 140;
+  const copyTop = clamp(
+    ((railTop + railBottom) * 0.5) - (copyHeight * 0.5),
+    18,
+    Math.max(18, modalRect.height - copyHeight - 18),
+  );
+
+  gameOverModal.style.setProperty('--game-over-copy-left', `${copyLeft}px`);
+  gameOverModal.style.setProperty('--game-over-copy-top', `${copyTop}px`);
+  gameOverModal.style.setProperty('--game-over-copy-width', `${copyWidth}px`);
+}
+
+function syncGameOverModal() {
+  const open = state.gameOver.open;
+  gameOverModal.hidden = !open;
+  gameOverModal.classList.toggle('is-visible', open);
+  gameOverTitle.textContent = state.gameOver.title;
+  gameOverHint.textContent = state.gameOver.hint;
+  gameOverRetryButton.disabled = !canRetryLevel();
+  gameOverUndoButton.disabled = !canRedo();
+  syncGameOverActionAnchors();
+}
+
+function hideGoalCloseAnimation() {
+  state.goalCloseAnimation.active = false;
+  state.goalCloseAnimation.elapsed = 0;
+  state.goalCloseAnimation.hint = '';
+  state.goalCloseAnimation.countReset = true;
+}
+
+function hideGameOverModal() {
+  state.gameOver.open = false;
+  state.gameOver.title = '';
+  state.gameOver.hint = '';
+  state.gameOver.countReset = false;
+}
+
+function getFailureTitle(reason) {
+  if (reason === 'sun') {
+    return 'Burned in the sun.';
+  }
+
+  if (reason === 'goal-closed') {
+    return 'Black hole closed.';
+  }
+
+  if (reason === 'planet') {
+    return 'Drowned in a gas giant.';
+  }
+
+  return 'Lost in space.';
+}
+
+function showGameOverModal(reason, hint, options = {}) {
+  state.gameOver.open = true;
+  state.gameOver.title = getFailureTitle(reason);
+  state.gameOver.hint = hint;
+  state.gameOver.countReset = options.countReset !== false;
+  state.timeSpeedIndex = 1;
+  state.message = state.gameOver.title;
+  state.hint = hint;
+  syncHud();
+}
+
+function beginGoalClosure(hint, options = {}) {
+  if (state.goalCloseAnimation.active || state.gameOver.open) {
+    return;
+  }
+
+  stopAdminReplay();
+  state.ball.goaling = false;
+  state.ball.crashed = false;
+  state.ball.transition = 0;
+  state.ball.velocity.x = 0;
+  state.ball.velocity.y = 0;
+  state.dragActive = false;
+  state.dragPower = 0;
+  state.roundSettled = true;
+  state.relayPulse = 0;
+  state.goalCloseAnimation.active = true;
+  state.goalCloseAnimation.elapsed = 0;
+  state.goalCloseAnimation.hint = hint;
+  state.goalCloseAnimation.countReset = options.countReset !== false;
+  state.message = 'Black hole closing.';
+  state.hint = 'Window collapsing.';
+  syncHud();
 }
 
 function toggleFpsOverlay() {
@@ -2418,7 +2621,11 @@ function shouldClampRewindAtCheckpoint(checkpoint) {
 }
 
 function canAdjustTimeSpeed() {
-  return !state.dragActive && !state.adminReplay.active && !state.undo.active;
+  return !state.dragActive
+    && !state.adminReplay.active
+    && !state.undo.active
+    && !state.gameOver.open
+    && !state.goalCloseAnimation.active;
 }
 
 function syncTimeControl() {
@@ -2894,6 +3101,8 @@ function getInitialLevelIndex() {
 
 function applyLevel(index) {
   stopAdminReplay();
+  hideGameOverModal();
+  hideGoalCloseAnimation();
   state.levelIndex = index % LEVELS.length;
   persistLastLevelIndex(state.levelIndex);
   state.level = createLevelRuntime(state.levelIndex);
@@ -2932,9 +3141,12 @@ function syncHud() {
   syncActionButtons();
   syncTimeControl();
   syncPerfOverlay();
+  syncGameOverModal();
 }
 
 function resetBall(message, hint, options = {}) {
+  hideGameOverModal();
+  hideGoalCloseAnimation();
   if (options.scored) {
     state.score += 1;
   }
@@ -2997,6 +3209,8 @@ function resetBall(message, hint, options = {}) {
 }
 
 function beginGoal(result = null) {
+  hideGameOverModal();
+  hideGoalCloseAnimation();
   finalizeFlightHistory('goal', result?.eventState ?? null, result?.displayEventState ?? null);
   finalizeAttemptTrail('goal');
   stopAdminReplay();
@@ -3012,6 +3226,8 @@ function beginGoal(result = null) {
 }
 
 function beginCrash(reason, hint, crashKind = 'planet', eventState = null, displayEventState = null) {
+  hideGameOverModal();
+  hideGoalCloseAnimation();
   finalizeFlightHistory('crash', eventState, displayEventState);
   finalizeAttemptTrail('crash');
   stopAdminReplay();
@@ -3034,6 +3250,8 @@ function beginCrash(reason, hint, crashKind = 'planet', eventState = null, displ
 }
 
 function beginLanding(result) {
+  hideGameOverModal();
+  hideGoalCloseAnimation();
   finalizeFlightHistory('landed', result?.eventState ?? null, result?.displayEventState ?? null);
   finalizeAttemptTrail('landed');
   state.ball.velocity.x = 0;
@@ -3190,7 +3408,7 @@ function launchShot(direction, power, anchor) {
 }
 
 function onPointerDown(event) {
-  if (ballIsMoving() || state.adminReplay.active || state.undo.active) {
+  if (state.gameOver.open || state.goalCloseAnimation.active || ballIsMoving() || state.adminReplay.active || state.undo.active) {
     return;
   }
 
@@ -3252,12 +3470,17 @@ function restartLevel() {
   resetBall(
     `Level ${state.levelIndex + 1}: ${state.level.name}.`,
     state.level.summary,
-    { countReset: true },
+    { countReset: state.gameOver.countReset || false },
   );
 }
 
 retryButton.addEventListener('click', restartLevel);
 undoButton.addEventListener('click', startUndo);
+gameOverRetryButton.addEventListener('click', restartLevel);
+gameOverUndoButton.addEventListener('click', () => {
+  hideGameOverModal();
+  startUndo();
+});
 timeSpeedSlider.addEventListener('input', (event) => {
   const nextIndex = clamp(Number.parseInt(event.target.value, 10), 0, TIME_SPEED_VALUES.length - 1);
   state.timeSpeedIndex = nextIndex;
@@ -3318,6 +3541,28 @@ window.addEventListener('keydown', (event) => {
 });
 
 function updatePhysics(delta) {
+  if (state.goalCloseAnimation.active) {
+    state.goalCloseAnimation.elapsed += delta;
+    state.ball.velocity.x = 0;
+    state.ball.velocity.y = 0;
+    if (
+      state.goalCloseAnimation.elapsed
+      >= GOAL_CLOSE_ANIMATION_DURATION + GOAL_CLOSE_MODAL_DELAY
+    ) {
+      const hint = state.goalCloseAnimation.hint;
+      const countReset = state.goalCloseAnimation.countReset;
+      hideGoalCloseAnimation();
+      showGameOverModal('goal-closed', hint, { countReset });
+    }
+    return;
+  }
+
+  if (state.gameOver.open) {
+    state.ball.velocity.x = 0;
+    state.ball.velocity.y = 0;
+    return;
+  }
+
   if (state.undo.active) {
     if (!state.rewindPlayback.active) {
       finishUndo();
@@ -3377,11 +3622,7 @@ function updatePhysics(delta) {
 
       if (t >= 1) {
         ballGroup.visible = false;
-        resetBall(
-          state.ball.crashReason,
-          state.hint,
-          { countReset: true },
-        );
+        showGameOverModal('sun', state.hint, { countReset: true });
       }
       return;
     }
@@ -3393,11 +3634,7 @@ function updatePhysics(delta) {
 
     if (state.ball.transition >= 1) {
       ballGroup.visible = false;
-      resetBall(
-        state.ball.crashReason,
-        state.hint,
-        { countReset: true },
-      );
+      showGameOverModal(state.ball.crashKind === 'planet' ? 'planet' : 'bounds', state.hint, { countReset: true });
     }
     return;
   }
@@ -3432,20 +3669,12 @@ function updatePhysics(delta) {
         clampTimeSpeedToNonNegative();
       }
       if (!isGoalOpen(state.level, state.ball.time)) {
-        resetBall(
-          'Event horizon collapsed.',
-          describeFailureHint('goal-closed'),
-          { countReset: true },
-        );
+        beginGoalClosure(describeFailureHint('goal-closed'), { countReset: true });
       }
       return;
     }
     if (!state.roundSettled) {
-      resetBall(
-        'Drift expired.',
-        describeFailureHint('settled'),
-        { countReset: true },
-      );
+      showGameOverModal('settled', describeFailureHint('settled'), { countReset: true });
     }
     return;
   }
@@ -3476,7 +3705,11 @@ function updatePhysics(delta) {
     beginCrash(
       message,
       hint,
-      result.reason === 'sun' ? 'sun' : 'planet',
+      result.reason === 'sun'
+        ? 'sun'
+        : result.reason === 'planet'
+          ? 'planet'
+          : 'bounds',
       result.eventState ?? null,
       result.displayEventState ?? null,
     );
@@ -3485,11 +3718,7 @@ function updatePhysics(delta) {
 
   if (result.type === 'settled' && !state.roundSettled) {
     finalizeAttemptTrail('settled');
-    resetBall(
-      'Drift expired.',
-      describeFailureHint('settled'),
-      { countReset: true },
-    );
+    showGameOverModal('settled', describeFailureHint('settled'), { countReset: true });
   }
 }
 
@@ -3498,6 +3727,9 @@ function updateDecor(time) {
   const goalOpen = isGoalOpen(state.level, worldTime);
   const goalTimeLeft = getGoalRemainingTime(state.level, worldTime);
   const goalTimerFraction = getGoalRemainingFraction(state.level, worldTime);
+  const goalCloseProgress = state.goalCloseAnimation.active
+    ? clamp(state.goalCloseAnimation.elapsed / GOAL_CLOSE_ANIMATION_DURATION, 0, 1)
+    : 0;
   runStatusPill.textContent = getRunStatusText();
   windowStatusPill.textContent = getWindowStatusText();
   windowStatusPill.classList.toggle('is-hot', goalTimeLeft < 2.5);
@@ -3524,18 +3756,30 @@ function updateDecor(time) {
     gravityFieldVisuals.core.material.opacity = 0.38 + Math.sin(time * 2 + 0.6) * 0.04;
   }
 
-  setGoalTimerArc(goalTimerFraction);
+  setGoalTimerArc(state.goalCloseAnimation.active ? Math.max(0, 1 - goalCloseProgress) : goalTimerFraction);
 
-  blackHoleDisc.material.color.setHex(goalOpen ? palette.blackHole.getHex() : 0x191f26);
-  blackHoleRing.rotation.z = time * (goalOpen ? 0.9 : 0.25);
-  blackHoleRing.scale.setScalar(goalOpen ? 1 + Math.sin(time * 4.2) * 0.08 : 0.92);
-  blackHoleRing.material.opacity = goalOpen
-    ? 0.46 + goalTimerFraction * 0.12 + Math.sin(time * 4.2) * 0.04
-    : 0.18;
-  goalTimerTrack.material.opacity = goalOpen ? 0.22 : 0.08;
-  goalTimerArc.material.opacity = goalOpen
-    ? 0.56 + goalTimerFraction * 0.28 + Math.sin(time * 5.6) * 0.03
-    : 0;
+  if (state.goalCloseAnimation.active) {
+    const collapseEase = THREE.MathUtils.smootherstep(goalCloseProgress, 0, 1);
+    blackHoleDisc.material.color.setHex(0x202832);
+    blackHoleDisc.scale.setScalar(1 - collapseEase * 0.92);
+    blackHoleRing.rotation.z = time * 0.2 - collapseEase * 0.9;
+    blackHoleRing.scale.setScalar(1 - collapseEase * 0.78);
+    blackHoleRing.material.opacity = Math.max(0, 0.48 - collapseEase * 0.44);
+    goalTimerTrack.material.opacity = Math.max(0, 0.2 - collapseEase * 0.18);
+    goalTimerArc.material.opacity = Math.max(0, 0.62 - collapseEase * 0.62);
+  } else {
+    blackHoleDisc.material.color.setHex(goalOpen ? palette.blackHole.getHex() : 0x191f26);
+    blackHoleDisc.scale.setScalar(1);
+    blackHoleRing.rotation.z = time * (goalOpen ? 0.9 : 0.25);
+    blackHoleRing.scale.setScalar(goalOpen ? 1 + Math.sin(time * 4.2) * 0.08 : 0.92);
+    blackHoleRing.material.opacity = goalOpen
+      ? 0.46 + goalTimerFraction * 0.12 + Math.sin(time * 4.2) * 0.04
+      : 0.18;
+    goalTimerTrack.material.opacity = goalOpen ? 0.22 : 0.08;
+    goalTimerArc.material.opacity = goalOpen
+      ? 0.56 + goalTimerFraction * 0.28 + Math.sin(time * 5.6) * 0.03
+      : 0;
+  }
   goalTimerArc.material.color.setHex(goalTimeLeft < 2.5 ? 0xff9f6e : 0x8fffe3);
 
   planetVisuals.forEach((visual, index) => {
@@ -3622,6 +3866,7 @@ function resize() {
   syncViewportHeight();
   const width = sceneHost.clientWidth;
   const height = sceneHost.clientHeight;
+  syncGameOverActionAnchors();
   if (width <= 0 || height <= 0) {
     return;
   }
