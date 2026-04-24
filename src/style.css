@@ -312,13 +312,14 @@ h1 {
   place-items: center;
   padding: 24px;
   pointer-events: none;
-  opacity: 0;
-  transition: opacity 180ms ease;
+}
+
+.game-over-modal[hidden] {
+  display: none;
 }
 
 .game-over-modal.is-visible {
   pointer-events: auto;
-  opacity: 1;
 }
 
 .game-over-backdrop {

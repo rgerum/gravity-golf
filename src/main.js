@@ -1015,10 +1015,6 @@ function canRedo() {
     return false;
   }
 
-  if (state.ball.crashed && !state.gameOver.open) {
-    return false;
-  }
-
   if (state.currentFlightLaunchState && state.currentFlightStartCheckpoint) {
     return true;
   }
