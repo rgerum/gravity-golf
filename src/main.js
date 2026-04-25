@@ -601,6 +601,7 @@ const state = {
   },
   gameOver: {
     open: false,
+    reason: '',
     title: '',
     hint: '',
     countReset: false,
@@ -2547,6 +2548,7 @@ function hideGoalCloseAnimation() {
 
 function hideGameOverModal() {
   state.gameOver.open = false;
+  state.gameOver.reason = '';
   state.gameOver.title = '';
   state.gameOver.hint = '';
   state.gameOver.countReset = false;
@@ -2570,6 +2572,7 @@ function getFailureTitle(reason) {
 
 function showGameOverModal(reason, hint, options = {}) {
   state.gameOver.open = true;
+  state.gameOver.reason = reason;
   state.gameOver.title = getFailureTitle(reason);
   state.gameOver.hint = hint;
   state.gameOver.countReset = options.countReset !== false;
@@ -3755,8 +3758,12 @@ function updateDecor(time) {
   const goalOpen = isGoalOpen(state.level, worldTime);
   const goalTimeLeft = getGoalRemainingTime(state.level, worldTime);
   const goalTimerFraction = getGoalRemainingFraction(state.level, worldTime);
-  const goalCloseProgress = state.goalCloseAnimation.active
+  const goalCloseAnimationProgress = state.goalCloseAnimation.active
     ? clamp(state.goalCloseAnimation.elapsed / GOAL_CLOSE_ANIMATION_DURATION, 0, 1)
+    : 0;
+  const keepGoalCollapsed = state.goalCloseAnimation.active || (state.gameOver.open && state.gameOver.reason === 'goal-closed');
+  const goalCloseProgress = keepGoalCollapsed
+    ? (state.goalCloseAnimation.active ? goalCloseAnimationProgress : 1)
     : 0;
   runStatusPill.textContent = getRunStatusText();
   windowStatusPill.textContent = getWindowStatusText();
@@ -3784,17 +3791,17 @@ function updateDecor(time) {
     gravityFieldVisuals.core.material.opacity = 0.38 + Math.sin(time * 2 + 0.6) * 0.04;
   }
 
-  setGoalTimerArc(state.goalCloseAnimation.active ? Math.max(0, 1 - goalCloseProgress) : goalTimerFraction);
+  setGoalTimerArc(goalTimerFraction);
 
-  if (state.goalCloseAnimation.active) {
+  if (keepGoalCollapsed) {
     const collapseEase = THREE.MathUtils.smootherstep(goalCloseProgress, 0, 1);
     blackHoleDisc.material.color.setHex(0x202832);
     blackHoleDisc.scale.setScalar(1 - collapseEase * 0.92);
     blackHoleRing.rotation.z = time * 0.2 - collapseEase * 0.9;
     blackHoleRing.scale.setScalar(1 - collapseEase * 0.78);
     blackHoleRing.material.opacity = Math.max(0, 0.48 - collapseEase * 0.44);
-    goalTimerTrack.material.opacity = Math.max(0, 0.2 - collapseEase * 0.18);
-    goalTimerArc.material.opacity = Math.max(0, 0.62 - collapseEase * 0.62);
+    goalTimerTrack.material.opacity = 0;
+    goalTimerArc.material.opacity = 0;
   } else {
     blackHoleDisc.material.color.setHex(goalOpen ? palette.blackHole.getHex() : 0x191f26);
     blackHoleDisc.scale.setScalar(1);
