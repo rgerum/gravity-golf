@@ -548,6 +548,7 @@ const state = {
   dragPointerWorld: { x: 0, y: 0 },
   controlShots: [],
   timeSpeedIndex: 2,
+  resumeTimeSpeedIndex: 2,
   dragActive: false,
   dragPower: 0,
   roundSettled: true,
@@ -1626,6 +1627,9 @@ function finishUndo(checkpoint = state.undo.checkpoint) {
 }
 
 function startUndo() {
+  if (state.gameOver.open) {
+    state.timeSpeedIndex = state.resumeTimeSpeedIndex;
+  }
   hideGameOverModal();
   let started = false;
   const rewind = state.rewindHistory[state.rewindHistory.length - 1] ?? null;
@@ -2569,6 +2573,9 @@ function showGameOverModal(reason, hint, options = {}) {
   state.gameOver.title = getFailureTitle(reason);
   state.gameOver.hint = hint;
   state.gameOver.countReset = options.countReset !== false;
+  if (getTimeSpeedValue() > 0) {
+    state.resumeTimeSpeedIndex = state.timeSpeedIndex;
+  }
   state.timeSpeedIndex = 1;
   state.message = state.gameOver.title;
   state.hint = hint;
@@ -3484,6 +3491,10 @@ function restartLevel() {
     return;
   }
 
+  if (state.gameOver.open) {
+    state.timeSpeedIndex = state.resumeTimeSpeedIndex;
+  }
+
   resetBall(
     `Level ${state.levelIndex + 1}: ${state.level.name}.`,
     state.level.summary,
@@ -3494,13 +3505,13 @@ function restartLevel() {
 retryButton.addEventListener('click', restartLevel);
 undoButton.addEventListener('click', startUndo);
 gameOverRetryButton.addEventListener('click', restartLevel);
-gameOverUndoButton.addEventListener('click', () => {
-  hideGameOverModal();
-  startUndo();
-});
+gameOverUndoButton.addEventListener('click', startUndo);
 timeSpeedSlider.addEventListener('input', (event) => {
   const nextIndex = clamp(Number.parseInt(event.target.value, 10), 0, TIME_SPEED_VALUES.length - 1);
   state.timeSpeedIndex = nextIndex;
+  if ((TIME_SPEED_VALUES[nextIndex] ?? 0) > 0) {
+    state.resumeTimeSpeedIndex = nextIndex;
+  }
   syncHud();
 });
 
