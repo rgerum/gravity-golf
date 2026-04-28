@@ -17,7 +17,8 @@ const BALL_STOP_SPEED = 0.055;
 const BALL_FRICTION_BASE = 0.992;
 const GOAL_CAPTURE_RATIO = 0.95;
 const PLANET_COLLISION_PADDING = 0.92;
-const PLANET_LANDING_PADDING = 0.2;
+const PLANET_LANDING_PADDING = 0.03;
+const ICE_PLANET_LANDING_PADDING = -0.01;
 const PLANET_RADIUS_SCALE = 0.5;
 const SUN_COLLISION_RADIUS = 0.42;
 export const SOLAR_GRAVITY_MULTIPLIER = 5;
@@ -30,18 +31,43 @@ const LAUNCH_DRAG_SPEED = 3.4;
 const LAUNCH_MAX_SPEED = 11.8;
 const DEFAULT_START_ANGLE_DEG = 180;
 const DEFAULT_GOAL_OPEN_SECONDS = 12;
+const GOAL_ALWAYS_OPEN = true;
 const SYSTEM_LAYOUT_SCALE = 1;
 export const FIXED_SOLAR_GRAVITY_STRENGTH = 20;
+const DEFAULT_EXTRA_SUN_GRAVITY_STRENGTH = 16;
+const DEFAULT_EXTRA_SUN_COLLISION_RADIUS = 0.38;
+const PORTAL_COOLDOWN_SECONDS = 0.22;
+const BINARY_PRIMARY_RADIUS = 0.44;
+const BINARY_PRIMARY_GRAVITY_STRENGTH = FIXED_SOLAR_GRAVITY_STRENGTH;
+const BINARY_SECONDARY_RADIUS = 0.36;
+const BINARY_SECONDARY_GRAVITY_STRENGTH = 16;
 
 function polar(radius, angleDeg) {
   return { radius, angleDeg };
 }
 
-const LEVEL_DEFINITIONS = [
+export const WORLD_SIZE = 10;
+
+export const WORLD_DEFINITIONS = [
+  { id: 'starter-belt', name: 'Starter Belt' },
+  { id: 'relay-reach', name: 'Relay Reach' },
+  { id: 'hazard-verge', name: 'Hazard Verge' },
+  { id: 'moon-lattice', name: 'Moon Lattice' },
+  { id: 'frostline-verge', name: 'Frostline Verge' },
+  { id: 'aperture-reach', name: 'Aperture Reach' },
+  { id: 'binary-crown', name: 'Binary Crown' },
+  { id: 'ancient-worlds', name: 'Ancient Worlds' },
+];
+
+const CORE_LEVEL_DEFINITIONS = [
   {
     id: 'open-lane',
     name: 'Open Lane',
     summary: 'Start on the goal side of the sun and take the simple straight lane first.',
+    tutorial: {
+      type: 'drag',
+      copy: 'Drag and release to launch the ball.',
+    },
     sun: [0, 0],
     startPlanetIndex: 0,
     launchPresets: [
@@ -49,7 +75,7 @@ const LEVEL_DEFINITIONS = [
     ],
     startAnchor: polar(6.105, 2.3),
     goalCenter: polar(10.353, 1.4),
-    goalOpenSeconds: 7,
+    goalOpenSeconds: 9999,
     goalPullRadius: 4.9,
     goalPullStrength: 6.2,
     planets: [
@@ -1055,6 +1081,394 @@ const LEVEL_DEFINITIONS = [
   },
 ];
 
+const coreLevelById = new Map(
+  CORE_LEVEL_DEFINITIONS.map((level) => [level.id, level]),
+);
+
+const WORLD_THEMES = {
+  frostline: {
+    landable: [
+      { core: 0x9ed8ff, glow: 0xe8f8ff },
+      { core: 0x89f0ff, glow: 0xd9ffff },
+      { core: 0xc8cbff, glow: 0xf5f6ff },
+    ],
+    hazards: [
+      { core: 0x83a9dc, glow: 0xcce4ff },
+      { core: 0x9bb8ff, glow: 0xdeebff },
+      { core: 0x7fd6f2, glow: 0xcaf8ff },
+    ],
+    moons: [
+      { core: 0xecf4ff, glow: 0xffffff },
+    ],
+  },
+  ember: {
+    landable: [
+      { core: 0xffaf6a, glow: 0xffe1a4 },
+      { core: 0xff8e65, glow: 0xffc2a1 },
+      { core: 0xffc26f, glow: 0xffefb6 },
+    ],
+    hazards: [
+      { core: 0xff6f5f, glow: 0xffb093 },
+      { core: 0xff8762, glow: 0xffc89c },
+      { core: 0xff6f8d, glow: 0xffb1c0 },
+    ],
+    moons: [
+      { core: 0xffd9b0, glow: 0xfff1d7 },
+    ],
+  },
+  prism: {
+    landable: [
+      { core: 0x8ec6ff, glow: 0xcff0ff },
+      { core: 0xbc93ff, glow: 0xe8dbff },
+      { core: 0xffa0c5, glow: 0xffd7e6 },
+    ],
+    hazards: [
+      { core: 0xff88ab, glow: 0xffc3d4 },
+      { core: 0xff9b7a, glow: 0xffd5b7 },
+      { core: 0xaa8fff, glow: 0xdccfff },
+    ],
+    moons: [
+      { core: 0xf5eeff, glow: 0xffffff },
+    ],
+  },
+  singularity: {
+    landable: [
+      { core: 0x7db9ff, glow: 0xbfe2ff },
+      { core: 0x75e8d4, glow: 0xbffff2 },
+      { core: 0xb6a0ff, glow: 0xe4dbff },
+    ],
+    hazards: [
+      { core: 0xff7e93, glow: 0xffbcc8 },
+      { core: 0xff986e, glow: 0xffd0ab },
+      { core: 0xd37aff, glow: 0xf0c6ff },
+    ],
+    moons: [
+      { core: 0xe8eeff, glow: 0xffffff },
+    ],
+  },
+  ancient: {
+    landable: [
+      { core: 0xd1bb84, glow: 0xffe5a8 },
+      { core: 0xa3b77b, glow: 0xdaf0a8 },
+      { core: 0x8bb0d8, glow: 0xcde8ff },
+    ],
+    hazards: [
+      { core: 0xcf8b6c, glow: 0xffcfb5 },
+      { core: 0xb28cff, glow: 0xe0d0ff },
+      { core: 0xff8fa7, glow: 0xffc8d5 },
+    ],
+    moons: [
+      { core: 0xf1ead6, glow: 0xffffff },
+    ],
+  },
+};
+
+function cloneLaunchPresets(launchPresets) {
+  return launchPresets.map((preset) => ({
+    angleDeg: preset.angleDeg,
+    power: preset.power,
+  }));
+}
+
+function cloneAdminSolutions(adminSolutions) {
+  return adminSolutions.map((solution) => ({
+    ...solution,
+    shots: solution.shots.map((shot) => ({ ...shot })),
+  }));
+}
+
+function clonePlanets(planets) {
+  return planets.map((planet) => ({ ...planet }));
+}
+
+function cloneLevel(baseId, overrides = {}) {
+  const base = coreLevelById.get(baseId);
+  if (!base) {
+    throw new Error(`Unknown base level "${baseId}".`);
+  }
+
+  const level = {
+    ...base,
+    ...overrides,
+    launchPresets: cloneLaunchPresets(overrides.launchPresets ?? base.launchPresets),
+    planets: clonePlanets(overrides.planets ?? base.planets),
+  };
+
+  if ('tutorial' in overrides) {
+    level.tutorial = overrides.tutorial;
+  } else if (base.tutorial) {
+    level.tutorial = { ...base.tutorial };
+  }
+
+  if ('adminSolutions' in overrides) {
+    if (overrides.adminSolutions === null || overrides.adminSolutions === undefined) {
+      delete level.adminSolutions;
+    } else {
+      level.adminSolutions = cloneAdminSolutions(overrides.adminSolutions);
+    }
+  } else if (base.adminSolutions) {
+    level.adminSolutions = cloneAdminSolutions(base.adminSolutions);
+  }
+
+  return level;
+}
+
+function shiftPolarPoint(point, radiusDelta = 0, angleDelta = 0) {
+  return polar(point.radius + radiusDelta, point.angleDeg + angleDelta);
+}
+
+function tuneLaunchPresets(launchPresets, angleDelta = 0, powerScale = 1) {
+  return launchPresets.map((preset) => ({
+    angleDeg: Number((preset.angleDeg + angleDelta).toFixed(1)),
+    power: Number(Math.max(0.85, preset.power * powerScale).toFixed(2)),
+  }));
+}
+
+function applyPlanetTweaks(planets, tweaks = {}) {
+  return planets.map((planet, planetIndex) => ({
+    ...planet,
+    ...(tweaks[planetIndex] ?? {}),
+  }));
+}
+
+function rethemePlanets(planets, themeKey) {
+  const theme = WORLD_THEMES[themeKey];
+  if (!theme) {
+    return clonePlanets(planets);
+  }
+
+  let landableIndex = 0;
+  let hazardIndex = 0;
+  let moonIndex = 0;
+
+  return planets.map((planet) => {
+    const palette = planet.orbitAround !== undefined
+      ? theme.moons[moonIndex++ % theme.moons.length]
+      : (
+        planet.landable
+          ? theme.landable[landableIndex++ % theme.landable.length]
+          : theme.hazards[hazardIndex++ % theme.hazards.length]
+      );
+    return {
+      ...planet,
+      core: palette.core,
+      glow: palette.glow,
+    };
+  });
+}
+
+function variantLevel(themeKey, spec) {
+  const base = coreLevelById.get(spec.baseId);
+  const startAnchorShift = spec.startAnchorShift ?? {};
+  const goalShift = spec.goalShift ?? {};
+  const goalOpenSeconds = spec.goalOpenSeconds
+    ?? Math.max(6, (base.goalOpenSeconds ?? DEFAULT_GOAL_OPEN_SECONDS) + (spec.goalOpenSecondsDelta ?? 0));
+  const planets = rethemePlanets(
+    applyPlanetTweaks(base.planets, spec.planetTweaks),
+    themeKey,
+  );
+  const nextLevel = cloneLevel(spec.baseId, {
+    id: spec.id,
+    name: spec.name,
+    summary: spec.summary ?? base.summary,
+    tutorial: null,
+    adminSolutions: null,
+    goalOpenSeconds,
+    startAnchor: shiftPolarPoint(
+      base.startAnchor,
+      startAnchorShift.radius ?? 0,
+      startAnchorShift.angle ?? 0,
+    ),
+    goalCenter: shiftPolarPoint(
+      base.goalCenter,
+      goalShift.radius ?? 0,
+      goalShift.angle ?? 0,
+    ),
+    launchPresets: tuneLaunchPresets(
+      base.launchPresets,
+      spec.launchAngleDelta ?? 0,
+      spec.powerScale ?? 1,
+    ),
+    goalPullRadius: spec.goalPullRadius ?? base.goalPullRadius,
+    goalPullStrength: spec.goalPullStrength ?? base.goalPullStrength,
+    planets,
+  });
+
+  if (spec.startTimeSeconds !== undefined) {
+    nextLevel.startTimeSeconds = spec.startTimeSeconds;
+  }
+
+  return nextLevel;
+}
+
+function makeIcyVariant(spec) {
+  const level = variantLevel('frostline', spec);
+  level.planets = level.planets.map((planet, index) => (
+    planet.landable
+      ? {
+        ...planet,
+        surfaceType: 'ice',
+        slideAngularSpeed: spec.slideAngularSpeeds?.[index]
+          ?? (((index % 2 === 0 ? 1 : -1) * (spec.defaultSlideAngularSpeed ?? 0.2))),
+        slideSettleSeconds: spec.slideSettleSeconds ?? 4,
+      }
+      : planet
+  ));
+  return level;
+}
+
+function makePortalVariant(spec) {
+  const level = variantLevel('prism', spec);
+  const pairSeed = spec.id;
+  level.portals = [
+    {
+      id: `${pairSeed}-white`,
+      pairId: `${pairSeed}-black`,
+      variant: 'white',
+      position: spec.portalWhite.position,
+      radius: spec.portalWhite.radius ?? 0.64,
+      orbitAngularSpeed: spec.portalWhite.orbitAngularSpeed ?? 0.34,
+      orbitEccentricity: spec.portalWhite.orbitEccentricity ?? 0.04,
+      orbitRotationDeg: spec.portalWhite.orbitRotationDeg,
+      core: 0xe8f6ff,
+      glow: 0x9fe9ff,
+    },
+    {
+      id: `${pairSeed}-black`,
+      pairId: `${pairSeed}-white`,
+      variant: 'black',
+      position: spec.portalBlack.position,
+      radius: spec.portalBlack.radius ?? 0.72,
+      orbitAngularSpeed: spec.portalBlack.orbitAngularSpeed ?? -0.18,
+      orbitEccentricity: spec.portalBlack.orbitEccentricity ?? 0.05,
+      orbitRotationDeg: spec.portalBlack.orbitRotationDeg,
+      core: 0x0b0616,
+      glow: 0x7e67ff,
+    },
+  ];
+  return level;
+}
+
+function makeBinaryVariant(spec) {
+  const level = variantLevel('singularity', spec);
+  const secondaryOrbitRadius = clamp((spec.extraSun.position.radius ?? 5) * 0.32, 1.35, 2.2);
+  const primaryOrbitRadius = clamp(secondaryOrbitRadius * 0.62, 0.78, 1.4);
+  const orbitAngleDeg = spec.extraSun.position.angleDeg ?? 0;
+  const orbitAngularSpeed = spec.extraSun.orbitAngularSpeed ?? 0.22;
+  level.binarySystem = {
+    primarySun: {
+      name: spec.primarySun?.name ?? 'Primary Sun',
+      position: polar(primaryOrbitRadius, orbitAngleDeg + 180),
+      radius: spec.primarySun?.radius ?? BINARY_PRIMARY_RADIUS,
+      gravityStrength: spec.primarySun?.gravityStrength ?? BINARY_PRIMARY_GRAVITY_STRENGTH,
+      collisionRadius: spec.primarySun?.collisionRadius ?? BINARY_PRIMARY_RADIUS,
+      orbitAngularSpeed,
+      orbitEccentricity: spec.primarySun?.orbitEccentricity ?? (spec.extraSun.orbitEccentricity ?? 0.04),
+      orbitRotationDeg: spec.primarySun?.orbitRotationDeg ?? spec.extraSun.orbitRotationDeg,
+      core: spec.primarySun?.core ?? 0xffdf96,
+      glow: spec.primarySun?.glow ?? 0xffa95a,
+    },
+    secondarySun: {
+      name: spec.extraSun.name ?? 'Second Sun',
+      position: polar(secondaryOrbitRadius, orbitAngleDeg),
+      radius: spec.extraSun.radius ?? BINARY_SECONDARY_RADIUS,
+      gravityStrength: spec.extraSun.gravityStrength ?? BINARY_SECONDARY_GRAVITY_STRENGTH,
+      collisionRadius: spec.extraSun.collisionRadius ?? BINARY_SECONDARY_RADIUS,
+      orbitAngularSpeed,
+      orbitEccentricity: spec.extraSun.orbitEccentricity ?? 0.04,
+      orbitRotationDeg: spec.extraSun.orbitRotationDeg,
+      core: spec.extraSun.core ?? 0x9ed7ff,
+      glow: spec.extraSun.glow ?? 0x65b7ff,
+    },
+  };
+  level.extraSuns = [];
+  level.planets = level.planets.map((planet, index) => {
+    if (planet.orbitAround !== undefined) {
+      return planet;
+    }
+    if (spec.secondaryOrbitIndices?.includes(index)) {
+      return { ...planet, orbitAnchor: 'secondary-sun' };
+    }
+    if (spec.primaryOrbitIndices?.includes(index)) {
+      return { ...planet, orbitAnchor: 'primary-sun' };
+    }
+    return { ...planet, orbitAnchor: 'system-center' };
+  });
+  return level;
+}
+
+function makeAncientVariant(spec) {
+  const level = variantLevel('ancient', spec);
+  level.goalUnlockRequired = true;
+  level.goalOpenSeconds = spec.goalOpenSeconds ?? level.goalOpenSeconds;
+  level.planets = level.planets.map((planet, index) => ({
+    ...planet,
+    goalUnlock: index === spec.unlockPlanetIndex,
+  }));
+  return level;
+}
+
+const ICY_WORLD_SPECS = [
+  { baseId: 'first-relay', id: 'polar-relay', name: 'Polar Relay', summary: 'Land on a frozen relay, then let the ball drift around the ice before you launch again.', defaultSlideAngularSpeed: 0.8, slideAngularSpeeds: { 0: 0.72, 1: -0.82 } },
+  { baseId: 'mirror-harbor', id: 'frost-gate', name: 'Frost Gate', summary: 'The two-gate relay only works if you let the icy harbor drift into the correct launch face.', defaultSlideAngularSpeed: 0.82 },
+  { baseId: 'guarded-relay', id: 'whiteout-lock', name: 'Whiteout Lock', summary: 'The outward relay is frozen solid, so the safe exit appears only after the ball skids around it.', defaultSlideAngularSpeed: -0.78 },
+  { baseId: 'forked-harbor', id: 'aurora-harbor', name: 'Aurora Harbor', summary: 'Both harbors are slick. Pick the right landing because the drift changes the outgoing angle.', defaultSlideAngularSpeed: 0.76 },
+  { baseId: 'inner-step', id: 'drift-step', name: 'Drift Step', summary: 'The first handoff is easy. The frozen outer relay is the real puzzle once the ball starts sliding.', defaultSlideAngularSpeed: -0.84 },
+  { baseId: 'moon-switch', id: 'ice-switch', name: 'Ice Switch', summary: 'Wake the outer lane from an icy switch world whose launch point keeps drifting after touchdown.', defaultSlideAngularSpeed: 0.8 },
+  { baseId: 'long-transfer', id: 'glacier-transfer', name: 'Glacier Transfer', summary: 'The outer station works, but the long frozen setup only lines up after a slow quarter-turn drift.', defaultSlideAngularSpeed: -0.8 },
+  { baseId: 'halo-run', id: 'frost-halo', name: 'Frost Halo', summary: 'A long halo route becomes an ice route: land, drift, and leave at the correct new face.', defaultSlideAngularSpeed: 0.78 },
+  { baseId: 'split-sentinel', id: 'rime-sentinel', name: 'Rime Sentinel', summary: 'The mirrored options both land safely, but only one icy stop drifts into a playable finish.', defaultSlideAngularSpeed: -0.82 },
+  { baseId: 'moon-catch', id: 'moon-glide', name: 'Moon Glide', summary: 'Catch the moving moon, then ride the icy relay until the launch face settles into place.', defaultSlideAngularSpeed: 0.84 },
+];
+
+const PORTAL_WORLD_SPECS = [
+  { baseId: 'moon-switch', id: 'aperture-switch', name: 'Aperture Switch', summary: 'Use the orbiting portal pair to redirect the shot onto the switch lane.', portalWhite: { position: polar(4.2, 138), orbitAngularSpeed: 0.46 }, portalBlack: { position: polar(7.2, -18), orbitAngularSpeed: -0.16 } },
+  { baseId: 'long-transfer', id: 'gate-transfer', name: 'Gate Transfer', summary: 'The outer station is too far without a white-hole transfer that preserves your speed.', portalWhite: { position: polar(3.8, 8), orbitAngularSpeed: 0.22 }, portalBlack: { position: polar(6.9, -52), orbitAngularSpeed: -0.12 } },
+  { baseId: 'halo-run', id: 'halo-gates', name: 'Halo Gates', summary: 'A portal on the inner lane feeds the long outer relay if you hit it with the right momentum.', portalWhite: { position: polar(4.6, 118), orbitAngularSpeed: 0.32 }, portalBlack: { position: polar(7.4, 6), orbitAngularSpeed: -0.1 } },
+  { baseId: 'split-sentinel', id: 'split-port', name: 'Split Port', summary: 'The mirrored routes converge at a portal pair, but only one exit preserves a playable line.', portalWhite: { position: polar(4.9, -18), orbitAngularSpeed: 0.28 }, portalBlack: { position: polar(7.8, 32), orbitAngularSpeed: -0.08 } },
+  { baseId: 'mirror-sweep', id: 'echo-port', name: 'Echo Port', summary: 'The late sweep now folds through a portal, turning one clean arc into a two-part transfer.', portalWhite: { position: polar(3.8, 24), orbitAngularSpeed: 0.4 }, portalBlack: { position: polar(6.8, 158), orbitAngularSpeed: -0.12 } },
+  { baseId: 'moon-catch', id: 'moon-gate', name: 'Moon Gate', summary: 'Catch the moon, then leave through a black gate to punch through the far side.', portalWhite: { position: polar(4.4, -34), orbitAngularSpeed: 0.2 }, portalBlack: { position: polar(7.6, 18), orbitAngularSpeed: -0.24 } },
+  { baseId: 'false-periapsis', id: 'aperture-bend', name: 'Aperture Bend', summary: 'The periapsis touch only works if the exit portal is arriving on the rim at the same moment.', portalWhite: { position: polar(4.3, -84), orbitAngularSpeed: 0.36 }, portalBlack: { position: polar(7.4, 18), orbitAngularSpeed: -0.14 } },
+  { baseId: 'crown-window', id: 'crown-gate', name: 'Crown Gate', summary: 'The crown still opens on a timer, but the route now jumps through an orbiting aperture first.', portalWhite: { position: polar(5.4, 96), orbitAngularSpeed: 0.3 }, portalBlack: { position: polar(8.2, 12), orbitAngularSpeed: -0.1 } },
+  { baseId: 'final-circuit', id: 'portal-circuit', name: 'Portal Circuit', summary: 'The clean circuit becomes a gate circuit: one portal handoff, one relay, one final burn.', portalWhite: { position: polar(4.2, 42), orbitAngularSpeed: 0.22 }, portalBlack: { position: polar(7.7, -18), orbitAngularSpeed: -0.18 } },
+  { baseId: 'outer-echo', id: 'echo-aperture', name: 'Echo Aperture', summary: 'The false inner line now feeds a portal pair that can either save or ruin the outer finish.', portalWhite: { position: polar(4.8, 162), orbitAngularSpeed: 0.34 }, portalBlack: { position: polar(7.9, 24), orbitAngularSpeed: -0.12 } },
+];
+
+const BINARY_WORLD_SPECS = [
+  { baseId: 'periapsis-moon', id: 'binary-moon', name: 'Binary Moon', summary: 'A second sun adds a sideways pull that changes the relay moon’s whole timing.', secondaryOrbitIndices: [3], extraSun: { position: polar(4.8, 158), core: 0xb7deff, glow: 0x67aaff } },
+  { baseId: 'outer-crown', id: 'double-crown', name: 'Double Crown', summary: 'The crown transfer is now bent by two suns, turning the midline into a figure-eight lane.', secondaryOrbitIndices: [4], extraSun: { position: polar(5.6, -132), core: 0x9ee0ff, glow: 0x59a2ff } },
+  { baseId: 'hot-giant', id: 'binary-giant', name: 'Binary Giant', summary: 'The giant is dangerous enough alone, but a cool companion sun drags the whole bend off-center.', extraSun: { position: polar(5.1, 148), core: 0xb6e2ff, glow: 0x62adff } },
+  { baseId: 'shielded-arc', id: 'dual-arc', name: 'Dual Arc', summary: 'The shielded arc only works while the two suns tug against each other across the lane.', extraSun: { position: polar(4.8, -158), core: 0xa8dcff, glow: 0x589dff } },
+  { baseId: 'sunlocked-relay', id: 'binary-sunlock', name: 'Binary Sunlock', summary: 'The launch world still faces the main sun, but the second star keeps shearing the outward burn.', extraSun: { position: polar(5.8, 168), core: 0xc2e7ff, glow: 0x6caeff } },
+  { baseId: 'mirror-harbor', id: 'twin-harbor', name: 'Twin Harbor', summary: 'Both harbors are playable, but the cooler sun makes one side of the system far heavier.', secondaryOrbitIndices: [2], extraSun: { position: polar(5.2, -26), core: 0xa8ddff, glow: 0x5ba8ff } },
+  { baseId: 'rim-switch', id: 'cross-suns', name: 'Cross Suns', summary: 'The switch route crosses the gravity seam between two suns on the way to the rim.', secondaryOrbitIndices: [2], extraSun: { position: polar(4.6, 24), core: 0xbde7ff, glow: 0x6bb1ff } },
+  { baseId: 'counterspin-gate', id: 'counterdouble', name: 'Counterdouble', summary: 'The off-angle launch now stabilizes under two competing suns before you ever reach the gate.', secondaryOrbitIndices: [3], extraSun: { position: polar(4.9, -148), core: 0xb0e0ff, glow: 0x5fa5ff } },
+  { baseId: 'guarded-relay', id: 'binary-guard', name: 'Binary Guard', summary: 'The relay route still survives, but the second sun squeezes the last outward seam.', secondaryOrbitIndices: [1], extraSun: { position: polar(5.8, 146), core: 0xbfe8ff, glow: 0x71b4ff } },
+  { baseId: 'double-slalom', id: 'binary-slalom', name: 'Binary Slalom', summary: 'The slalom already threads giants; now the twin suns twist the approach into a deeper S-curve.', extraSun: { position: polar(5.3, 142), core: 0xb2ddff, glow: 0x63a7ff } },
+];
+
+const ANCIENT_WORLD_SPECS = [
+  { baseId: 'twin-shepherds', id: 'monolith-wardens', name: 'Monolith Wardens', summary: 'Touch the ancient monolith first. Only then will the black hole awaken between the wardens.', unlockPlanetIndex: 1, goalOpenSeconds: 9 },
+  { baseId: 'periapsis-brood', id: 'altar-brood', name: 'Altar Brood', summary: 'The brood guards the altar world; land there to open the finish before the timer begins.', unlockPlanetIndex: 1, goalOpenSeconds: 8 },
+  { baseId: 'far-side-switch', id: 'far-altar-switch', name: 'Far Altar Switch', summary: 'The far-side opening only matters after the monolith world has lit the goal.', unlockPlanetIndex: 2, goalOpenSeconds: 8 },
+  { baseId: 'halo-shepherds', id: 'halo-monolith', name: 'Halo Monolith', summary: 'The halo route starts locked. Reach the monolith planet, then sprint the outer seam.', unlockPlanetIndex: 1, goalOpenSeconds: 8 },
+  { baseId: 'long-brood', id: 'vault-monolith', name: 'Vault Monolith', summary: 'The long route is impossible until the ancient vault planet opens the black hole.', unlockPlanetIndex: 2, goalOpenSeconds: 8 },
+  { baseId: 'guarded-brood', id: 'guarded-monolith', name: 'Guarded Monolith', summary: 'A guarded relay and a monolith planet must both be respected before the finish is available.', unlockPlanetIndex: 1, goalOpenSeconds: 7.5 },
+  { baseId: 'countermoon-gate', id: 'moon-obelisk', name: 'Moon Obelisk', summary: 'The countermoon shapes the route, but the real objective is waking the obelisk first.', unlockPlanetIndex: 2, goalOpenSeconds: 8 },
+  { baseId: 'crown-lattice', id: 'sealed-lattice', name: 'Sealed Lattice', summary: 'The crown lattice ends in a sealed hole until the lattice monolith has been touched.', unlockPlanetIndex: 1, goalOpenSeconds: 7.5 },
+  { baseId: 'shepherd-crown', id: 'shepherd-shrine', name: 'Shepherd Shrine', summary: 'The shrine world opens the final crown, but only for a short ancient window.', unlockPlanetIndex: 1, goalOpenSeconds: 7.5 },
+  { baseId: 'final-moon-circuit', id: 'unlock-circuit', name: 'Unlock Circuit', summary: 'The last circuit of the campaign first asks for a monolith landing, then a clean relay escape.', unlockPlanetIndex: 2, goalOpenSeconds: 7 },
+];
+
+const EXPANSION_LEVEL_DEFINITIONS = [
+  ...ICY_WORLD_SPECS.map((spec) => makeIcyVariant(spec)),
+  ...PORTAL_WORLD_SPECS.map((spec) => makePortalVariant(spec)),
+  ...BINARY_WORLD_SPECS.map((spec) => makeBinaryVariant(spec)),
+  ...ANCIENT_WORLD_SPECS.map((spec) => makeAncientVariant(spec)),
+];
+
+const LEVEL_DEFINITIONS = [...CORE_LEVEL_DEFINITIONS, ...EXPANSION_LEVEL_DEFINITIONS];
+
 const CAMPAIGN_LEVEL_ORDER = [
   'open-lane',
   'first-arc',
@@ -1096,6 +1510,46 @@ const CAMPAIGN_LEVEL_ORDER = [
   'crown-lattice',
   'shepherd-crown',
   'final-moon-circuit',
+  'polar-relay',
+  'frost-gate',
+  'whiteout-lock',
+  'aurora-harbor',
+  'drift-step',
+  'ice-switch',
+  'glacier-transfer',
+  'frost-halo',
+  'rime-sentinel',
+  'moon-glide',
+  'aperture-switch',
+  'gate-transfer',
+  'halo-gates',
+  'split-port',
+  'echo-port',
+  'moon-gate',
+  'aperture-bend',
+  'crown-gate',
+  'portal-circuit',
+  'echo-aperture',
+  'binary-moon',
+  'double-crown',
+  'binary-giant',
+  'dual-arc',
+  'binary-sunlock',
+  'twin-harbor',
+  'cross-suns',
+  'counterdouble',
+  'binary-guard',
+  'binary-slalom',
+  'monolith-wardens',
+  'altar-brood',
+  'far-altar-switch',
+  'halo-monolith',
+  'vault-monolith',
+  'guarded-monolith',
+  'moon-obelisk',
+  'sealed-lattice',
+  'shepherd-shrine',
+  'unlock-circuit',
 ];
 
 const campaignOrderIndex = new Map(
@@ -1272,6 +1726,13 @@ function validateLevelDefinition(level) {
     }
 
     if (
+      planet.orbitAnchor !== undefined
+      && !['system-center', 'primary-sun', 'secondary-sun'].includes(planet.orbitAnchor)
+    ) {
+      throw new Error(`Level "${level.id}" planet "${planet.name}" uses an invalid orbitAnchor.`);
+    }
+
+    if (
       planet.orbitAround !== undefined
       && (
         !Number.isInteger(planet.orbitAround)
@@ -1355,6 +1816,103 @@ function resolveOrbitCenterIndex(source, planetsLength, planetIndex) {
   return source.orbitAround;
 }
 
+function createOrbitalBodyRuntime(source, sun, index, radiusScale = 1) {
+  const basePosition = scalePointFromSun(pointFromPolar(source.position), sun);
+  const scaledRadius = (source.radius ?? 0.5) * radiusScale;
+  return {
+    ...source,
+    index,
+    radius: scaledRadius,
+    basePosition,
+    position: cloneVec(basePosition),
+    orbitCenter: cloneVec(sun),
+    ...createOrbitDefaults(source, basePosition, sun, index),
+  };
+}
+
+function getOrbitalBodyState(body, time, orbitCenter) {
+  if (!body) {
+    return {
+      position: cloneVec(orbitCenter),
+      velocity: vec(0, 0),
+      orbitCenter: cloneVec(orbitCenter),
+    };
+  }
+
+  if (!body.orbitRadius || !body.orbitSpeed) {
+    return {
+      position: cloneVec(body.basePosition),
+      velocity: vec(0, 0),
+      orbitCenter: cloneVec(orbitCenter),
+    };
+  }
+
+  const anomaly = wrapAngleRad(body.orbitPhase + time * body.orbitSpeed);
+  const offset = getOrbitOffset(body, anomaly);
+  const nextOffset = getOrbitOffset(body, anomaly + 0.0005);
+  const velocityOffset = vec(
+    (nextOffset.x - offset.x) / 0.0005,
+    (nextOffset.y - offset.y) / 0.0005,
+  );
+  return {
+    position: vec(
+      orbitCenter.x + offset.x,
+      orbitCenter.y + offset.y,
+    ),
+    velocity: vec(
+      velocityOffset.x * body.orbitSpeed,
+      velocityOffset.y * body.orbitSpeed,
+    ),
+    orbitCenter: cloneVec(orbitCenter),
+  };
+}
+
+function setOrbitalBodyTime(body, time, orbitCenter) {
+  if (!body) {
+    return;
+  }
+
+  const state = getOrbitalBodyState(body, time, orbitCenter);
+  body.orbitCenter.x = state.orbitCenter.x;
+  body.orbitCenter.y = state.orbitCenter.y;
+  body.position.x = state.position.x;
+  body.position.y = state.position.y;
+  body.velocity = state.velocity;
+}
+
+function getSystemCenter(level) {
+  return level.systemCenter ?? level.sun;
+}
+
+function getSecondarySunBody(level) {
+  return level.secondarySunBody
+    ?? (level.extraSuns ?? []).find((solarBody) => solarBody.binaryRole === 'secondary-sun')
+    ?? null;
+}
+
+function getDynamicOrbitAnchorState(level, planet, time) {
+  const systemCenter = getSystemCenter(level);
+  if (planet.orbitAnchor === 'primary-sun' && level.primarySunBody) {
+    return {
+      position: cloneVec(level.primarySunBody.position),
+      velocity: cloneVec(level.primarySunBody.velocity ?? vec(0, 0)),
+    };
+  }
+  if (planet.orbitAnchor === 'secondary-sun') {
+    const secondarySun = getSecondarySunBody(level);
+    if (secondarySun) {
+      return {
+        position: cloneVec(secondarySun.position),
+        velocity: cloneVec(secondarySun.velocity ?? vec(0, 0)),
+      };
+    }
+  }
+  return {
+    position: cloneVec(systemCenter),
+    velocity: vec(0, 0),
+  };
+}
+
 function getOrbitOffset(planet, anomaly) {
   if (!planet.orbitSemiMajor || !planet.orbitSpeed) {
     return vec(0, 0);
@@ -1387,13 +1945,17 @@ function getOrbitState(level, planetIndex, time, cache = new Map()) {
   }
 
   const planet = level.planets[planetIndex];
-  let orbitCenter = cloneVec(level.sun);
+  let orbitCenter = cloneVec(getSystemCenter(level));
   let centerVelocity = vec(0, 0);
 
   if (planet.orbitCenterIndex !== null && planet.orbitCenterIndex !== undefined) {
     const parentState = getOrbitState(level, planet.orbitCenterIndex, time, cache);
     orbitCenter = cloneVec(parentState.position);
     centerVelocity = cloneVec(parentState.velocity);
+  } else {
+    const dynamicAnchorState = getDynamicOrbitAnchorState(level, planet, time);
+    orbitCenter = dynamicAnchorState.position;
+    centerVelocity = dynamicAnchorState.velocity;
   }
 
   if (!planet.orbitRadius || !planet.orbitSpeed) {
@@ -1432,6 +1994,15 @@ function getOrbitState(level, planetIndex, time, cache = new Map()) {
 
 export function setLevelTime(level, time) {
   level.time = time;
+  const systemCenter = getSystemCenter(level);
+  if (level.primarySunBody) {
+    setOrbitalBodyTime(level.primarySunBody, time, systemCenter);
+    level.sun.x = level.primarySunBody.position.x;
+    level.sun.y = level.primarySunBody.position.y;
+  }
+  level.extraSuns?.forEach((solarBody) => {
+    setOrbitalBodyTime(solarBody, time, systemCenter);
+  });
   const orbitStateCache = new Map();
   level.planets.forEach((planet) => {
     const orbitState = getOrbitState(level, planet.index, time, orbitStateCache);
@@ -1440,28 +2011,63 @@ export function setLevelTime(level, time) {
     planet.orbitCenter.x = orbitState.orbitCenter.x;
     planet.orbitCenter.y = orbitState.orbitCenter.y;
   });
+  level.portals?.forEach((portal) => {
+    setOrbitalBodyTime(portal, time, systemCenter);
+  });
   return level;
 }
 
 export function getGoalCloseTime(level) {
+  if (GOAL_ALWAYS_OPEN) {
+    return Number.POSITIVE_INFINITY;
+  }
+  if (level.goalUnlockRequired) {
+    if (!level.goalUnlocked || !Number.isFinite(level.goalUnlockTime)) {
+      return Number.POSITIVE_INFINITY;
+    }
+    return level.goalUnlockTime + (level.goalOpenSeconds ?? DEFAULT_GOAL_OPEN_SECONDS);
+  }
   return (level.startTimeSeconds ?? 0) + (level.goalOpenSeconds ?? DEFAULT_GOAL_OPEN_SECONDS);
 }
 
 export function getGoalRemainingTime(level, time = level.time ?? 0) {
+  if (GOAL_ALWAYS_OPEN) {
+    return Number.POSITIVE_INFINITY;
+  }
+  if (level.goalUnlockRequired && !level.goalUnlocked) {
+    return level.goalOpenSeconds ?? DEFAULT_GOAL_OPEN_SECONDS;
+  }
   return Math.max(0, getGoalCloseTime(level) - time);
 }
 
 export function getGoalRemainingFraction(level, time = level.time ?? 0) {
+  if (GOAL_ALWAYS_OPEN) {
+    return 1;
+  }
   const duration = Math.max(0.001, level.goalOpenSeconds ?? DEFAULT_GOAL_OPEN_SECONDS);
   return clamp(getGoalRemainingTime(level, time) / duration, 0, 1);
 }
 
 export function isGoalOpen(level, time = level.time ?? 0) {
+  if (GOAL_ALWAYS_OPEN) {
+    return true;
+  }
+  if (level.goalUnlockRequired && !level.goalUnlocked) {
+    return false;
+  }
   return getGoalRemainingTime(level, time) > 0.000001;
 }
 
+export function isGoalLocked(level) {
+  if (GOAL_ALWAYS_OPEN) {
+    return false;
+  }
+  return Boolean(level.goalUnlockRequired && !level.goalUnlocked);
+}
+
 export function getBallSurfaceRadius(planet) {
-  return planet.radius + COURSE.ballRadius + PLANET_LANDING_PADDING;
+  return planet.radius + COURSE.ballRadius + PLANET_LANDING_PADDING
+    + (planet?.surfaceType === 'ice' ? ICE_PLANET_LANDING_PADDING : 0);
 }
 
 export function getPlanetVelocity(level, planetIndex, time = level.time ?? 0) {
@@ -1487,19 +2093,47 @@ export function advanceBallAnchor(level, ball, delta) {
   if (planet.spinSpeed) {
     ball.anchorNormal = normalize(rotateVector(ball.anchorNormal ?? vec(1, 0), planet.spinSpeed * delta));
   }
+  const slideAngularSpeed = getPlanetSlideAngularSpeed(planet, ball);
+  if (slideAngularSpeed) {
+    ball.anchorNormal = normalize(rotateVector(ball.anchorNormal ?? vec(1, 0), slideAngularSpeed * delta));
+  }
 
   syncBallToAnchor(level, ball);
 }
 
-export function getPlanetSurfaceVelocity(level, planetIndex, anchorNormal) {
+export function getPlanetSlideAngularSpeed(planet, ball) {
+  if (!planet || !planet.slideAngularSpeed || planet.surfaceType !== 'ice') {
+    return 0;
+  }
+
+  if ((ball?.landingCount ?? 0) <= 0 && !planet.slideFromStart) {
+    return 0;
+  }
+
+  const settleSeconds = Math.max(0.25, planet.slideSettleSeconds ?? 4);
+  const anchorSinceTime = ball?.anchorSinceTime ?? ball?.time ?? 0;
+  const currentTime = ball?.time ?? anchorSinceTime;
+  const elapsed = Math.max(0, currentTime - anchorSinceTime);
+  const t = Math.min(1, elapsed / settleSeconds);
+  const baseSpeed = planet.slideAngularSpeed * Math.pow(1 - t, 1.35);
+  const skidSeconds = Math.min(settleSeconds * 0.34, planet.slideSkidSeconds ?? 0.9);
+  if (elapsed >= skidSeconds) {
+    return baseSpeed;
+  }
+  const skidT = Math.min(1, elapsed / skidSeconds);
+  const skidBoost = planet.slideAngularSpeed * (planet.slideSkidBoost ?? 0.95) * (1 - skidT);
+  return baseSpeed + skidBoost;
+}
+
+export function getPlanetSurfaceVelocity(level, planetIndex, anchorNormal, ball = null) {
   const planet = level.planets[planetIndex];
-  if (!planet || !planet.spinSpeed) {
+  if (!planet || (!planet.spinSpeed && !planet.slideAngularSpeed)) {
     return vec(0, 0);
   }
 
   const normal = normalize(anchorNormal ?? vec(1, 0));
   const tangent = vec(-normal.y, normal.x);
-  const speed = getBallSurfaceRadius(planet) * planet.spinSpeed;
+  const speed = getBallSurfaceRadius(planet) * ((planet.spinSpeed ?? 0) + getPlanetSlideAngularSpeed(planet, ball));
   return vec(tangent.x * speed, tangent.y * speed);
 }
 
@@ -1512,6 +2146,8 @@ function cloneBallRuntimeState(ball) {
     launchGracePlanetIndex: ball.launchGracePlanetIndex ?? null,
     anchorPlanetIndex: ball.anchorPlanetIndex ?? null,
     anchorNormal: ball.anchorNormal ? cloneVec(ball.anchorNormal) : null,
+    anchorSinceTime: ball.anchorSinceTime ?? 0,
+    portalCooldown: ball.portalCooldown ?? 0,
   };
 }
 
@@ -1542,20 +2178,43 @@ function inferStartPlanetIndex(source, planets) {
 export function createLevelRuntime(index) {
   const source = LEVELS[index];
   validateLevelDefinition(source);
+  const worldIndex = Math.floor(index / WORLD_SIZE);
+  const worldDefinition = WORLD_DEFINITIONS[worldIndex]
+    ?? { id: `world-${worldIndex + 1}`, name: `World ${worldIndex + 1}` };
   const launchPresets = source.launchPresets.map((preset) => ({
     angleDeg: preset.angleDeg,
     power: preset.power,
   }));
-  const sun = vec(source.sun?.[0] ?? 0, source.sun?.[1] ?? 0);
-  const scaledStartAnchor = scalePointFromSun(pointFromPolar(source.startAnchor), sun);
-  const scaledGoalCenter = scalePointFromSun(pointFromPolar(source.goalCenter), sun);
+  const systemCenter = vec(source.sun?.[0] ?? 0, source.sun?.[1] ?? 0);
+  const scaledStartAnchor = scalePointFromSun(pointFromPolar(source.startAnchor), systemCenter);
+  const scaledGoalCenter = scalePointFromSun(pointFromPolar(source.goalCenter), systemCenter);
   const basePositions = source.planets.map((planet) => (
-    scalePointFromSun(pointFromPolar(planet.position), sun)
+    scalePointFromSun(pointFromPolar(planet.position), systemCenter)
   ));
+  const primarySunBody = source.binarySystem?.primarySun
+    ? {
+      ...createOrbitalBodyRuntime(source.binarySystem.primarySun, systemCenter, 0, 1),
+      gravityStrength: source.binarySystem.primarySun.gravityStrength ?? BINARY_PRIMARY_GRAVITY_STRENGTH,
+      collisionRadius: source.binarySystem.primarySun.collisionRadius ?? BINARY_PRIMARY_RADIUS,
+    }
+    : null;
+  const secondarySunBody = source.binarySystem?.secondarySun
+    ? {
+      ...createOrbitalBodyRuntime(source.binarySystem.secondarySun, systemCenter, 0, 1),
+      binaryRole: 'secondary-sun',
+      gravityStrength: source.binarySystem.secondarySun.gravityStrength ?? DEFAULT_EXTRA_SUN_GRAVITY_STRENGTH,
+      collisionRadius: source.binarySystem.secondarySun.collisionRadius ?? DEFAULT_EXTRA_SUN_COLLISION_RADIUS,
+    }
+    : null;
   const planets = source.planets.map((planet, planetIndex) => {
     const orbitCenterIndex = resolveOrbitCenterIndex(planet, source.planets.length, planetIndex);
     const basePosition = basePositions[planetIndex];
-    const orbitCenterPosition = orbitCenterIndex !== null ? basePositions[orbitCenterIndex] : sun;
+    let orbitCenterPosition = orbitCenterIndex !== null ? basePositions[orbitCenterIndex] : systemCenter;
+    if (orbitCenterIndex === null && planet.orbitAnchor === 'primary-sun' && primarySunBody) {
+      orbitCenterPosition = primarySunBody.basePosition;
+    } else if (orbitCenterIndex === null && planet.orbitAnchor === 'secondary-sun' && secondarySunBody) {
+      orbitCenterPosition = secondarySunBody.basePosition;
+    }
     const scaledRadius = planet.radius * PLANET_RADIUS_SCALE;
     return {
       ...planet,
@@ -1570,6 +2229,22 @@ export function createLevelRuntime(index) {
       position: cloneVec(basePosition),
     };
   });
+  const authoredExtraSuns = Array.isArray(source.extraSuns)
+    ? source.extraSuns.map((solarBody, solarIndex) => ({
+      ...createOrbitalBodyRuntime(solarBody, systemCenter, solarIndex),
+      gravityStrength: solarBody.gravityStrength ?? DEFAULT_EXTRA_SUN_GRAVITY_STRENGTH,
+      collisionRadius: solarBody.collisionRadius ?? DEFAULT_EXTRA_SUN_COLLISION_RADIUS,
+    }))
+    : [];
+  const extraSuns = secondarySunBody ? [secondarySunBody, ...authoredExtraSuns] : authoredExtraSuns;
+  const portals = Array.isArray(source.portals)
+    ? source.portals.map((portal, portalIndex) => ({
+      ...createOrbitalBodyRuntime(portal, systemCenter, portalIndex),
+      pairId: portal.pairId ?? null,
+      variant: portal.variant ?? 'white',
+      cooldownSeconds: portal.cooldownSeconds ?? PORTAL_COOLDOWN_SECONDS,
+    }))
+    : [];
   const startPlanetIndex = inferStartPlanetIndex(source, planets);
   const startPlanet = planets[startPlanetIndex];
   const startAngleDeg = source.startAngleDeg
@@ -1579,11 +2254,21 @@ export function createLevelRuntime(index) {
 
   const level = {
     ...source,
+    worldIndex,
+    worldNumber: worldIndex + 1,
+    worldId: source.worldId ?? worldDefinition.id,
+    worldName: source.worldName ?? worldDefinition.name,
+    worldLevelNumber: (index % WORLD_SIZE) + 1,
+    worldSize: WORLD_SIZE,
+    worldCount: WORLD_DEFINITIONS.length,
     startAnchor: scaledStartAnchor,
     goalCenter: scaledGoalCenter,
     launchPreset: { ...launchPresets[0] },
     launchPresets,
-    sun,
+    sun: cloneVec(primarySunBody?.basePosition ?? systemCenter),
+    systemCenter,
+    primarySunBody,
+    secondarySunBody,
     startPlanetIndex,
     startAngleDeg,
     startTimeSeconds: source.startTimeSeconds ?? 0,
@@ -1592,7 +2277,12 @@ export function createLevelRuntime(index) {
     goalRadius: source.goalRadius ?? COURSE.goalRadius,
     goalPullRadius: source.goalPullRadius ?? COURSE.goalPullRadius,
     goalPullStrength: source.goalPullStrength ?? COURSE.goalPullStrength,
+    goalUnlockRequired: Boolean(source.goalUnlockRequired),
+    goalUnlocked: !source.goalUnlockRequired,
+    goalUnlockTime: source.goalUnlockRequired ? null : (source.startTimeSeconds ?? 0),
     planets,
+    extraSuns,
+    portals,
   };
 
   if (!level.planets[level.startPlanetIndex].landable) {
@@ -1618,6 +2308,8 @@ export function createBallState(level) {
     launchGracePlanetIndex: level.startPlanetIndex,
     anchorPlanetIndex: level.startPlanetIndex,
     anchorNormal,
+    anchorSinceTime: level.time ?? 0,
+    portalCooldown: 0,
   };
 }
 
@@ -1662,6 +2354,8 @@ function landBallOnPlanet(ball, planet, planetIndex) {
   ball.launchGracePlanetIndex = null;
   ball.anchorPlanetIndex = planetIndex;
   ball.anchorNormal = landingDirection;
+  ball.anchorSinceTime = ball.time ?? 0;
+  ball.portalCooldown = 0;
 }
 
 function findContainingLandingPlanetIndex(level, position) {
@@ -1671,7 +2365,7 @@ function findContainingLandingPlanetIndex(level, position) {
       continue;
     }
 
-    const landingRadius = planet.landingRadius ?? planet.radius + COURSE.ballRadius + PLANET_LANDING_PADDING;
+    const landingRadius = planet.landingRadius ?? getBallSurfaceRadius(planet);
     if (distanceBetween(position, planet.position) <= landingRadius) {
       return index;
     }
@@ -1689,7 +2383,7 @@ function resolvePlanetContact(level, ball) {
     );
     const distance = Math.max(length(toPlanet), 0.001);
     const touchRadius = planet.radius + COURSE.ballRadius * PLANET_COLLISION_PADDING;
-    const landingRadius = planet.landingRadius ?? planet.radius + COURSE.ballRadius + PLANET_LANDING_PADDING;
+    const landingRadius = planet.landingRadius ?? getBallSurfaceRadius(planet);
 
     if (
       ball.launchGracePlanetIndex === index &&
@@ -1710,10 +2404,16 @@ function resolvePlanetContact(level, ball) {
         ),
       });
       landBallOnPlanet(ball, planet, index);
+      const goalUnlocked = Boolean(planet.goalUnlock && level.goalUnlockRequired && !level.goalUnlocked);
+      if (goalUnlocked) {
+        level.goalUnlocked = true;
+        level.goalUnlockTime = ball.time ?? level.time ?? 0;
+      }
       return {
         type: 'landed',
         planetIndex: index,
         planetName: planet.name ?? 'relay world',
+        goalUnlocked,
         eventState,
         displayEventState,
       };
@@ -1731,12 +2431,63 @@ function resolvePlanetContact(level, ball) {
 }
 
 function resolveSunContact(level, ball) {
-  const touchRadius = SUN_COLLISION_RADIUS + COURSE.ballRadius * PLANET_COLLISION_PADDING;
+  const touchRadius = (level.primarySunBody?.collisionRadius ?? SUN_COLLISION_RADIUS) + COURSE.ballRadius * PLANET_COLLISION_PADDING;
   if (distanceBetween(ball.position, level.sun) <= touchRadius) {
     const eventState = cloneBallRuntimeState(ball);
     ball.velocity.x = 0;
     ball.velocity.y = 0;
     return { type: 'crash', reason: 'sun', eventState, displayEventState: cloneBallRuntimeState(eventState) };
+  }
+
+  for (const solarBody of level.extraSuns ?? []) {
+    const collisionRadius = (solarBody.collisionRadius ?? DEFAULT_EXTRA_SUN_COLLISION_RADIUS) + COURSE.ballRadius * PLANET_COLLISION_PADDING;
+    if (distanceBetween(ball.position, solarBody.position) <= collisionRadius) {
+      const eventState = cloneBallRuntimeState(ball);
+      ball.velocity.x = 0;
+      ball.velocity.y = 0;
+      return { type: 'crash', reason: 'sun', eventState, displayEventState: cloneBallRuntimeState(eventState) };
+    }
+  }
+
+  return null;
+}
+
+function resolvePortalContact(level, ball) {
+  if ((ball.portalCooldown ?? 0) > 0) {
+    return null;
+  }
+
+  for (const portal of level.portals ?? []) {
+    if (distanceBetween(ball.position, portal.position) > portal.radius + COURSE.ballRadius * 0.78) {
+      continue;
+    }
+
+    const exitPortal = (level.portals ?? []).find((candidate) => candidate.id === portal.pairId);
+    if (!exitPortal) {
+      continue;
+    }
+
+    const eventState = cloneBallRuntimeState(ball);
+    const offset = vec(
+      ball.position.x - portal.position.x,
+      ball.position.y - portal.position.y,
+    );
+    const exitOffset = lengthSq(offset) > 0.000001
+      ? offset
+      : (() => {
+        const direction = lengthSq(ball.velocity) > 0.000001 ? normalize(ball.velocity) : vec(1, 0);
+        return vec(direction.x * (exitPortal.radius + COURSE.ballRadius * 0.8), direction.y * (exitPortal.radius + COURSE.ballRadius * 0.8));
+      })();
+    ball.position.x = exitPortal.position.x + exitOffset.x;
+    ball.position.y = exitPortal.position.y + exitOffset.y;
+    ball.portalCooldown = Math.max(portal.cooldownSeconds ?? PORTAL_COOLDOWN_SECONDS, exitPortal.cooldownSeconds ?? PORTAL_COOLDOWN_SECONDS);
+    return {
+      time: ball.time ?? level.time ?? 0,
+      fromPortalId: portal.id,
+      toPortalId: exitPortal.id,
+      preState: eventState,
+      postState: cloneBallRuntimeState(ball),
+    };
   }
 
   return null;
@@ -1772,13 +2523,24 @@ export function samplePlanetGravity(level, point) {
     netGravity.y += direction.y * pull;
   }
 
-  if (FIXED_SOLAR_GRAVITY_STRENGTH > 0) {
+  const solarBodies = [
+    { position: level.sun, gravityStrength: level.primarySunBody?.gravityStrength ?? FIXED_SOLAR_GRAVITY_STRENGTH },
+    ...(level.extraSuns ?? []).map((solarBody) => ({
+      position: solarBody.position,
+      gravityStrength: solarBody.gravityStrength ?? DEFAULT_EXTRA_SUN_GRAVITY_STRENGTH,
+    })),
+  ];
+
+  for (const solarBody of solarBodies) {
+    if (!(solarBody.gravityStrength > 0)) {
+      continue;
+    }
     const toSun = vec(
-      level.sun.x - point.x,
-      level.sun.y - point.y,
+      solarBody.position.x - point.x,
+      solarBody.position.y - point.y,
     );
     const distance = Math.max(length(toSun), 0.001);
-    const pull = FIXED_SOLAR_GRAVITY_STRENGTH * SOLAR_GRAVITY_MULTIPLIER / (distance * distance + SOLAR_GRAVITY_SOFTENING);
+    const pull = solarBody.gravityStrength * SOLAR_GRAVITY_MULTIPLIER / (distance * distance + SOLAR_GRAVITY_SOFTENING);
     const direction = normalize(toSun);
     netGravity.x += direction.x * pull;
     netGravity.y += direction.y * pull;
@@ -1791,7 +2553,7 @@ function sampleBallAcceleration(level, point) {
   const acceleration = samplePlanetGravity(level, point);
   const toGoal = vec(level.goalCenter.x - point.x, level.goalCenter.y - point.y);
   const goalDistance = Math.max(length(toGoal), 0.001);
-  if (goalDistance < level.goalPullRadius) {
+  if (isGoalOpen(level, level.time ?? 0) && goalDistance < level.goalPullRadius) {
     const pull = level.goalPullStrength / (goalDistance * goalDistance + 0.38);
     const direction = normalize(toGoal);
     acceleration.x += direction.x * pull;
@@ -1814,8 +2576,9 @@ export function stepBall(level, ball, delta) {
   const nextTime = (ball.time ?? level.time ?? 0) + delta;
   setLevelTime(level, nextTime);
   ball.time = nextTime;
+  ball.portalCooldown = Math.max(0, (ball.portalCooldown ?? 0) - delta);
 
-  if (!isGoalOpen(level, ball.time)) {
+  if ((!level.goalUnlockRequired || level.goalUnlocked) && !isGoalOpen(level, ball.time)) {
     const eventState = cloneBallRuntimeState(ball);
     ball.velocity.x = 0;
     ball.velocity.y = 0;
@@ -1829,7 +2592,7 @@ export function stepBall(level, ball, delta) {
   const toGoal = vec(level.goalCenter.x - ball.position.x, level.goalCenter.y - ball.position.y);
   const goalDistance = Math.max(length(toGoal), 0.001);
 
-  if (goalDistance < level.goalRadius * GOAL_CAPTURE_RATIO) {
+  if (isGoalOpen(level, ball.time) && goalDistance < level.goalRadius * GOAL_CAPTURE_RATIO) {
     const eventState = cloneBallRuntimeState(ball);
     ball.velocity.x = 0;
     ball.velocity.y = 0;
@@ -1838,13 +2601,25 @@ export function stepBall(level, ball, delta) {
 
   addScaledVec(ball.position, ball.velocity, delta);
 
+  const portalEvent = resolvePortalContact(level, ball);
+
+  const postPortalGoalDistance = Math.max(distanceBetween(ball.position, level.goalCenter), 0.001);
+  if (isGoalOpen(level, ball.time) && postPortalGoalDistance < level.goalRadius * GOAL_CAPTURE_RATIO) {
+    const eventState = cloneBallRuntimeState(ball);
+    ball.velocity.x = 0;
+    ball.velocity.y = 0;
+    return { type: 'goal', eventState, displayEventState: cloneBallRuntimeState(eventState), portalEvent };
+  }
+
   const sunContactResult = resolveSunContact(level, ball);
   if (sunContactResult) {
+    sunContactResult.portalEvent = portalEvent;
     return sunContactResult;
   }
 
   const contactResult = resolvePlanetContact(level, ball);
   if (contactResult) {
+    contactResult.portalEvent = portalEvent;
     return contactResult;
   }
 
@@ -1859,17 +2634,17 @@ export function stepBall(level, ball, delta) {
     const eventState = cloneBallRuntimeState(ball);
     ball.velocity.x = 0;
     ball.velocity.y = 0;
-    return { type: 'crash', reason: 'bounds', eventState, displayEventState: cloneBallRuntimeState(eventState) };
+    return { type: 'crash', reason: 'bounds', eventState, displayEventState: cloneBallRuntimeState(eventState), portalEvent };
   }
 
   if (length(ball.velocity) < BALL_STOP_SPEED) {
     const eventState = cloneBallRuntimeState(ball);
     ball.velocity.x = 0;
     ball.velocity.y = 0;
-    return { type: 'settled', eventState, displayEventState: cloneBallRuntimeState(eventState) };
+    return { type: 'settled', eventState, displayEventState: cloneBallRuntimeState(eventState), portalEvent };
   }
 
-  return { type: 'flying' };
+  return { type: 'flying', portalEvent };
 }
 
 export function reverseStepBall(level, ball, delta, options = {}) {
@@ -1904,7 +2679,7 @@ export function reverseStepBall(level, ball, delta, options = {}) {
     const launchPlanet = level.planets[launchPlanetIndex];
     if (launchPlanet) {
       const clearanceRadius =
-        (launchPlanet.landingRadius ?? launchPlanet.radius + COURSE.ballRadius + PLANET_LANDING_PADDING)
+        (launchPlanet.landingRadius ?? getBallSurfaceRadius(launchPlanet))
         + PLANET_LANDING_PADDING;
       ball.launchGracePlanetIndex = distanceBetween(ball.position, launchPlanet.position) <= clearanceRadius
         ? launchPlanetIndex

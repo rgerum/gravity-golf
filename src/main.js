@@ -18,8 +18,10 @@ import {
   getBallSurfaceRadius,
   getGoalRemainingFraction,
   getGoalRemainingTime,
+  getPlanetSlideAngularSpeed,
   getPlanetVelocity,
   getPlanetSurfaceVelocity,
+  isGoalLocked,
   isGoalOpen,
   length,
   lengthSq,
@@ -42,7 +44,7 @@ app.innerHTML = `
         <div class="stage-overlay">
           <div class="hud-top">
             <div class="level-block">
-              <p class="level-kicker">Orbital Course</p>
+              <p class="level-kicker" id="levelKicker">Orbital Course</p>
               <h1 id="levelLabel">Level 1 / 1</h1>
               <p class="level-name" id="levelName">Launch Window</p>
               <div class="hud-pills">
@@ -82,6 +84,19 @@ app.innerHTML = `
             </div>
           </div>
         </div>
+        <div class="tutorial-overlay" aria-live="polite">
+          <div class="tutorial-card" id="tutorialCard" hidden>
+            <div class="tutorial-kicker">How To</div>
+            <div class="tutorial-gesture" aria-hidden="true">
+              <span class="tutorial-gesture-guide"></span>
+              <span class="tutorial-gesture-handle"></span>
+              <span class="tutorial-gesture-ball"></span>
+              <span class="tutorial-gesture-start"></span>
+              <span class="tutorial-gesture-release"></span>
+            </div>
+            <p class="tutorial-copy" id="tutorialCopy">Drag from the ball. Release to launch.</p>
+          </div>
+        </div>
         <div class="game-over-modal" id="gameOverModal" hidden>
           <div class="game-over-backdrop"></div>
           <div class="game-over-panel" role="dialog" aria-modal="true" aria-labelledby="gameOverTitle">
@@ -103,6 +118,7 @@ app.innerHTML = `
 
 const levelLabel = document.querySelector('#levelLabel');
 const levelName = document.querySelector('#levelName');
+const levelKicker = document.querySelector('#levelKicker');
 const statusLine = document.querySelector('#statusLine');
 const statusHint = document.querySelector('#statusHint');
 const runStatusPill = document.querySelector('#runStatusPill');
@@ -115,6 +131,8 @@ const fpsValue = document.querySelector('#fpsValue');
 const actionRow = document.querySelector('.action-row');
 const retryButton = document.querySelector('#retryButton');
 const undoButton = document.querySelector('#undoButton');
+const tutorialCard = document.querySelector('#tutorialCard');
+const tutorialCopy = document.querySelector('#tutorialCopy');
 const gameOverModal = document.querySelector('#gameOverModal');
 const gameOverCopy = document.querySelector('.game-over-copy');
 const gameOverTitle = document.querySelector('#gameOverTitle');
@@ -180,7 +198,7 @@ const UNDO_REWIND_SPEED = -8;
 const GOAL_CLOSE_ANIMATION_DURATION = 0.46;
 const GOAL_CLOSE_MODAL_DELAY = 0.12;
 const MAX_PHYSICS_STEPS_PER_FRAME = 4;
-const ballRestY = COURSE.ballRadius + 0.04;
+const ballRestY = COURSE.ballRadius - 0.01;
 const CONTROL_MIN_ANGLE = -180;
 const CONTROL_MAX_ANGLE = 180;
 const CONTROL_MIN_POWER = 0.2;
@@ -190,7 +208,6 @@ const FPS_OVERLAY_STORAGE_KEY = 'gravityBilliardFpsOverlay';
 const LAST_LEVEL_STORAGE_KEY = 'gravityBilliardLastLevel';
 const DEFAULT_CONTROL_SHOT = { angleDeg: 0, power: 1.8 };
 const TIME_SPEED_VALUES = [-1, 0, 1, 2];
-
 const ambientLight = new THREE.HemisphereLight(0x8bd5ff, 0x03070c, 1.18);
 scene.add(ambientLight);
 
@@ -272,6 +289,12 @@ const sunCore = new THREE.Mesh(
 sunCore.position.y = 0.42;
 sunGroup.add(sunCore);
 
+const extraSunsRoot = new THREE.Group();
+world.add(extraSunsRoot);
+
+const portalsRoot = new THREE.Group();
+world.add(portalsRoot);
+
 const startPad = new THREE.Mesh(
   new THREE.RingGeometry(0.62, 0.98, 48),
   new THREE.MeshBasicMaterial({
@@ -348,7 +371,7 @@ goalGroup.add(goalTimerArc);
 
 const starsGeometry = new THREE.BufferGeometry();
 const starPositions = [];
-for (let i = 0; i < 240; i += 1) {
+for (let i = 0; i < 420; i += 1) {
   starPositions.push(
     THREE.MathUtils.randFloatSpread(COURSE.width * 1.55),
     THREE.MathUtils.randFloat(0.45, 1.8),
@@ -361,12 +384,13 @@ const stars = new THREE.Points(
   starsGeometry,
   new THREE.PointsMaterial({
     color: 0xd7e6ff,
-    size: 0.06,
+    size: 0.475,
     transparent: true,
-    opacity: 0.75,
+    opacity: 0.88,
     sizeAttenuation: false,
   }),
 );
+stars.renderOrder = 0;
 world.add(stars);
 
 const orbitPathsRoot = new THREE.Group();
@@ -377,6 +401,7 @@ world.add(planetsRoot);
 
 const ballGroup = new THREE.Group();
 world.add(ballGroup);
+ballGroup.renderOrder = 20;
 
 const ballShadow = new THREE.Mesh(
   new THREE.CircleGeometry(COURSE.ballRadius * 1.08, 36),
@@ -388,6 +413,7 @@ const ballShadow = new THREE.Mesh(
 );
 ballShadow.rotation.x = -Math.PI / 2;
 ballShadow.position.y = 0.02;
+ballShadow.renderOrder = 20;
 ballGroup.add(ballShadow);
 
 const ballMesh = new THREE.Mesh(
@@ -401,6 +427,7 @@ const ballMesh = new THREE.Mesh(
   }),
 );
 ballMesh.position.y = ballRestY;
+ballMesh.renderOrder = 21;
 ballGroup.add(ballMesh);
 
 const BALL_TRACE_PARTICLE_COUNT = 160;
@@ -556,6 +583,7 @@ const state = {
   currentAttemptTrail: [],
   currentAttemptMinGoalDistance: Number.POSITIVE_INFINITY,
   currentFlightHistory: [],
+  currentFlightEvents: [],
   currentFlightStartCheckpoint: null,
   currentFlightLaunchState: null,
   rewindHistory: [],
@@ -571,6 +599,8 @@ const state = {
     eventState: null,
     displayEventState: null,
     launchPlanetIndex: null,
+    portalEvents: [],
+    portalEventIndex: -1,
   },
   lastAttemptTrail: [],
   lastAttemptOutcome: '',
@@ -637,6 +667,8 @@ const state = {
 };
 
 let planetVisuals = [];
+let extraSunVisuals = [];
+let portalVisuals = [];
 let gravityFieldVisuals = null;
 let gravityFieldSamples = [];
 let physicsAccumulator = 0;
@@ -1044,6 +1076,9 @@ function cloneCheckpoint(checkpoint) {
     ...checkpoint,
     position: cloneVec(checkpoint.position),
     anchorNormal: cloneVec(checkpoint.anchorNormal),
+    anchorSinceTime: checkpoint.anchorSinceTime ?? checkpoint.levelTime,
+    goalUnlocked: checkpoint.goalUnlocked ?? false,
+    goalUnlockTime: checkpoint.goalUnlockTime ?? null,
     controlShots: Array.isArray(checkpoint.controlShots)
       ? checkpoint.controlShots.map((shot) => ({ angleDeg: shot.angleDeg, power: shot.power }))
       : [],
@@ -1063,6 +1098,8 @@ function cloneBallPlaybackState(ball) {
     launchGracePlanetIndex: ball.launchGracePlanetIndex ?? null,
     anchorPlanetIndex: ball.anchorPlanetIndex ?? null,
     anchorNormal: ball.anchorNormal ? cloneVec(ball.anchorNormal) : null,
+    anchorSinceTime: ball.anchorSinceTime ?? 0,
+    portalCooldown: ball.portalCooldown ?? 0,
   };
 }
 
@@ -1076,6 +1113,9 @@ function createCurrentCheckpoint() {
     landedPlanetIndex: state.ball.landedPlanetIndex ?? state.ball.anchorPlanetIndex,
     landedPlanetName: state.ball.landedPlanetName || state.level.planets[state.ball.anchorPlanetIndex]?.name || 'launch world',
     landingCount: state.ball.landingCount ?? 0,
+    anchorSinceTime: state.ball.anchorSinceTime ?? (state.level.time ?? state.ball.time ?? 0),
+    goalUnlocked: state.level.goalUnlocked ?? false,
+    goalUnlockTime: state.level.goalUnlockTime ?? null,
     shots: state.shots,
     resets: state.resets,
     score: state.score,
@@ -1111,6 +1151,8 @@ function saveUndoCheckpoint() {
 }
 
 function applyCheckpointState(checkpoint) {
+  state.level.goalUnlocked = checkpoint.goalUnlocked ?? !state.level.goalUnlockRequired;
+  state.level.goalUnlockTime = checkpoint.goalUnlockTime ?? (state.level.goalUnlocked ? checkpoint.levelTime : null);
   setLevelTime(state.level, checkpoint.levelTime);
   rebuildGravityField();
   lastGravityFieldRefreshTime = state.level.time ?? 0;
@@ -1126,6 +1168,8 @@ function applyCheckpointState(checkpoint) {
   state.ball.launchGracePlanetIndex = null;
   state.ball.anchorPlanetIndex = checkpoint.anchorPlanetIndex;
   state.ball.anchorNormal = cloneVec(checkpoint.anchorNormal);
+  state.ball.anchorSinceTime = checkpoint.anchorSinceTime ?? checkpoint.levelTime;
+  state.ball.portalCooldown = 0;
   state.ball.landedPlanetIndex = checkpoint.landedPlanetIndex;
   state.ball.landedPlanetName = checkpoint.landedPlanetName;
   syncBallToAnchor(state.level, state.ball);
@@ -1171,6 +1215,7 @@ function rewindPastLandingCheckpoint(checkpoint) {
 
 function clearFlightHistoryState() {
   state.currentFlightHistory = [];
+  state.currentFlightEvents = [];
   state.currentFlightStartCheckpoint = null;
   state.currentFlightLaunchState = null;
   state.rewindHistory = [];
@@ -1185,6 +1230,8 @@ function clearFlightHistoryState() {
   state.rewindPlayback.eventState = null;
   state.rewindPlayback.displayEventState = null;
   state.rewindPlayback.launchPlanetIndex = null;
+  state.rewindPlayback.portalEvents = [];
+  state.rewindPlayback.portalEventIndex = -1;
 }
 
 function captureFlightHistorySample() {
@@ -1197,9 +1244,24 @@ function captureFlightHistorySample() {
 
 function seedFlightHistoryFromCurrentState() {
   state.currentFlightHistory = [captureFlightHistorySample()];
+  state.currentFlightEvents = [];
   if (!state.currentFlightStartCheckpoint && state.ball.anchorPlanetIndex !== null && state.ball.anchorPlanetIndex !== undefined) {
     state.currentFlightStartCheckpoint = cloneCheckpoint(createCurrentCheckpoint());
   }
+}
+
+function recordPortalFlightEvent(portalEvent) {
+  if (!portalEvent) {
+    return;
+  }
+
+  state.currentFlightEvents.push({
+    time: portalEvent.time,
+    fromPortalId: portalEvent.fromPortalId,
+    toPortalId: portalEvent.toPortalId,
+    preState: cloneBallPlaybackState(portalEvent.preState),
+    postState: cloneBallPlaybackState(portalEvent.postState),
+  });
 }
 
 function recordFlightHistorySample() {
@@ -1243,6 +1305,11 @@ function finalizeFlightHistory(outcome, eventState = null, displayEventState = n
         launchState,
         eventState: eventPlaybackState,
         displayEventState: displayPlaybackState,
+        portalEvents: state.currentFlightEvents.map((event) => ({
+          ...event,
+          preState: cloneBallPlaybackState(event.preState),
+          postState: cloneBallPlaybackState(event.postState),
+        })),
         launchPlanetIndex: checkpoint.anchorPlanetIndex ?? null,
         landingCount: state.ball.landingCount ?? 0,
         anchorPlanetIndex: state.ball.anchorPlanetIndex,
@@ -1254,6 +1321,7 @@ function finalizeFlightHistory(outcome, eventState = null, displayEventState = n
   }
 
   state.currentFlightHistory = [];
+  state.currentFlightEvents = [];
   state.currentFlightStartCheckpoint = null;
   state.currentFlightLaunchState = null;
 }
@@ -1288,6 +1356,8 @@ function applyPlaybackBallState(ballState) {
   state.ball.anchorPlanetIndex = ballState.anchorPlanetIndex ?? null;
   state.ball.anchorNormal = ballState.anchorNormal ? cloneVec(ballState.anchorNormal) : null;
   state.ball.launchGracePlanetIndex = ballState.launchGracePlanetIndex ?? null;
+  state.ball.anchorSinceTime = ballState.anchorSinceTime ?? state.ball.time;
+  state.ball.portalCooldown = ballState.portalCooldown ?? 0;
   state.ball.landedPlanetIndex = null;
   state.ball.landedPlanetName = '';
   if (state.ball.anchorPlanetIndex !== null) {
@@ -1321,6 +1391,8 @@ function clearRewindPlaybackState() {
   state.rewindPlayback.eventState = null;
   state.rewindPlayback.displayEventState = null;
   state.rewindPlayback.launchPlanetIndex = null;
+  state.rewindPlayback.portalEvents = [];
+  state.rewindPlayback.portalEventIndex = -1;
 }
 
 function matchesLandingPlaybackAnchor(rewind) {
@@ -1364,6 +1436,7 @@ function createAnchoredPlaybackState(checkpoint, targetTime) {
     launchGracePlanetIndex: null,
     anchorPlanetIndex: checkpoint.anchorPlanetIndex,
     anchorNormal: cloneVec(checkpoint.anchorNormal),
+    anchorSinceTime: checkpoint.anchorSinceTime ?? checkpoint.levelTime,
   };
 
   setLevelTime(state.level, checkpoint.levelTime);
@@ -1388,10 +1461,12 @@ function configureRewindPlayback({
   eventState = null,
   displayEventState = null,
   launchPlanetIndex = null,
+  portalEvents = [],
   message = 'Rewinding flight path.',
   hint = 'Rolling back to the prior anchor.',
 }) {
   state.currentFlightHistory = [];
+  state.currentFlightEvents = [];
   state.currentFlightStartCheckpoint = null;
   state.currentFlightLaunchState = null;
   state.rewindPlayback.active = true;
@@ -1405,6 +1480,12 @@ function configureRewindPlayback({
   state.rewindPlayback.eventState = cloneBallPlaybackState(eventState);
   state.rewindPlayback.displayEventState = cloneBallPlaybackState(displayEventState ?? eventState);
   state.rewindPlayback.launchPlanetIndex = launchPlanetIndex ?? null;
+  state.rewindPlayback.portalEvents = portalEvents.map((event) => ({
+    ...event,
+    preState: cloneBallPlaybackState(event.preState),
+    postState: cloneBallPlaybackState(event.postState),
+  }));
+  state.rewindPlayback.portalEventIndex = portalEvents.length - 1;
   state.message = message;
   state.hint = hint;
   syncHud();
@@ -1428,6 +1509,7 @@ function startLandingRewindPlayback() {
     eventState: rewind.eventState,
     displayEventState: rewind.displayEventState ?? rewind.eventState,
     launchPlanetIndex: rewind.launchPlanetIndex ?? null,
+    portalEvents: rewind.portalEvents ?? [],
     message: 'Rewinding flight path.',
     hint: `Rolling back from ${state.level.planets[rewind.anchorPlanetIndex]?.name ?? 'relay world'} to the prior anchor.`,
   });
@@ -1481,6 +1563,13 @@ function updateLandingRewindPlayback(speedOverride = null) {
         if (state.rewindPlayback.flightPrimed) {
           applyPlaybackBallState(state.rewindPlayback.eventState);
           state.rewindPlayback.flightPrimed = false;
+        }
+        const reversePortalEvent = [...(state.rewindPlayback.portalEvents ?? [])]
+          .reverse()
+          .find((event) => (state.ball.time ?? 0) - PHYSICS_STEP <= event.time + 0.0001 && (state.ball.time ?? 0) > event.time + 0.0001);
+        if (reversePortalEvent) {
+          applyPlaybackBallState(reversePortalEvent.preState);
+          continue;
         }
         const launchTime = state.rewindPlayback.launchState?.time ?? 0;
         if ((state.ball.time ?? 0) - PHYSICS_STEP <= launchTime + 0.0001) {
@@ -1557,6 +1646,12 @@ function updateLandingRewindPlayback(speedOverride = null) {
         }
         state.rewindPlayback.flightPrimed = false;
         state.rewindPlayback.phase = 'after-landing';
+        continue;
+      }
+      const forwardPortalEvent = (state.rewindPlayback.portalEvents ?? [])
+        .find((event) => (state.ball.time ?? 0) + PHYSICS_STEP >= event.time - 0.0001 && (state.ball.time ?? 0) < event.time - 0.0001);
+      if (forwardPortalEvent) {
+        applyPlaybackBallState(forwardPortalEvent.postState);
         continue;
       }
       const eventTime = state.rewindPlayback.eventState?.time ?? 0;
@@ -1646,6 +1741,7 @@ function startUndo() {
       eventState: rewind.eventState,
       displayEventState: rewind.displayEventState ?? rewind.eventState,
       launchPlanetIndex: rewind.launchPlanetIndex ?? null,
+      portalEvents: rewind.portalEvents ?? [],
       message: 'Undo rewinding.',
       hint: `Rolling back to ${rewind.checkpoint?.landedPlanetName ?? 'the prior anchor'}.`,
     });
@@ -1661,6 +1757,7 @@ function startUndo() {
       eventState: state.ball,
       displayEventState: state.ball,
       launchPlanetIndex: state.currentFlightStartCheckpoint.anchorPlanetIndex ?? null,
+      portalEvents: state.currentFlightEvents,
       message: 'Undo rewinding.',
       hint: `Rolling back to ${state.currentFlightStartCheckpoint.landedPlanetName}.`,
     });
@@ -1971,6 +2068,47 @@ function mixColors(from, to, amount) {
   return from.clone().lerp(to, amount);
 }
 
+function getIceSlideVisualSpeed(planet, ball = state.ball) {
+  return getPlanetSlideAngularSpeed(planet, ball);
+}
+
+function getIceSlideElapsed(planet, ball = state.ball) {
+  if (!planet || planet.surfaceType !== 'ice' || !planet.slideAngularSpeed) {
+    return 0;
+  }
+  const anchorSinceTime = ball?.anchorSinceTime ?? ball?.time ?? 0;
+  const currentTime = ball?.time ?? anchorSinceTime;
+  return Math.max(0, currentTime - anchorSinceTime);
+}
+
+function getIceLaunchLockRemaining(planet, ball = state.ball) {
+  if (!planet || planet.surfaceType !== 'ice' || !planet.slideAngularSpeed) {
+    return 0;
+  }
+  if ((ball?.landingCount ?? 0) <= 0) {
+    return 0;
+  }
+  const settleSeconds = Math.max(0.25, planet.slideSettleSeconds ?? 4);
+  const lockSeconds = Math.min(settleSeconds * 0.3, Math.max(0.45, planet.slideLaunchLockSeconds ?? 1));
+  return Math.max(0, lockSeconds - getIceSlideElapsed(planet, ball));
+}
+
+function getAnchoredIcePlanet(ball = state.ball) {
+  if (ball.anchorPlanetIndex === null || ball.anchorPlanetIndex === undefined) {
+    return null;
+  }
+  const planet = state.level.planets[ball.anchorPlanetIndex];
+  if (!planet || planet.surfaceType !== 'ice' || !planet.slideAngularSpeed) {
+    return null;
+  }
+  return planet;
+}
+
+function isLaunchLockedByIce(ball = state.ball) {
+  const planet = getAnchoredIcePlanet(ball);
+  return Boolean(planet) && getIceLaunchLockRemaining(planet, ball) > 0.0001;
+}
+
 function createSeededRandom(seed) {
   let value = seed >>> 0;
   return () => {
@@ -2014,6 +2152,9 @@ function drawEllipse(ctx, x, y, rx, ry, rotation, fillStyle, alpha = 1) {
 }
 
 function getRockyBiome(planet) {
+  if (planet.surfaceType === 'ice') {
+    return 'ice';
+  }
   const hsl = {};
   new THREE.Color(planet.core).getHSL(hsl);
   if (hsl.h >= 0.48 && hsl.h <= 0.7) {
@@ -2035,7 +2176,12 @@ function createRockyPlanetTexture(planet) {
     let accentColor;
     let brightColor;
 
-    if (biome === 'oceanic') {
+    if (biome === 'ice') {
+      deepColor = new THREE.Color(0x89c9ee);
+      midColor = new THREE.Color(0xb9ebff);
+      accentColor = new THREE.Color(0xe5fbff);
+      brightColor = new THREE.Color(0xf8ffff);
+    } else if (biome === 'oceanic') {
       deepColor = new THREE.Color(0x163b69);
       midColor = new THREE.Color(0x2d6da3);
       accentColor = new THREE.Color(0x6db06b);
@@ -2074,7 +2220,82 @@ function createRockyPlanetTexture(planet) {
       ctx.restore();
     }
 
-    if (biome === 'oceanic') {
+    if (biome === 'ice') {
+      const iceGlow = ctx.createRadialGradient(
+        width * 0.48,
+        height * 0.46,
+        width * 0.04,
+        width * 0.5,
+        height * 0.5,
+        width * 0.56,
+      );
+      iceGlow.addColorStop(0, 'rgba(255, 255, 255, 0.58)');
+      iceGlow.addColorStop(0.42, 'rgba(232, 248, 255, 0.2)');
+      iceGlow.addColorStop(1, 'rgba(232, 248, 255, 0)');
+      ctx.save();
+      ctx.fillStyle = iceGlow;
+      ctx.fillRect(0, 0, width, height);
+      ctx.restore();
+
+      for (let index = 0; index < 28; index += 1) {
+        const bandY = random() * height;
+        const bandHeight = height * (0.01 + random() * 0.03);
+        const frostBand = ctx.createLinearGradient(0, bandY, width, bandY + bandHeight);
+        frostBand.addColorStop(0, colorHex(mixColors(midColor, deepColor, 0.18 + random() * 0.22)));
+        frostBand.addColorStop(0.52, colorHex(mixColors(accentColor, brightColor, 0.58 + random() * 0.25)));
+        frostBand.addColorStop(1, colorHex(mixColors(midColor, deepColor, 0.18 + random() * 0.22)));
+        ctx.save();
+        ctx.globalAlpha = 0.18 + random() * 0.16;
+        ctx.fillStyle = frostBand;
+        ctx.fillRect(0, bandY, width, bandHeight);
+        ctx.restore();
+      }
+
+      const crackNodes = Array.from({ length: 12 }, () => ({
+        x: width * (0.16 + random() * 0.68),
+        y: height * (0.16 + random() * 0.68),
+      }));
+      crackNodes.forEach((node, index) => {
+        const next = crackNodes[(index + 1 + Math.floor(random() * 3)) % crackNodes.length];
+        ctx.save();
+        ctx.strokeStyle = colorHex(mixColors(new THREE.Color(0xf4fdff), new THREE.Color(0x8fd9ff), 0.42 + random() * 0.26));
+        ctx.globalAlpha = 0.34 + random() * 0.16;
+        ctx.lineWidth = 2.4 + random() * 2.2;
+        ctx.beginPath();
+        ctx.moveTo(node.x, node.y);
+        const controlX = (node.x + next.x) * 0.5 + (random() - 0.5) * width * 0.08;
+        const controlY = (node.y + next.y) * 0.5 + (random() - 0.5) * height * 0.08;
+        ctx.quadraticCurveTo(controlX, controlY, next.x, next.y);
+        ctx.stroke();
+        ctx.restore();
+      });
+
+      for (let index = 0; index < 16; index += 1) {
+        const centerX = width * (0.22 + random() * 0.56);
+        const centerY = height * (0.22 + random() * 0.56);
+        ctx.save();
+        ctx.globalAlpha = 0.08 + random() * 0.1;
+        ctx.strokeStyle = colorHex(mixColors(new THREE.Color(0xffffff), accentColor, 0.45));
+        ctx.lineWidth = 5 + random() * 7;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, width * (0.025 + random() * 0.055), 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      for (let index = 0; index < 18; index += 1) {
+        drawEllipse(
+          ctx,
+          random() * width,
+          random() * height,
+          width * (0.03 + random() * 0.075),
+          height * (0.012 + random() * 0.028),
+          random() * Math.PI,
+          colorHex(brightColor),
+          0.14 + random() * 0.16,
+        );
+      }
+    } else if (biome === 'oceanic') {
       for (let index = 0; index < 12; index += 1) {
         drawEllipse(
           ctx,
@@ -2163,6 +2384,17 @@ function createRockyPlanetTexture(planet) {
     ctx.fillStyle = shade;
     ctx.fillRect(0, 0, width, height);
     ctx.restore();
+
+    if (biome === 'ice') {
+      const iceBloom = ctx.createRadialGradient(width * 0.28, height * 0.24, width * 0.02, width * 0.44, height * 0.34, width * 0.46);
+      iceBloom.addColorStop(0, 'rgba(255, 255, 255, 0.52)');
+      iceBloom.addColorStop(0.5, 'rgba(228, 250, 255, 0.16)');
+      iceBloom.addColorStop(1, 'rgba(228, 250, 255, 0)');
+      ctx.save();
+      ctx.fillStyle = iceBloom;
+      ctx.fillRect(0, 0, width, height);
+      ctx.restore();
+    }
   });
 }
 
@@ -2255,6 +2487,7 @@ function createGasGiantTexture(planet) {
 function getPlanetTexture(planet) {
   const key = [
     planet.landable ? 'landable' : 'hazard',
+    planet.surfaceType ?? 'standard',
     planet.position.x,
     planet.position.y,
     planet.radius,
@@ -2275,7 +2508,13 @@ function getPlanetTexture(planet) {
 state.controlShots = createControlShots(state.level);
 
 function getWindowStatusText() {
+  if (isGoalLocked(state.level)) {
+    return 'Goal locked';
+  }
   const remaining = getGoalRemainingTime(state.level, state.ball.time ?? state.level.time ?? 0);
+  if (!Number.isFinite(remaining)) {
+    return 'Window open';
+  }
   return remaining > 0.05 ? `Window ${remaining.toFixed(1)}s` : 'Window closed';
 }
 
@@ -2286,6 +2525,10 @@ function getRunStatusText() {
 
   if (state.ball.crashed) {
     return 'Retry armed';
+  }
+
+  if (isLaunchLockedByIce()) {
+    return `Shot ${Math.min(getActiveStageIndex() + 1, state.controlShots.length)} · Sliding`;
   }
 
   if (state.ball.anchorPlanetIndex !== null && state.ball.landingCount > 0) {
@@ -2433,7 +2676,7 @@ function constrainLaunchDirection(direction, power) {
       getPlanetVelocity(state.level, state.ball.anchorPlanetIndex, state.ball.time ?? state.level.time ?? 0).y
       + getPlanetSurfaceVelocity(state.level, state.ball.anchorPlanetIndex, state.ball.anchorNormal).y,
   };
-  const maxInwardLaunchAngleDeg = 30;
+  const maxInwardLaunchAngleDeg = 15;
   const minimumSafeNormalVelocity = -relativeSpeed * Math.sin(maxInwardLaunchAngleDeg * Math.PI / 180);
   const requiredNormalComponent = (minimumSafeNormalVelocity - dot(inheritedVelocity, anchorNormal)) / relativeSpeed;
 
@@ -2632,6 +2875,18 @@ function getTimeSpeedValue() {
   return TIME_SPEED_VALUES[state.timeSpeedIndex] ?? 1;
 }
 
+function getEffectiveTimeSpeedValue() {
+  const requested = getTimeSpeedValue();
+  if (requested !== 0) {
+    return requested;
+  }
+  if (!isLaunchLockedByIce()) {
+    return 0;
+  }
+  const resumeValue = TIME_SPEED_VALUES[state.resumeTimeSpeedIndex] ?? 1;
+  return resumeValue > 0 ? resumeValue : 1;
+}
+
 function formatTimeSpeedValue(value) {
   return `${value}x`;
 }
@@ -2752,14 +3007,28 @@ function createGravityFieldSample(baseX, baseY, halfWidth, halfHeight, target) {
     tintWeight += influence;
   }
 
-  if (FIXED_SOLAR_GRAVITY_STRENGTH > 0) {
-    const deltaX = state.level.sun.x - baseX;
-    const deltaY = state.level.sun.y - baseY;
+  const solarBodies = [
+    {
+      position: state.level.sun,
+      gravityStrength: state.level.primarySunBody?.gravityStrength ?? FIXED_SOLAR_GRAVITY_STRENGTH,
+    },
+    ...((state.level.extraSuns ?? []).map((solarBody) => ({
+      position: solarBody.position,
+      gravityStrength: solarBody.gravityStrength ?? FIXED_SOLAR_GRAVITY_STRENGTH * 0.8,
+    }))),
+  ];
+
+  for (const solarBody of solarBodies) {
+    if (!(solarBody.gravityStrength > 0)) {
+      continue;
+    }
+    const deltaX = solarBody.position.x - baseX;
+    const deltaY = solarBody.position.y - baseY;
     const distanceSq = deltaX * deltaX + deltaY * deltaY;
     const safeDistanceSq = Math.max(distanceSq, 0.000001);
     const distance = Math.sqrt(safeDistanceSq);
     const inverseDistance = 1 / distance;
-    const pull = FIXED_SOLAR_GRAVITY_STRENGTH * SOLAR_GRAVITY_MULTIPLIER / (safeDistanceSq + SOLAR_GRAVITY_SOFTENING);
+    const pull = solarBody.gravityStrength * SOLAR_GRAVITY_MULTIPLIER / (safeDistanceSq + SOLAR_GRAVITY_SOFTENING);
     gravityX += deltaX * inverseDistance * pull;
     gravityY += deltaY * inverseDistance * pull;
   }
@@ -2909,6 +3178,114 @@ function rebuildGravityField() {
   gravityFieldVisuals = visuals;
 }
 
+function createAuxSunVisual(solarBody) {
+  const group = new THREE.Group();
+  const glowColor = new THREE.Color(solarBody.glow ?? 0x89c8ff);
+  const coreColor = new THREE.Color(solarBody.core ?? 0xe4f6ff);
+
+  const glow = new THREE.Mesh(
+    new THREE.CircleGeometry((solarBody.radius ?? 0.38) * 3.2, 48),
+    new THREE.MeshBasicMaterial({
+      color: glowColor,
+      transparent: true,
+      opacity: 0.16,
+    }),
+  );
+  glow.rotation.x = -Math.PI / 2;
+  glow.position.y = 0.03;
+  group.add(glow);
+
+  const corona = new THREE.Mesh(
+    new THREE.RingGeometry((solarBody.radius ?? 0.38) * 1.4, (solarBody.radius ?? 0.38) * 2.35, 64),
+    new THREE.MeshBasicMaterial({
+      color: mixColors(glowColor, new THREE.Color(0xffffff), 0.22),
+      transparent: true,
+      opacity: 0.28,
+      side: THREE.DoubleSide,
+    }),
+  );
+  corona.rotation.x = -Math.PI / 2;
+  corona.position.y = 0.04;
+  group.add(corona);
+
+  const core = new THREE.Mesh(
+    new THREE.SphereGeometry(solarBody.radius ?? 0.38, 28, 28),
+    new THREE.MeshStandardMaterial({
+      color: coreColor,
+      emissive: glowColor,
+      emissiveIntensity: 1.05,
+      roughness: 0.5,
+      metalness: 0.02,
+    }),
+  );
+  core.position.y = (solarBody.radius ?? 0.38) * 0.92;
+  group.add(core);
+
+  return { group, glow, corona, core, solarBody };
+}
+
+function rebuildExtraSuns() {
+  clearGroup(extraSunsRoot);
+  extraSunVisuals = (state.level.extraSuns ?? []).map((solarBody) => {
+    const visual = createAuxSunVisual(solarBody);
+    visual.group.position.set(solarBody.position.x, 0, solarBody.position.y);
+    extraSunsRoot.add(visual.group);
+    return visual;
+  });
+}
+
+function rebuildPortals() {
+  clearGroup(portalsRoot);
+  portalVisuals = (state.level.portals ?? []).map((portal) => {
+    const group = new THREE.Group();
+    const isWhite = portal.variant === 'white';
+    const ringColor = new THREE.Color(isWhite ? 0xeaf6ff : 0x7f64ff);
+    const accentColor = new THREE.Color(isWhite ? 0x93e8ff : 0x72f2da);
+
+    const aura = new THREE.Mesh(
+      new THREE.CircleGeometry((portal.radius ?? 0.62) * 1.9, 40),
+      new THREE.MeshBasicMaterial({
+        color: accentColor,
+        transparent: true,
+        opacity: isWhite ? 0.12 : 0.1,
+      }),
+    );
+    aura.rotation.x = -Math.PI / 2;
+    aura.position.y = 0.02;
+    group.add(aura);
+
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry((portal.radius ?? 0.62) * 0.86, (portal.radius ?? 0.62) * 1.24, 64),
+      new THREE.MeshBasicMaterial({
+        color: ringColor,
+        transparent: true,
+        opacity: 0.84,
+        side: THREE.DoubleSide,
+      }),
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.03;
+    group.add(ring);
+
+    const core = new THREE.Mesh(
+      new THREE.CircleGeometry((portal.radius ?? 0.62) * 0.66, 40),
+      new THREE.MeshBasicMaterial({
+        color: isWhite ? 0x06131f : 0x040109,
+        transparent: true,
+        opacity: 0.96,
+      }),
+    );
+    core.rotation.x = -Math.PI / 2;
+    core.position.y = 0.04;
+    group.add(core);
+
+    group.position.set(portal.position.x, 0, portal.position.y);
+    portalsRoot.add(group);
+
+    return { group, aura, ring, core, portal, accentColor, ringColor };
+  });
+}
+
 function rebuildPlanets() {
   clearGroup(orbitPathsRoot);
   clearGroup(planetsRoot);
@@ -2919,7 +3296,11 @@ function rebuildPlanets() {
     const glowColor = new THREE.Color(planet.glow);
     const surfaceTexture = getPlanetTexture(planet);
     const orbitPathColor = planet.landable
-      ? mixColors(glowColor, new THREE.Color(0x9feedd), 0.35)
+      ? (
+        planet.surfaceType === 'ice'
+          ? mixColors(glowColor, new THREE.Color(0xf5ffff), 0.52)
+          : mixColors(glowColor, new THREE.Color(0x9feedd), 0.35)
+      )
       : mixColors(glowColor, new THREE.Color(0xffdfa9), 0.22);
 
     const orbitPathPoints = [];
@@ -2961,24 +3342,18 @@ function rebuildPlanets() {
     orbitPath.position.set(planet.orbitCenter.x, 0, planet.orbitCenter.y);
     orbitPathsRoot.add(orbitPath);
 
-    const halo = new THREE.Mesh(
-      new THREE.RingGeometry(planet.radius + 0.52, planet.falloff, 72),
-      new THREE.MeshBasicMaterial({
-        color: planet.landable ? mixColors(glowColor, new THREE.Color(0x88f5e1), 0.42) : glowColor,
-        transparent: true,
-        opacity: planet.landable ? 0.1 : 0.08,
-        side: THREE.DoubleSide,
-      }),
-    );
-    halo.rotation.x = -Math.PI / 2;
-    group.add(halo);
-
     const glow = new THREE.Mesh(
       new THREE.CircleGeometry(planet.radius + (planet.landable ? 0.32 : 0.48), 48),
       new THREE.MeshBasicMaterial({
-        color: planet.landable ? mixColors(glowColor, new THREE.Color(0x9ce9ff), 0.16) : mixColors(glowColor, new THREE.Color(0xffe3ba), 0.12),
+        color: planet.landable
+          ? (
+            planet.surfaceType === 'ice'
+              ? mixColors(glowColor, new THREE.Color(0xffffff), 0.28)
+              : mixColors(glowColor, new THREE.Color(0x9ce9ff), 0.16)
+          )
+          : mixColors(glowColor, new THREE.Color(0xffe3ba), 0.12),
         transparent: true,
-        opacity: planet.landable ? 0.16 : 0.18,
+        opacity: planet.landable ? (planet.surfaceType === 'ice' ? 0.24 : 0.16) : 0.18,
       }),
     );
     glow.rotation.x = -Math.PI / 2;
@@ -2989,10 +3364,12 @@ function rebuildPlanets() {
       ? new THREE.MeshStandardMaterial({
         color: 0xffffff,
         map: surfaceTexture,
-        emissive: mixColors(coreColor, glowColor, 0.14),
-        emissiveIntensity: 0.08,
-        roughness: 0.98,
-        metalness: 0.02,
+        emissive: planet.surfaceType === 'ice'
+          ? mixColors(coreColor, new THREE.Color(0xf1fdff), 0.42)
+          : mixColors(coreColor, glowColor, 0.14),
+        emissiveIntensity: planet.surfaceType === 'ice' ? 0.28 : 0.08,
+        roughness: planet.surfaceType === 'ice' ? 0.34 : 0.98,
+        metalness: planet.surfaceType === 'ice' ? 0.1 : 0.02,
       })
       : new THREE.MeshStandardMaterial({
         color: 0xffffff,
@@ -3015,14 +3392,21 @@ function rebuildPlanets() {
 
     let atmosphereShell = null;
     let accentBand = null;
+    let monolith = null;
+    let monolithRing = null;
+    let iceSkidArc = null;
+    let iceHaloRing = null;
+    let iceInnerRing = null;
 
     if (planet.landable) {
       atmosphereShell = new THREE.Mesh(
         new THREE.SphereGeometry(planet.radius * 1.045, 48, 48),
         new THREE.MeshPhongMaterial({
-          color: mixColors(glowColor, new THREE.Color(0xc7fff7), 0.38),
+          color: planet.surfaceType === 'ice'
+            ? mixColors(glowColor, new THREE.Color(0xf0fbff), 0.56)
+            : mixColors(glowColor, new THREE.Color(0xc7fff7), 0.38),
           transparent: true,
-          opacity: 0.16,
+          opacity: planet.surfaceType === 'ice' ? 0.24 : 0.16,
           blending: THREE.AdditiveBlending,
           side: THREE.DoubleSide,
           depthWrite: false,
@@ -3062,29 +3446,114 @@ function rebuildPlanets() {
     const orbitRing = new THREE.Mesh(
       new THREE.TorusGeometry(planet.radius + 0.16, 0.035, 12, 72),
       new THREE.MeshBasicMaterial({
-        color: planet.landable ? 0x7df3d1 : 0xfef3d0,
+        color: planet.landable
+          ? (planet.surfaceType === 'ice' ? 0xf5ffff : 0x7df3d1)
+          : 0xfef3d0,
         transparent: true,
-        opacity: planet.landable ? 0.68 : 0.42,
+        opacity: planet.landable ? (planet.surfaceType === 'ice' ? 0.78 : 0.68) : 0.42,
+        depthWrite: false,
       }),
     );
     orbitRing.rotation.x = Math.PI / 2.45;
     orbitRing.position.y = planet.radius * 0.84;
+    orbitRing.renderOrder = 4;
     group.add(orbitRing);
+
+    if (planet.surfaceType === 'ice') {
+      iceHaloRing = new THREE.Mesh(
+        new THREE.RingGeometry(planet.radius + 0.28, planet.radius + 0.42, 72),
+        new THREE.MeshBasicMaterial({
+          color: 0xaedfff,
+          transparent: true,
+          opacity: 0.34,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+        }),
+      );
+      iceHaloRing.rotation.x = -Math.PI / 2;
+      iceHaloRing.position.y = 0.048;
+      iceHaloRing.renderOrder = 2;
+      group.add(iceHaloRing);
+
+      iceInnerRing = new THREE.Mesh(
+        new THREE.RingGeometry(planet.radius * 0.78, planet.radius * 0.94, 72),
+        new THREE.MeshBasicMaterial({
+          color: 0xf7ffff,
+          transparent: true,
+          opacity: 0.22,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+        }),
+      );
+      iceInnerRing.rotation.x = -Math.PI / 2;
+      iceInnerRing.position.y = planet.radius * 0.66;
+      iceInnerRing.renderOrder = 6;
+      group.add(iceInnerRing);
+    }
 
     let landingRing = null;
     if (planet.landable) {
       landingRing = new THREE.Mesh(
         new THREE.RingGeometry(planet.radius + 0.2, planet.landingRadius ?? planet.radius + 0.48, 64),
         new THREE.MeshBasicMaterial({
-          color: 0x75f3d9,
+          color: planet.surfaceType === 'ice' ? 0xf7ffff : 0x75f3d9,
           transparent: true,
-          opacity: 0.18,
+          opacity: planet.surfaceType === 'ice' ? 0.34 : 0.18,
           side: THREE.DoubleSide,
+          depthWrite: false,
         }),
       );
       landingRing.rotation.x = -Math.PI / 2;
       landingRing.position.y = 0.06;
+      landingRing.renderOrder = 3;
       group.add(landingRing);
+    }
+
+    if (planet.surfaceType === 'ice') {
+      iceSkidArc = new THREE.Mesh(
+        new THREE.RingGeometry(planet.radius + 0.1, planet.radius + 0.19, 48, 1, -0.34, 0.68),
+        new THREE.MeshBasicMaterial({
+          color: 0xf2fbff,
+          transparent: true,
+          opacity: 0,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+        }),
+      );
+      iceSkidArc.rotation.x = -Math.PI / 2;
+      iceSkidArc.position.y = 0.095;
+      iceSkidArc.visible = false;
+      iceSkidArc.renderOrder = 5;
+      group.add(iceSkidArc);
+    }
+
+    if (planet.goalUnlock) {
+      monolith = new THREE.Mesh(
+        new THREE.BoxGeometry(0.12, planet.radius * 1.15, 0.12),
+        new THREE.MeshStandardMaterial({
+          color: 0xf4e7b6,
+          emissive: 0x8ad9ff,
+          emissiveIntensity: 0.4,
+          roughness: 0.3,
+          metalness: 0.55,
+        }),
+      );
+      monolith.position.set(0, planet.radius * 1.35, 0);
+      monolith.rotation.z = 0.2;
+      group.add(monolith);
+
+      monolithRing = new THREE.Mesh(
+        new THREE.RingGeometry(planet.radius + 0.28, planet.radius + 0.45, 48),
+        new THREE.MeshBasicMaterial({
+          color: 0xffd68f,
+          transparent: true,
+          opacity: 0.22,
+          side: THREE.DoubleSide,
+        }),
+      );
+      monolithRing.rotation.x = -Math.PI / 2;
+      monolithRing.position.y = 0.08;
+      group.add(monolithRing);
     }
 
     group.position.set(planet.position.x, 0, planet.position.y);
@@ -3094,12 +3563,16 @@ function rebuildPlanets() {
       group,
       orbitPath,
       body,
-      halo,
       glow,
       atmosphereShell,
       accentBand,
       orbitRing,
       landingRing,
+      monolith,
+      monolithRing,
+      iceSkidArc,
+      iceHaloRing,
+      iceInnerRing,
       planet,
     };
   });
@@ -3146,10 +3619,13 @@ function applyLevel(index) {
   syncLevelQueryParam(state.levelIndex);
   syncActionButtons();
 
+  levelKicker.textContent = `World ${state.level.worldNumber} · ${state.level.worldName}`;
   levelLabel.textContent = `Level ${state.levelIndex + 1} / ${LEVELS.length}`;
   levelName.textContent = state.level.name;
   rebuildGravityField();
   lastGravityFieldRefreshTime = state.level.time ?? 0;
+  rebuildExtraSuns();
+  rebuildPortals();
   rebuildPlanets();
 }
 
@@ -3168,7 +3644,31 @@ function syncHud() {
   syncActionButtons();
   syncTimeControl();
   syncPerfOverlay();
+  syncTutorialOverlay();
   syncGameOverModal();
+}
+
+function getActiveTutorial() {
+  const tutorial = state.level?.tutorial;
+  if (!tutorial) {
+    return null;
+  }
+
+  if (state.shots > 0 || state.gameOver.open || state.goalCloseAnimation.active) {
+    return null;
+  }
+
+  return tutorial;
+}
+
+function syncTutorialOverlay() {
+  const tutorial = getActiveTutorial();
+  tutorialCard.hidden = !tutorial;
+  if (!tutorial) {
+    return;
+  }
+
+  tutorialCopy.textContent = tutorial.copy;
 }
 
 function resetBall(message, hint, options = {}) {
@@ -3209,6 +3709,8 @@ function resetBall(message, hint, options = {}) {
   state.ball.launchGracePlanetIndex = freshBall.launchGracePlanetIndex;
   state.ball.anchorPlanetIndex = freshBall.anchorPlanetIndex;
   state.ball.anchorNormal = cloneVec(freshBall.anchorNormal);
+  state.ball.anchorSinceTime = freshBall.anchorSinceTime;
+  state.ball.portalCooldown = freshBall.portalCooldown ?? 0;
   state.ball.landedPlanetIndex = freshBall.anchorPlanetIndex ?? null;
   state.ball.landedPlanetName = state.level.planets[freshBall.anchorPlanetIndex ?? 0]?.name ?? 'launch world';
   setVec(state.ball.crashStartPosition, freshBall.position);
@@ -3300,8 +3802,20 @@ function beginLanding(result) {
   ballGroup.scale.setScalar(1);
   ballMesh.position.y = ballRestY;
   ballShadow.material.opacity = 0.28;
-  state.message = `Relay locked on ${state.ball.landedPlanetName}.`;
-  state.hint = `Chain ${state.ball.landingCount} armed. Shot ${Math.min(state.ball.landingCount + 1, state.controlShots.length)} is live.`;
+  const landedPlanet = result.planetIndex !== null && result.planetIndex !== undefined
+    ? state.level.planets[result.planetIndex]
+    : null;
+  const iceLockRemaining = landedPlanet ? getIceLaunchLockRemaining(landedPlanet, state.ball) : 0;
+  if (result.goalUnlocked) {
+    state.message = 'Monolith awakened.';
+    state.hint = `Black hole open for ${state.level.goalOpenSeconds.toFixed(1)}s.`;
+  } else if (iceLockRemaining > 0) {
+    state.message = `Sliding on ${state.ball.landedPlanetName}.`;
+    state.hint = `Ice drift settling. Next shot unlocks in ${iceLockRemaining.toFixed(1)}s.`;
+  } else {
+    state.message = `Relay locked on ${state.ball.landedPlanetName}.`;
+    state.hint = `Chain ${state.ball.landingCount} armed. Shot ${Math.min(state.ball.landingCount + 1, state.controlShots.length)} is live.`;
+  }
 
   if (state.adminReplay.active) {
     const selected = getAdminSolutions()[state.adminReplay.solutionIndex];
@@ -3378,8 +3892,9 @@ function updateCueVisual() {
   const guideLength = Math.max(0.001, length(bandVector));
   const bandDirection = normalize(bandVector);
   const anchor = state.dragAnchor;
-  aimLine.material.opacity = 0.9;
-  dragHandle.material.opacity = 0.95;
+  const previewLocked = isLaunchLockedByIce();
+  aimLine.material.opacity = previewLocked ? 0.38 : 0.9;
+  dragHandle.material.opacity = previewLocked ? 0.42 : 0.95;
 
   aimLine.position.set(
     state.ball.position.x + bandDirection.x * guideLength * 0.5,
@@ -3407,7 +3922,7 @@ function launchShot(direction, power, anchor) {
     ? getPlanetVelocity(state.level, launchPlanetIndex, state.ball.time ?? state.level.time ?? 0)
     : { x: 0, y: 0 };
   const launchSurfaceVelocity = launchPlanetIndex !== null
-    ? getPlanetSurfaceVelocity(state.level, launchPlanetIndex, state.ball.anchorNormal)
+    ? getPlanetSurfaceVelocity(state.level, launchPlanetIndex, state.ball.anchorNormal, state.ball)
     : { x: 0, y: 0 };
   const velocity = {
     x: relativeVelocity.x + launchBodyVelocity.x + launchSurfaceVelocity.x,
@@ -3418,6 +3933,8 @@ function launchShot(direction, power, anchor) {
   state.ball.launchGracePlanetIndex = launchPlanetIndex;
   state.ball.anchorPlanetIndex = null;
   state.ball.anchorNormal = null;
+  state.ball.anchorSinceTime = state.ball.time ?? state.level.time ?? 0;
+  state.ball.portalCooldown = 0;
   state.ball.landedPlanetIndex = null;
   state.ball.landedPlanetName = '';
   state.currentFlightLaunchState = cloneBallPlaybackState(state.ball);
@@ -3445,8 +3962,15 @@ function onPointerDown(event) {
   setVec(state.dragPointerWorld, point);
   renderer.domElement.setPointerCapture(event.pointerId);
   updateDragState(point);
-  state.message = 'Stretch and release.';
-  state.hint = 'Point the pull where you want the launch to begin.';
+  const slidingIcePlanet = getAnchoredIcePlanet();
+  if (slidingIcePlanet && isLaunchLockedByIce()) {
+    const remaining = getIceLaunchLockRemaining(slidingIcePlanet);
+    state.message = 'Aim while the ball settles.';
+    state.hint = `Hold the drag. Launch unlocks in ${remaining.toFixed(1)}s.`;
+  } else {
+    state.message = 'Stretch and release.';
+    state.hint = 'Point the pull where you want the launch to begin.';
+  }
   syncHud();
 }
 
@@ -3458,8 +3982,14 @@ function onPointerMove(event) {
   const point = getWorldPointFromEvent(event);
   setVec(state.dragPointerWorld, point);
   updateDragState(point);
-  state.message = 'Release to launch.';
-  state.hint = `Burn loaded: ${state.dragPower.toFixed(2)} / ${MAX_DRAG_DISTANCE.toFixed(1)}`;
+  if (isLaunchLockedByIce()) {
+    const remaining = getIceLaunchLockRemaining(getAnchoredIcePlanet());
+    state.message = 'Aim while the ball settles.';
+    state.hint = `Burn loaded: ${state.dragPower.toFixed(2)} / ${MAX_DRAG_DISTANCE.toFixed(1)} · unlocks in ${remaining.toFixed(1)}s`;
+  } else {
+    state.message = 'Release to launch.';
+    state.hint = `Burn loaded: ${state.dragPower.toFixed(2)} / ${MAX_DRAG_DISTANCE.toFixed(1)}`;
+  }
   syncHud();
 }
 
@@ -3471,6 +4001,17 @@ function onPointerUp(event) {
   renderer.domElement.releasePointerCapture(event.pointerId);
 
   if (state.dragPower > 0.12) {
+    if (isLaunchLockedByIce()) {
+      const remaining = getIceLaunchLockRemaining(getAnchoredIcePlanet());
+      state.dragActive = false;
+      state.dragPower = 0;
+      setVec(state.dragAnchor, state.ball.position);
+      setVec(state.dragStartWorld, state.ball.position);
+      state.message = 'Ball still sliding.';
+      state.hint = `Wait ${remaining.toFixed(1)}s more before releasing the shot.`;
+      syncHud();
+      return;
+    }
     launchShot(state.aimDirection, state.dragPower, state.dragAnchor);
     return;
   }
@@ -3670,7 +4211,7 @@ function updatePhysics(delta) {
     return;
   }
 
-  if (lengthSq(state.ball.velocity) < 0.000001) {
+    if (lengthSq(state.ball.velocity) < 0.000001) {
     state.ball.velocity.x = 0;
     state.ball.velocity.y = 0;
     if (state.ball.anchorPlanetIndex !== null && state.ball.anchorPlanetIndex !== undefined) {
@@ -3678,7 +4219,7 @@ function updatePhysics(delta) {
         return;
       }
       const currentTime = state.ball.time ?? state.level.time ?? 0;
-      const timeSpeed = state.adminReplay.active ? 1 : getTimeSpeedValue();
+      const timeSpeed = state.adminReplay.active ? 1 : getEffectiveTimeSpeedValue();
       const minTime = state.level.startTimeSeconds ?? 0;
       const nextTime = Math.max(minTime, currentTime + delta * timeSpeed);
       const appliedDelta = nextTime - currentTime;
@@ -3699,7 +4240,7 @@ function updatePhysics(delta) {
       if (timeSpeed < 0 && nextTime <= minTime + 0.0001) {
         clampTimeSpeedToNonNegative();
       }
-      if (!isGoalOpen(state.level, state.ball.time)) {
+      if (!isGoalLocked(state.level) && !isGoalOpen(state.level, state.ball.time)) {
         beginGoalClosure(describeFailureHint('goal-closed'), { countReset: true });
       }
       return;
@@ -3712,6 +4253,7 @@ function updatePhysics(delta) {
 
   const result = stepBall(state.level, state.ball, delta);
   recordFlightHistorySample();
+  recordPortalFlightEvent(result.portalEvent ?? null);
   recordAttemptTrailPoint();
   if (result.type === 'goal') {
     beginGoal(result);
@@ -3777,6 +4319,21 @@ function updateDecor(time) {
   sunCorona.rotation.z = time * 0.28;
   sunCorona.material.opacity = 0.3 + Math.sin(time * 2.1) * 0.04;
   sunCore.rotation.y = time * 0.22;
+  extraSunVisuals.forEach((visual, index) => {
+    visual.group.position.set(visual.solarBody.position.x, 0, visual.solarBody.position.y);
+    visual.glow.scale.setScalar(1 + Math.sin(time * (1.4 + index * 0.16)) * 0.08);
+    visual.glow.material.opacity = 0.14 + Math.sin(time * 1.8 + index) * 0.03;
+    visual.corona.rotation.z = time * (0.24 + index * 0.08);
+    visual.corona.material.opacity = 0.24 + Math.sin(time * 2 + index) * 0.04;
+    visual.core.rotation.y = time * (0.18 + index * 0.06);
+  });
+  portalVisuals.forEach((visual, index) => {
+    visual.group.position.set(visual.portal.position.x, 0, visual.portal.position.y);
+    visual.ring.rotation.z = time * (visual.portal.variant === 'white' ? 0.9 : -0.75);
+    visual.aura.scale.setScalar(1 + Math.sin(time * (2.6 + index * 0.2) + index) * 0.08);
+    visual.aura.material.opacity = 0.09 + Math.sin(time * 2.2 + index) * 0.03;
+    visual.ring.material.opacity = 0.72 + Math.sin(time * 3 + index) * 0.08;
+  });
 
   const gravityFieldRefreshDue =
     worldTime < lastGravityFieldRefreshTime || worldTime - lastGravityFieldRefreshTime >= 0.16;
@@ -3822,7 +4379,6 @@ function updateDecor(time) {
     const isLandable = Boolean(visual.planet.landable);
     const relayPulse = state.ball.landedPlanetIndex === index ? state.relayPulse : 0;
     visual.group.position.set(visual.planet.position.x, 0, visual.planet.position.y);
-    visual.halo.scale.setScalar(pulse + relayPulse * 0.16);
     visual.glow.material.opacity = isLandable
       ? 0.13 + Math.sin(time * 2 + index) * 0.03 + relayPulse * 0.12
       : 0.16 + Math.sin(time * 1.7 + index) * 0.04;
@@ -3844,11 +4400,39 @@ function updateDecor(time) {
       visual.landingRing.material.opacity = selected
         ? 0.34 + Math.sin(time * 4.4) * 0.06 + relayPulse * 0.28
         : 0.16 + Math.sin(time * 3 + index) * 0.03;
+      if (visual.planet.surfaceType === 'ice') {
+        visual.landingRing.material.opacity += 0.08;
+      }
       visual.orbitRing.material.opacity = selected ? 0.9 : 0.62 + Math.sin(time * 2.5 + index) * 0.06;
       visual.orbitPath.material.opacity = selected ? 0.5 : 0.22 + Math.sin(time * 1.6 + index) * 0.025;
     } else {
       visual.orbitRing.material.opacity = 0.38 + Math.sin(time * 1.8 + index) * 0.04;
       visual.orbitPath.material.opacity = 0.14 + Math.sin(time * 1.4 + index) * 0.02;
+    }
+    if (visual.iceSkidArc) {
+      const selected = state.ball.anchorPlanetIndex === index;
+      const slideSpeed = selected ? getIceSlideVisualSpeed(visual.planet, state.ball) : 0;
+      visual.iceSkidArc.visible = selected && Math.abs(slideSpeed) > 0.02;
+      if (visual.iceSkidArc.visible) {
+        const anchorAngle = Math.atan2((state.ball.anchorNormal ?? { x: 1, y: 0 }).y, (state.ball.anchorNormal ?? { x: 1, y: 0 }).x);
+        visual.iceSkidArc.rotation.z = -anchorAngle + (slideSpeed >= 0 ? -0.24 : 0.24);
+        visual.iceSkidArc.material.opacity = Math.min(0.48, 0.18 + Math.abs(slideSpeed) * 0.22);
+        visual.iceSkidArc.scale.setScalar(1 + Math.min(0.12, Math.abs(slideSpeed) * 0.05));
+      }
+    }
+    if (visual.iceHaloRing) {
+      visual.iceHaloRing.material.opacity = 0.28 + Math.sin(time * 2.6 + index) * 0.04;
+      visual.iceHaloRing.scale.setScalar(1 + Math.sin(time * 2 + index) * 0.025);
+    }
+    if (visual.iceInnerRing) {
+      visual.iceInnerRing.material.opacity = 0.18 + Math.sin(time * 3.1 + index) * 0.04;
+      visual.iceInnerRing.rotation.z = time * (0.16 + index * 0.01);
+    }
+    if (visual.monolith) {
+      const unlocked = state.level.goalUnlocked;
+      visual.monolith.material.emissiveIntensity = unlocked ? 1.15 : 0.42 + Math.sin(time * 2.4) * 0.08;
+      visual.monolithRing.material.opacity = unlocked ? 0.34 + Math.sin(time * 4.1) * 0.05 : 0.18 + Math.sin(time * 2.6) * 0.04;
+      visual.monolithRing.scale.setScalar(unlocked ? 1.08 + Math.sin(time * 3.4) * 0.04 : 1);
     }
     visual.orbitPath.position.set(visual.planet.orbitCenter.x, 0, visual.planet.orbitCenter.y);
   });

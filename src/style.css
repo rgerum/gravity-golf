@@ -100,6 +100,49 @@ body::after {
   border: 1px solid rgba(137, 168, 255, 0.08);
   border-radius: 22px;
   pointer-events: none;
+  z-index: 4;
+}
+
+.table-frame::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.62;
+  filter: drop-shadow(0 0 4px rgba(180, 230, 255, 0.12));
+  background:
+    radial-gradient(circle at 6% 10%, rgba(255, 255, 255, 0.95) 0 6.75px, transparent 11.5px),
+    radial-gradient(circle at 14% 24%, rgba(183, 223, 255, 0.85) 0 7.75px, transparent 12.75px),
+    radial-gradient(circle at 22% 8%, rgba(255, 255, 255, 0.88) 0 6.75px, transparent 11px),
+    radial-gradient(circle at 31% 18%, rgba(164, 233, 255, 0.78) 0 8.5px, transparent 13.75px),
+    radial-gradient(circle at 39% 11%, rgba(255, 255, 255, 0.84) 0 6.75px, transparent 11px),
+    radial-gradient(circle at 47% 26%, rgba(255, 255, 255, 0.92) 0 7.25px, transparent 12px),
+    radial-gradient(circle at 58% 9%, rgba(158, 216, 255, 0.82) 0 9px, transparent 14.5px),
+    radial-gradient(circle at 66% 21%, rgba(255, 255, 255, 0.88) 0 6.75px, transparent 11.25px),
+    radial-gradient(circle at 74% 14%, rgba(125, 243, 217, 0.72) 0 9.5px, transparent 15px),
+    radial-gradient(circle at 82% 7%, rgba(255, 255, 255, 0.9) 0 6.75px, transparent 11.25px),
+    radial-gradient(circle at 91% 19%, rgba(196, 225, 255, 0.8) 0 7.75px, transparent 12.75px),
+    radial-gradient(circle at 11% 44%, rgba(255, 255, 255, 0.82) 0 6.75px, transparent 11px),
+    radial-gradient(circle at 19% 58%, rgba(183, 223, 255, 0.72) 0 7.75px, transparent 12.75px),
+    radial-gradient(circle at 28% 39%, rgba(255, 255, 255, 0.92) 0 7.25px, transparent 12px),
+    radial-gradient(circle at 36% 63%, rgba(158, 216, 255, 0.78) 0 8.5px, transparent 13.75px),
+    radial-gradient(circle at 44% 47%, rgba(255, 255, 255, 0.86) 0 6.75px, transparent 11px),
+    radial-gradient(circle at 53% 68%, rgba(255, 255, 255, 0.82) 0 6.75px, transparent 11.25px),
+    radial-gradient(circle at 62% 41%, rgba(183, 223, 255, 0.76) 0 7.75px, transparent 12.75px),
+    radial-gradient(circle at 71% 57%, rgba(255, 255, 255, 0.88) 0 7.25px, transparent 12px),
+    radial-gradient(circle at 79% 36%, rgba(125, 243, 217, 0.66) 0 9px, transparent 14.5px),
+    radial-gradient(circle at 87% 61%, rgba(255, 255, 255, 0.84) 0 6.75px, transparent 11.25px),
+    radial-gradient(circle at 94% 43%, rgba(183, 223, 255, 0.74) 0 7.75px, transparent 12.75px),
+    radial-gradient(circle at 8% 82%, rgba(255, 255, 255, 0.86) 0 6.75px, transparent 11px),
+    radial-gradient(circle at 17% 73%, rgba(158, 216, 255, 0.72) 0 8.5px, transparent 13.75px),
+    radial-gradient(circle at 27% 89%, rgba(255, 255, 255, 0.92) 0 7.25px, transparent 12px),
+    radial-gradient(circle at 38% 77%, rgba(183, 223, 255, 0.76) 0 7.75px, transparent 12.75px),
+    radial-gradient(circle at 49% 92%, rgba(255, 255, 255, 0.88) 0 6.75px, transparent 11.25px),
+    radial-gradient(circle at 61% 79%, rgba(158, 216, 255, 0.7) 0 9px, transparent 14.5px),
+    radial-gradient(circle at 72% 88%, rgba(255, 255, 255, 0.84) 0 6.75px, transparent 11px),
+    radial-gradient(circle at 83% 74%, rgba(183, 223, 255, 0.74) 0 7.75px, transparent 12.75px),
+    radial-gradient(circle at 92% 86%, rgba(255, 255, 255, 0.9) 0 7.25px, transparent 12px);
 }
 
 #scene,
@@ -107,6 +150,11 @@ body::after {
   width: 100%;
   height: 100%;
   display: block;
+}
+
+#scene {
+  position: relative;
+  z-index: 1;
 }
 
 #scene canvas {
@@ -117,6 +165,7 @@ body::after {
 .stage-overlay {
   position: absolute;
   inset: 0;
+  z-index: 2;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -303,6 +352,230 @@ h1 {
 .hud-button-primary {
   border-color: rgba(125, 243, 217, 0.24);
   background: linear-gradient(180deg, rgba(27, 57, 64, 0.9), rgba(10, 24, 26, 0.88));
+}
+
+.tutorial-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.tutorial-card {
+  position: absolute;
+  right: clamp(220px, 20vw, 300px);
+  bottom: clamp(42px, 8vh, 88px);
+  width: min(220px, calc(100% - 40px));
+  padding: 10px 11px 11px;
+  border-radius: 18px;
+  border: 1px solid rgba(137, 168, 255, 0.18);
+  background:
+    linear-gradient(180deg, rgba(10, 16, 29, 0.88), rgba(7, 12, 23, 0.76));
+  backdrop-filter: blur(16px);
+  box-shadow:
+    0 20px 56px rgba(0, 0, 0, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.tutorial-kicker {
+  margin-bottom: 6px;
+  color: var(--accent);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.52rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.tutorial-gesture {
+  position: relative;
+  height: 48px;
+  margin-bottom: 8px;
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at 22% 50%, rgba(123, 243, 217, 0.08), transparent 20%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0.012));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  overflow: hidden;
+}
+
+.tutorial-gesture-ball,
+.tutorial-gesture-handle,
+.tutorial-gesture-start,
+.tutorial-gesture-release {
+  position: absolute;
+  top: 50%;
+  border-radius: 999px;
+  transform: translateY(-50%);
+}
+
+.tutorial-gesture-ball {
+  left: 22px;
+  bottom: 10px;
+  top: auto;
+  width: 15px;
+  height: 15px;
+  background:
+    radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.95), rgba(222, 232, 255, 0.88) 56%, rgba(163, 194, 255, 0.52) 100%);
+  box-shadow:
+    0 0 18px rgba(255, 255, 255, 0.24),
+    0 0 0 1px rgba(255, 255, 255, 0.18);
+  transform: none;
+}
+
+.tutorial-gesture-guide {
+  position: absolute;
+  left: 29px;
+  bottom: 16px;
+  top: auto;
+  width: 84px;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(255, 179, 92, 0.96), rgba(255, 111, 79, 0));
+  transform: rotate(-8deg);
+  transform-origin: left center;
+  animation: tutorial-drag-line 2.4s linear infinite;
+  box-shadow: 0 0 18px rgba(255, 175, 98, 0.22);
+}
+
+.tutorial-gesture-handle {
+  left: 29px;
+  bottom: 13px;
+  top: auto;
+  width: 9px;
+  height: 9px;
+  background: rgba(255, 200, 111, 0.98);
+  box-shadow: 0 0 14px rgba(255, 175, 98, 0.32);
+  animation: tutorial-drag-handle 2.4s linear infinite;
+  transform: none;
+}
+
+.tutorial-gesture-release {
+  left: 19px;
+  bottom: 3px;
+  top: auto;
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(255, 184, 110, 0.34);
+  opacity: 0;
+  animation: tutorial-drag-release 2.4s linear infinite;
+  transform: none;
+}
+
+.tutorial-gesture-start {
+  left: 14px;
+  bottom: 2px;
+  top: auto;
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(255, 184, 110, 0.34);
+  opacity: 0;
+  animation: tutorial-drag-start 2.4s linear infinite;
+  transform: none;
+}
+
+.tutorial-copy {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.8rem;
+  line-height: 1.22;
+}
+
+@keyframes tutorial-drag-line {
+  0%, 12% {
+    opacity: 0;
+    transform: rotate(-8deg) scaleX(0.02);
+  }
+
+  24% {
+    opacity: 1;
+    transform: rotate(-8deg) scaleX(0.02);
+  }
+
+  56% {
+    opacity: 1;
+    transform: rotate(-8deg) scaleX(1);
+  }
+
+  62%, 68% {
+    opacity: 1;
+    transform: rotate(-8deg) scaleX(1);
+  }
+
+  72%, 100% {
+    opacity: 0;
+    transform: rotate(-8deg) scaleX(1);
+  }
+}
+
+@keyframes tutorial-drag-handle {
+  0%, 12% {
+    opacity: 0;
+    transform: translateX(0) translateY(0);
+  }
+
+  24% {
+    opacity: 1;
+    transform: translateX(0) translateY(0);
+  }
+
+  56% {
+    opacity: 1;
+    transform: translateX(82px) translateY(-13px);
+  }
+
+  62%, 68% {
+    opacity: 1;
+    transform: translateX(82px) translateY(-13px);
+  }
+
+  72% {
+    opacity: 0;
+    transform: translateX(82px) translateY(-13px);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateX(0) translateY(0);
+  }
+}
+
+@keyframes tutorial-drag-release {
+  0%, 56% {
+    opacity: 0;
+    transform: translateX(82px) translateY(-13px) scale(0.55);
+  }
+
+  70% {
+    opacity: 0.95;
+    transform: translateX(82px) translateY(-13px) scale(1);
+  }
+
+  78%, 100% {
+    opacity: 0;
+    transform: translateX(82px) translateY(-13px) scale(1.42);
+  }
+}
+
+@keyframes tutorial-drag-start {
+  0% {
+    opacity: 0;
+    transform: scale(1.36);
+  }
+
+  8% {
+    opacity: 0.85;
+    transform: scale(1.12);
+  }
+
+  18% {
+    opacity: 0;
+    transform: scale(0.58);
+  }
+
+  30%, 100% {
+    opacity: 0;
+    transform: scale(0.58);
+  }
 }
 
 .game-over-modal {
@@ -534,6 +807,18 @@ h1 {
     align-self: flex-end;
   }
 
+  .tutorial-card {
+    right: 12px;
+    bottom: 88px;
+    width: min(214px, calc(100% - 24px));
+    padding: 10px 11px 11px;
+    border-radius: 18px;
+  }
+
+  .tutorial-copy {
+    font-size: 0.78rem;
+  }
+
   .game-over-modal {
     padding: 10px;
     align-items: stretch;
@@ -612,6 +897,19 @@ h1 {
 
   .time-control-label strong {
     font-size: 0.62rem;
+  }
+
+  .tutorial-card {
+    bottom: 76px;
+  }
+
+  .tutorial-gesture {
+    height: 52px;
+  }
+
+  .tutorial-copy {
+    font-size: 0.76rem;
+    line-height: 1.22;
   }
 }
 
@@ -772,6 +1070,30 @@ h1 {
     font-size: 0.7rem;
     line-height: 1.16;
     max-width: 30ch;
+  }
+
+  .tutorial-card {
+    right: max(112px, 7vw);
+    bottom: 14px;
+    width: min(246px, 30vw);
+    padding: 10px 12px 11px;
+    border-radius: 16px;
+  }
+
+  .tutorial-kicker {
+    margin-bottom: 6px;
+    font-size: 0.5rem;
+  }
+
+  .tutorial-gesture {
+    height: 46px;
+    margin-bottom: 8px;
+    border-radius: 12px;
+  }
+
+  .tutorial-copy {
+    font-size: 0.72rem;
+    line-height: 1.18;
   }
 
   .game-over-panel {
