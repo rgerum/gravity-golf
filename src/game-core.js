@@ -40,6 +40,9 @@ const SYSTEM_LAYOUT_SCALE = 1;
 export const FIXED_SOLAR_GRAVITY_STRENGTH = 20;
 const DEFAULT_EXTRA_SUN_GRAVITY_STRENGTH = 16;
 const DEFAULT_EXTRA_SUN_COLLISION_RADIUS = 0.38;
+const DEFAULT_RED_GIANT_START_RADIUS = SUN_COLLISION_RADIUS;
+const DEFAULT_RED_GIANT_END_RADIUS = 2.35;
+const DEFAULT_RED_GIANT_GROW_SECONDS = 12;
 const PORTAL_COOLDOWN_SECONDS = 0.22;
 const BINARY_PRIMARY_RADIUS = 0.44;
 const BINARY_PRIMARY_GRAVITY_STRENGTH = FIXED_SOLAR_GRAVITY_STRENGTH;
@@ -53,6 +56,9 @@ const DEFAULT_PULSAR_JET_INNER_RADIUS = 0.5;
 const PULSAR_SEGMENT_COLLISION_SAMPLES = 8;
 const DEFAULT_TURRET_RANGE = 5.6;
 const DEFAULT_TURRET_LINE_WIDTH = 0.13;
+const DEFAULT_DUST_CLOUD_RADIUS = 1.15;
+const DEFAULT_DUST_CLOUD_DRAG = 0.9;
+const DUST_CLOUD_DRAG_MULTIPLIER = 3.2;
 
 function polar(radius, angleDeg) {
   return { radius, angleDeg };
@@ -75,6 +81,9 @@ export const WORLD_DEFINITIONS = [
   { id: 'dying-systems', name: 'Dying Systems' },
   { id: 'flicker-planets', name: 'Flicker Planets' },
   { id: 'hostile-planets', name: 'Hostile Planets' },
+  { id: 'asteroid-belts', name: 'Asteroid Belts' },
+  { id: 'supernova', name: 'Supernova' },
+  { id: 'dust-clouds', name: 'Dust Clouds' },
 ];
 
 const CORE_LEVEL_DEFINITIONS = [
@@ -1264,6 +1273,10 @@ function clonePlanets(planets) {
   }));
 }
 
+function cloneDustClouds(dustClouds) {
+  return (dustClouds ?? []).map((cloud) => ({ ...cloud }));
+}
+
 function cloneLevel(baseId, overrides = {}) {
   const base = coreLevelById.get(baseId);
   if (!base) {
@@ -1275,6 +1288,7 @@ function cloneLevel(baseId, overrides = {}) {
     ...overrides,
     launchPresets: cloneLaunchPresets(overrides.launchPresets ?? base.launchPresets),
     planets: clonePlanets(overrides.planets ?? base.planets),
+    dustClouds: cloneDustClouds(overrides.dustClouds ?? base.dustClouds),
   };
 
   if ('tutorial' in overrides) {
@@ -1610,6 +1624,29 @@ function makeHostileVariant(spec) {
   return level;
 }
 
+function normalizeDustCloud(cloud = {}, cloudIndex = 0) {
+  return {
+    id: cloud.id ?? `dust-cloud-${cloudIndex + 1}`,
+    position: cloud.position,
+    radius: cloud.radius ?? DEFAULT_DUST_CLOUD_RADIUS,
+    drag: cloud.drag ?? DEFAULT_DUST_CLOUD_DRAG,
+    orbitAngularSpeed: cloud.orbitAngularSpeed ?? 0,
+    orbitEccentricity: cloud.orbitEccentricity ?? 0.03,
+    orbitRotationDeg: cloud.orbitRotationDeg,
+    opacity: cloud.opacity ?? 1,
+  };
+}
+
+function makeDustVariant(spec) {
+  const level = variantLevel('ancient', {
+    ...spec,
+    summary: spec.summary ?? 'Interstellar dust drifts through the system. Crossing it bleeds speed from every shot.',
+  });
+  level.tutorial = spec.tutorial ?? null;
+  level.dustClouds = (spec.dustClouds ?? []).map((cloud, cloudIndex) => normalizeDustCloud(cloud, cloudIndex));
+  return level;
+}
+
 function makeSplitVariant(spec) {
   const level = variantLevel('prism', spec);
   const splitPlanets = spec.splitPlanets ?? {};
@@ -1697,6 +1734,106 @@ function makeFlickerVariant(spec) {
     };
   });
   return level;
+}
+
+function makeSupernovaVariant(spec, specIndex) {
+  const level = variantLevel('collapse', {
+    ...spec,
+    summary: spec.summary ?? 'The sun is swelling into a red giant. Launch before the inner worlds are swallowed.',
+  });
+  const growSeconds = spec.growSeconds ?? Math.max(8.5, DEFAULT_RED_GIANT_GROW_SECONDS - specIndex * 0.28);
+  const endRadius = spec.endRadius ?? (1.64 + specIndex * 0.12);
+  level.redGiant = {
+    startRadius: spec.startRadius ?? DEFAULT_RED_GIANT_START_RADIUS,
+    endRadius,
+    growSeconds,
+    startTimeSeconds: spec.redGiantStartTimeSeconds ?? level.startTimeSeconds ?? 0,
+  };
+  level.goalOpenSeconds = spec.goalOpenSeconds
+    ?? Math.max(6, Math.min(level.goalOpenSeconds ?? DEFAULT_GOAL_OPEN_SECONDS, growSeconds + 1.6));
+  level.planets = level.planets.map((planet, index) => ({
+    ...planet,
+    redGiantVulnerable: spec.safePlanetIndices?.includes(index) ? false : true,
+    sunFadeStartRadius: endRadius + (planet.radius ?? 0.5) * 2.25 + 0.35,
+    sunPlungeDuration: spec.sunPlungeDuration ?? 0.72,
+  }));
+  return level;
+}
+
+function angularDistanceDeg(left, right) {
+  return Math.abs((((left - right + 180) % 360) + 360) % 360 - 180);
+}
+
+function makeAsteroidBelt({
+  orbitRadius = 5,
+  count = 36,
+  radius = 0.2,
+  gapAngles = [0],
+  gapWidthDeg = 34,
+  angularSpeed = 0.08,
+  radialJitter = 0.18,
+  seed = 0,
+}) {
+  const asteroids = [];
+  for (let index = 0; index < count; index += 1) {
+    const angleDeg = (index / count) * 360;
+    const inGap = gapAngles.some((gapAngleDeg) => angularDistanceDeg(angleDeg, gapAngleDeg) <= gapWidthDeg / 2);
+    if (inGap) {
+      continue;
+    }
+
+    const wobble = ((index * 37 + seed * 19) % 17 - 8) * 0.008;
+    const orbitWobble = ((index * 29 + seed * 11) % 13 - 6) * (radialJitter / 6);
+    asteroids.push({
+      position: polar(orbitRadius + orbitWobble, angleDeg),
+      orbitRadius: orbitRadius + orbitWobble,
+      baseAngleDeg: angleDeg,
+      orbitAngularSpeed: angularSpeed,
+      radius: Number((radius + wobble).toFixed(3)),
+      spinSpeed: (((index + seed) % 2 === 0 ? 1 : -1) * (0.28 + ((index + seed) % 5) * 0.04)),
+      color: [0x9aa0aa, 0x7d858f, 0xb2aa9a][(index + seed) % 3],
+    });
+  }
+  return asteroids;
+}
+
+function makeAsteroidBeltLevel(spec) {
+  const defaultOuterPlanet = spec.disableDefaultOuterPlanet
+    ? []
+    : [{
+      name: spec.outerPlanetName ?? 'Outer Relay',
+      position: polar(
+        Math.max(5.8, Math.min(6.9, spec.goalCenter.radius - 1.35)),
+        (spec.goalCenter.angleDeg ?? 0) + (spec.outerPlanetAngleOffset ?? 18),
+      ),
+      radius: 0.58,
+      gravity: 5.2,
+      falloff: 3.4,
+      core: 0xf2a366,
+      glow: 0xffd18a,
+      landable: true,
+      landingRadius: 0.92,
+      orbitAngularSpeed: spec.outerPlanetOrbitSpeed ?? 0.04,
+      spinAngularSpeed: 0.08,
+    }];
+  return {
+    id: spec.id,
+    name: spec.name,
+    summary: spec.summary,
+    preferRelay: spec.preferRelay,
+    adminSolutions: spec.adminSolutions,
+    sun: [0, 0],
+    startPlanetIndex: spec.startPlanetIndex ?? 0,
+    startAnchor: spec.startAnchor,
+    goalCenter: spec.goalCenter,
+    goalOpenSeconds: spec.goalOpenSeconds ?? 12,
+    goalPullRadius: spec.goalPullRadius ?? 2.4,
+    goalPullStrength: spec.goalPullStrength ?? 5.8,
+    sunGravityStrength: spec.sunGravityStrength ?? 0,
+    launchPresets: spec.launchPresets,
+    asteroids: spec.belts.flatMap((belt, index) => makeAsteroidBelt({ ...belt, seed: index + spec.seed })),
+    planets: [...spec.planets, ...(spec.outerPlanets ?? defaultOuterPlanet)],
+  };
 }
 
 const ICY_WORLD_SPECS = [
@@ -1821,6 +1958,124 @@ const HOSTILE_WORLD_SPECS = [
   { baseId: 'final-circuit', id: 'hostile-circuit', name: 'Hostile Circuit', summary: 'The final relay circuit becomes a hostile run through overlapping planet sight lines.', turrets: { 1: { type: 'tank', angleDeg: 312, range: 4.8 }, 2: { type: 'missile', angleDeg: 88, range: 5.2 }, 3: { type: 'tank', angleDeg: 210, range: 4.6 } } },
 ];
 
+const DUST_WORLD_SPECS = [
+  {
+    baseId: 'first-arc',
+    id: 'dust-drift',
+    name: 'Dust Drift',
+    summary: 'The first cloud is soft enough to use as a brake, but crossing its center kills the clean arc.',
+    tutorial: { type: 'dust', copy: 'Dust clouds slow the ball while it flies through them.' },
+    launchAngleDelta: 1.5,
+    powerScale: 1.03,
+    dustClouds: [
+      { position: polar(4.3, -44), radius: 1.08, drag: 0.56, orbitAngularSpeed: 0.05 },
+    ],
+  },
+  {
+    baseId: 'fast-window',
+    id: 'silt-window',
+    name: 'Silt Window',
+    summary: 'A braking cloud slides across the fast lane, turning the timing window into a speed window too.',
+    launchAngleDelta: -2,
+    powerScale: 1.05,
+    dustClouds: [
+      { position: polar(4.9, -18), radius: 1.0, drag: 0.66, orbitAngularSpeed: -0.08 },
+    ],
+  },
+  {
+    baseId: 'first-arc',
+    id: 'veil-relay',
+    name: 'Veil Arc',
+    summary: 'A thin veil crosses the simple solar bend, trimming speed if the shot cuts too deep.',
+    launchAngleDelta: 2,
+    powerScale: 1.05,
+    dustClouds: [
+      { position: polar(3.9, -44), radius: 0.94, drag: 0.48, orbitAngularSpeed: 0.05 },
+      { position: polar(6.2, 8), radius: 0.82, drag: 0.34, orbitAngularSpeed: -0.04 },
+    ],
+  },
+  {
+    baseId: 'forked-harbor',
+    id: 'powder-harbor',
+    name: 'Powder Harbor',
+    summary: 'The fork is still readable, but one harbor lane spends too long inside the powder band.',
+    launchAngleDelta: 1,
+    dustClouds: [
+      { position: polar(4.4, 24), radius: 1.05, drag: 0.72, orbitAngularSpeed: -0.05 },
+      { position: polar(7.2, -16), radius: 1.2, drag: 0.5, orbitAngularSpeed: 0.04 },
+    ],
+  },
+  {
+    baseId: 'inner-step',
+    id: 'brownout-step',
+    name: 'Brownout Step',
+    summary: 'The inner launch has to step outward before the broad cloud strips away too much momentum.',
+    powerScale: 1.06,
+    dustClouds: [
+      { position: polar(3.7, -66), radius: 1.35, drag: 0.6, orbitAngularSpeed: 0.04 },
+      { position: polar(6.6, 30), radius: 0.95, drag: 0.5, orbitAngularSpeed: -0.06 },
+    ],
+  },
+  {
+    baseId: 'moon-switch',
+    id: 'dust-switch',
+    name: 'Dust Switch',
+    summary: 'The moon route survives, but the cloud before the switch changes how much speed reaches the rim.',
+    launchAngleDelta: -1.5,
+    dustClouds: [
+      { position: polar(4.6, 112), radius: 1.12, drag: 0.68, orbitAngularSpeed: 0.08 },
+      { position: polar(7.4, -10), radius: 1.0, drag: 0.48, orbitAngularSpeed: -0.03 },
+    ],
+  },
+  {
+    baseId: 'long-transfer',
+    id: 'nebula-transfer',
+    name: 'Nebula Transfer',
+    summary: 'A long transfer now needs a stronger launch because the nebula sands speed off the outbound leg.',
+    powerScale: 1.08,
+    dustClouds: [
+      { position: polar(5.4, -38), radius: 1.42, drag: 0.58, orbitAngularSpeed: 0.03 },
+      { position: polar(8.1, 20), radius: 1.05, drag: 0.44, orbitAngularSpeed: -0.05 },
+    ],
+  },
+  {
+    baseId: 'halo-run',
+    id: 'cloud-halo',
+    name: 'Cloud Halo',
+    summary: 'The outer halo has enough room, but the dust pockets decide which relays keep usable speed.',
+    powerScale: 1.07,
+    dustClouds: [
+      { position: polar(4.2, 138), radius: 1.0, drag: 0.62, orbitAngularSpeed: -0.04 },
+      { position: polar(6.7, -24), radius: 1.25, drag: 0.55, orbitAngularSpeed: 0.03 },
+      { position: polar(8.7, 44), radius: 0.95, drag: 0.42, orbitAngularSpeed: -0.06 },
+    ],
+  },
+  {
+    baseId: 'crown-window',
+    id: 'crown-haze',
+    name: 'Crown Haze',
+    summary: 'The crown route opens cleanly only if the haze trims speed without trapping the shot.',
+    launchAngleDelta: 1.5,
+    powerScale: 1.05,
+    dustClouds: [
+      { position: polar(5.2, 62), radius: 1.18, drag: 0.64, orbitAngularSpeed: 0.05 },
+      { position: polar(7.8, 2), radius: 1.12, drag: 0.52, orbitAngularSpeed: -0.04 },
+    ],
+  },
+  {
+    baseId: 'final-circuit',
+    id: 'dust-circuit',
+    name: 'Dust Circuit',
+    summary: 'The final circuit crosses several dusty pockets; conserve just enough speed for the last burn.',
+    powerScale: 1.08,
+    dustClouds: [
+      { position: polar(3.8, -122), radius: 1.0, drag: 0.66, orbitAngularSpeed: 0.05 },
+      { position: polar(6.2, 36), radius: 1.22, drag: 0.56, orbitAngularSpeed: -0.05 },
+      { position: polar(8.6, 10), radius: 1.05, drag: 0.46, orbitAngularSpeed: 0.04 },
+    ],
+  },
+];
+
 const DYING_WORLD_SPECS = [
   { baseId: 'first-arc', id: 'decay-arc', name: 'Decay Arc', summary: 'The launch world is already falling inward, so the clean bend changes every second.', goalOpenSecondsDelta: -1 },
   { baseId: 'fast-window', id: 'sinking-window', name: 'Sinking Window', summary: 'The fast lane is no longer stable; wait too long and the planet has dropped into a tighter spiral.', decayScale: 1.08, goalOpenSecondsDelta: -1 },
@@ -1943,6 +2198,227 @@ const FLICKER_WORLD_SPECS = [
   },
 ];
 
+const ASTEROID_WORLD_SPECS = [
+  {
+    id: 'belt-gap',
+    name: 'Belt Gap',
+    summary: 'A circular asteroid belt surrounds the sun. Shoot outward through one of the rotating gaps.',
+    seed: 1,
+    startAnchor: polar(3.06, 28),
+    goalCenter: polar(9.2, 28),
+    goalPullRadius: 3.2,
+    goalPullStrength: 6.4,
+    launchPresets: [{ angleDeg: 28, power: 2.05 }],
+    belts: [{ orbitRadius: 5.1, gapAngles: [28, 148, -92], gapWidthDeg: 42, angularSpeed: 0.14 }],
+    planets: [
+      { name: 'Inner Tee', position: polar(2.4, 28), radius: 0.7, gravity: 4.8, falloff: 3.2, core: 0x75bfff, glow: 0x9fe1ff, landable: true, orbitAngularSpeed: 0, spinAngularSpeed: 0.05 },
+    ],
+    outerPlanets: [
+      { name: 'Right Catch', position: polar(6.55, 44), radius: 0.56, gravity: 5.0, falloff: 3.3, core: 0xf2a366, glow: 0xffd18a, landable: true, landingRadius: 0.9, orbitAngularSpeed: 0.08, orbitEccentricity: 0.04, spinAngularSpeed: 0.08 },
+    ],
+  },
+  {
+    id: 'drifting-gap',
+    name: 'Drifting Gap',
+    preferRelay: true,
+    summary: 'The belt rotates quickly, so the first clean launch aims ahead of the visible opening.',
+    seed: 2,
+    startAnchor: polar(3.02, -34),
+    goalCenter: polar(9.15, -30),
+    launchPresets: [{ angleDeg: -12, power: 2.0 }, { angleDeg: 28, power: 1.75 }],
+    belts: [{ orbitRadius: 5.15, gapAngles: [-8, 52, 132, -128], gapWidthDeg: 40, angularSpeed: 0.16 }],
+    planets: [
+      { name: 'Low Tee', position: polar(2.36, -34), radius: 0.7, gravity: 4.9, falloff: 3.2, core: 0x76c4ff, glow: 0xa2e4ff, landable: true, orbitAngularSpeed: 0, spinAngularSpeed: 0.05 },
+    ],
+    outerPlanets: [
+      { name: 'Low Catch', position: polar(6.45, -12), radius: 0.5, gravity: 4.6, falloff: 3.0, core: 0xf6a76a, glow: 0xffd38d, landable: true, landingRadius: 0.84, orbitAngularSpeed: 0.08, spinAngularSpeed: -0.08 },
+      { name: 'High Catch', position: polar(6.9, 34), radius: 0.48, gravity: 4.4, falloff: 2.9, core: 0x9f8cff, glow: 0xd4cbff, landable: true, landingRadius: 0.82, orbitAngularSpeed: 0.08, spinAngularSpeed: 0.08 },
+    ],
+  },
+  {
+    id: 'inner-slot',
+    name: 'Inner Slot',
+    preferRelay: true,
+    summary: 'Stay inside the ring until the low slot lines up, then fire through the belt.',
+    seed: 3,
+    startAnchor: polar(3.0, 48),
+    goalCenter: polar(7.55, 48),
+    launchPresets: [{ angleDeg: 70, power: 2.0 }, { angleDeg: 36, power: 1.8 }],
+    belts: [{ orbitRadius: 5.0, gapAngles: [72, 142, -38, -128], gapWidthDeg: 38, angularSpeed: -0.15 }],
+    planets: [
+      { name: 'North Tee', position: polar(2.34, 48), radius: 0.7, gravity: 4.9, falloff: 3.2, core: 0x76c4ff, glow: 0xa2e4ff, landable: true, orbitAngularSpeed: 0, spinAngularSpeed: -0.05 },
+    ],
+    outerPlanets: [
+      { name: 'Near Ledge', position: polar(6.35, 70), radius: 0.52, gravity: 4.8, falloff: 3.1, core: 0xf1a366, glow: 0xffd28a, landable: true, landingRadius: 0.86, orbitAngularSpeed: -0.07, spinAngularSpeed: 0.08 },
+      { name: 'Far Ledge', position: polar(7.0, 36), radius: 0.44, gravity: 4.0, falloff: 2.8, core: 0xc0c7d6, glow: 0xf4f8ff, landable: true, landingRadius: 0.76, orbitAngularSpeed: -0.07, spinAngularSpeed: -0.08 },
+    ],
+  },
+  {
+    id: 'twin-gaps',
+    name: 'Twin Gaps',
+    preferRelay: true,
+    summary: 'Two openings rotate around the ring, but the shallower gap gives the cleaner finish.',
+    seed: 4,
+    startAnchor: polar(3.02, 32),
+    goalCenter: polar(9.05, 28),
+    launchPresets: [{ angleDeg: 54, power: 2.0 }, { angleDeg: -28, power: 1.9 }],
+    belts: [{ orbitRadius: 5.18, gapAngles: [54, -28, 118, -152], gapWidthDeg: 38, angularSpeed: 0.17 }],
+    planets: [
+      { name: 'Split Tee', position: polar(2.36, 32), radius: 0.7, gravity: 4.8, falloff: 3.1, core: 0x75bfff, glow: 0x9fe1ff, landable: true, orbitAngularSpeed: 0, spinAngularSpeed: 0.05 },
+    ],
+    outerPlanets: [
+      { name: 'Upper Harbor', position: polar(6.45, 54), radius: 0.54, gravity: 4.8, falloff: 3.2, core: 0xf2a366, glow: 0xffd18a, landable: true, landingRadius: 0.88, orbitAngularSpeed: 0.07, spinAngularSpeed: -0.08 },
+      { name: 'Lower Harbor', position: polar(6.95, -28), radius: 0.54, gravity: 4.8, falloff: 3.2, core: 0x8f82ff, glow: 0xc9c2ff, landable: true, landingRadius: 0.88, orbitAngularSpeed: 0.07, spinAngularSpeed: 0.08 },
+    ],
+  },
+  {
+    id: 'narrow-orbit',
+    name: 'Narrow Orbit',
+    preferRelay: true,
+    summary: 'The belt is tighter and faster; the route is a compact shot through a narrow rotating aperture.',
+    seed: 5,
+    startAnchor: polar(2.92, -38),
+    goalCenter: polar(8.9, -32),
+    launchPresets: [{ angleDeg: -8, power: 1.95 }, { angleDeg: -50, power: 2.0 }],
+    belts: [{ orbitRadius: 4.75, count: 42, radius: 0.21, gapAngles: [-8, 54, 124, -50, -128], gapWidthDeg: 34, angularSpeed: 0.2 }],
+    planets: [
+      { name: 'Tight Tee', position: polar(2.26, -38), radius: 0.7, gravity: 4.9, falloff: 3.2, core: 0x79c6ff, glow: 0xa7e6ff, landable: true, orbitAngularSpeed: 0, spinAngularSpeed: 0.05 },
+    ],
+    outerPlanets: [
+      { name: 'Needle Catch', position: polar(6.1, -8), radius: 0.42, gravity: 3.8, falloff: 2.7, core: 0xc0c7d6, glow: 0xf4f8ff, landable: true, landingRadius: 0.74, orbitAngularSpeed: 0.07, spinAngularSpeed: 0.08 },
+      { name: 'Wide Catch', position: polar(6.9, -50), radius: 0.56, gravity: 5.0, falloff: 3.3, core: 0xf6a76a, glow: 0xffd58f, landable: true, landingRadius: 0.9, orbitAngularSpeed: 0.07, spinAngularSpeed: -0.08 },
+    ],
+  },
+  {
+    id: 'relay-through',
+    name: 'Relay Through',
+    preferRelay: true,
+    summary: 'Land on the inner relay, then wait for the orbiting belt gap to sweep into the exit line.',
+    seed: 6,
+    startAnchor: polar(2.92, -58),
+    goalCenter: polar(9.2, 8),
+    startPlanetIndex: 0,
+    launchPresets: [{ angleDeg: -36, power: 2.0 }, { angleDeg: 8, power: 1.9 }],
+    belts: [{ orbitRadius: 5.05, gapAngles: [-36, 42, 118, -122], gapWidthDeg: 40, angularSpeed: 0.18 }],
+    planets: [
+      { name: 'Belt Relay', position: polar(2.26, -58), radius: 0.7, gravity: 5.2, falloff: 3.5, core: 0xf2a366, glow: 0xffd18a, landable: true, landingRadius: 1.12, orbitAngularSpeed: 0, spinAngularSpeed: -0.08 },
+    ],
+    outerPlanets: [
+      { name: 'Exit Relay', position: polar(6.45, -36), radius: 0.58, gravity: 5.2, falloff: 3.4, core: 0x8f81ff, glow: 0xc8c0ff, landable: true, landingRadius: 0.92, orbitAngularSpeed: 0.08, spinAngularSpeed: 0.08 },
+      { name: 'Far Dock', position: polar(7.05, 8), radius: 0.46, gravity: 4.2, falloff: 2.8, core: 0xc0c7d6, glow: 0xf4f8ff, landable: true, landingRadius: 0.78, orbitAngularSpeed: 0.08, spinAngularSpeed: -0.08 },
+    ],
+  },
+  {
+    id: 'double-ring',
+    name: 'Double Ring',
+    preferRelay: true,
+    summary: 'Two circular belts rotate at different speeds, leaving a shared corridor only when both gaps agree.',
+    seed: 7,
+    startAnchor: polar(3.0, 12),
+    goalCenter: polar(9.45, 18),
+    launchPresets: [{ angleDeg: 36, power: 2.0 }, { angleDeg: 4, power: 1.9 }],
+    belts: [
+      { orbitRadius: 4.7, count: 38, radius: 0.18, gapAngles: [36, 96, 156, -144, -84, -24], gapWidthDeg: 46, angularSpeed: 0.16 },
+      { orbitRadius: 6.0, count: 46, radius: 0.18, gapAngles: [40, 100, 160, -140, -80, -20], gapWidthDeg: 46, angularSpeed: -0.13 },
+    ],
+    planets: [
+      { name: 'Cross Tee', position: polar(2.34, 12), radius: 0.7, gravity: 4.8, falloff: 3.1, core: 0x77c1ff, glow: 0xa4e4ff, landable: true, orbitAngularSpeed: 0, spinAngularSpeed: 0.05 },
+    ],
+    outerPlanets: [
+      { name: 'Inner-Ring Catch', position: polar(7.3, 36), radius: 0.48, gravity: 4.5, falloff: 3.0, core: 0xf6a76a, glow: 0xffd58f, landable: true, landingRadius: 0.82, orbitAngularSpeed: 0.07, spinAngularSpeed: -0.08 },
+      { name: 'Outer-Ring Catch', position: polar(7.85, 4), radius: 0.5, gravity: 4.6, falloff: 3.0, core: 0x9f8cff, glow: 0xd4cbff, landable: true, landingRadius: 0.84, orbitAngularSpeed: 0.07, spinAngularSpeed: 0.08 },
+      { name: 'Side Shepherd', position: polar(8.35, -38), radius: 0.38, gravity: 3.6, falloff: 2.6, core: 0xc0c7d6, glow: 0xf4f8ff, landable: true, landingRadius: 0.7, orbitAngularSpeed: 0.07, spinAngularSpeed: 0.08 },
+    ],
+  },
+  {
+    id: 'sunward-slot',
+    name: 'Sunward Slot',
+    preferRelay: true,
+    summary: 'The rotating ring tempts an outside shot, but the clean slot is closer to the sunward side.',
+    seed: 8,
+    startAnchor: polar(3.02, 62),
+    goalCenter: polar(9.05, 12),
+    launchPresets: [{ angleDeg: 32, power: 2.0 }, { angleDeg: 72, power: 1.9 }],
+    belts: [{ orbitRadius: 5.12, gapAngles: [32, 112, -168, -88], gapWidthDeg: 40, angularSpeed: -0.18 }],
+    planets: [
+      { name: 'High Tee', position: polar(2.36, 62), radius: 0.7, gravity: 4.8, falloff: 3.1, core: 0x79c4ff, glow: 0xa5e5ff, landable: true, orbitAngularSpeed: 0, spinAngularSpeed: -0.05 },
+    ],
+    outerPlanets: [
+      { name: 'Sunward Catch', position: polar(6.45, 32), radius: 0.5, gravity: 4.7, falloff: 3.0, core: 0xf1a366, glow: 0xffd28a, landable: true, landingRadius: 0.84, orbitAngularSpeed: -0.11, orbitEccentricity: 0.04, spinAngularSpeed: 0.08 },
+      { name: 'Rim Catch', position: polar(6.85, 72), radius: 0.54, gravity: 4.8, falloff: 3.2, core: 0x8f82ff, glow: 0xc9c2ff, landable: true, landingRadius: 0.88, orbitAngularSpeed: 0.07, orbitEccentricity: 0.03, spinAngularSpeed: -0.08 },
+    ],
+  },
+  {
+    id: 'offset-maze',
+    name: 'Offset Maze',
+    preferRelay: true,
+    summary: 'Three nested belts make a circular maze; the route works only through the staggered moving gaps.',
+    seed: 9,
+    startAnchor: polar(2.95, -72),
+    goalCenter: polar(9.55, -62),
+    launchPresets: [{ angleDeg: -42, power: 1.95 }, { angleDeg: -8, power: 1.85 }],
+    belts: [
+      { orbitRadius: 4.2, count: 34, radius: 0.17, gapAngles: [-42, 18, 78, 138, -162, -102], gapWidthDeg: 48, angularSpeed: 0.17 },
+      { orbitRadius: 5.25, count: 40, radius: 0.18, gapAngles: [-38, 22, 82, 142, -158, -98], gapWidthDeg: 48, angularSpeed: -0.15 },
+      { orbitRadius: 6.25, count: 48, radius: 0.17, gapAngles: [-34, 26, 86, 146, -154, -94], gapWidthDeg: 48, angularSpeed: 0.12 },
+    ],
+    planets: [
+      { name: 'Maze Tee', position: polar(2.29, -72), radius: 0.7, gravity: 4.8, falloff: 3.1, core: 0x78c2ff, glow: 0xa5e3ff, landable: true, orbitAngularSpeed: 0, spinAngularSpeed: 0.05 },
+    ],
+    outerPlanets: [
+      { name: 'First Exit', position: polar(7.5, -42), radius: 0.48, gravity: 4.5, falloff: 3.0, core: 0xf6a76a, glow: 0xffd58f, landable: true, landingRadius: 0.82, orbitAngularSpeed: 0.07, spinAngularSpeed: -0.08 },
+      { name: 'Second Exit', position: polar(8.05, -8), radius: 0.5, gravity: 4.6, falloff: 3.0, core: 0x9f8cff, glow: 0xd4cbff, landable: true, landingRadius: 0.84, orbitAngularSpeed: 0.07, spinAngularSpeed: 0.08 },
+      { name: 'Outer Exit', position: polar(8.55, 34), radius: 0.44, gravity: 4.0, falloff: 2.8, core: 0xc0c7d6, glow: 0xf4f8ff, landable: true, landingRadius: 0.76, orbitAngularSpeed: 0.07, spinAngularSpeed: -0.08 },
+    ],
+  },
+  {
+    id: 'belt-gauntlet',
+    name: 'Belt Gauntlet',
+    preferRelay: true,
+    summary: 'The final field stacks two rotating belts and a relay setup before the last clean gate.',
+    seed: 10,
+    startAnchor: polar(3.0, 42),
+    goalCenter: polar(9.6, 28),
+    launchPresets: [{ angleDeg: 18, power: 2.0 }, { angleDeg: 48, power: 1.85 }],
+    belts: [
+      { orbitRadius: 4.9, count: 40, radius: 0.18, gapAngles: [18, 108, -162, -72], gapWidthDeg: 42, angularSpeed: 0.18 },
+      { orbitRadius: 6.15, count: 48, radius: 0.18, gapAngles: [48, 138, -132, -42], gapWidthDeg: 42, angularSpeed: -0.15 },
+    ],
+    planets: [
+      { name: 'Gauntlet Tee', position: polar(2.34, 42), radius: 0.7, gravity: 4.9, falloff: 3.2, core: 0x73bcff, glow: 0x94ddff, landable: true, orbitAngularSpeed: 0, spinAngularSpeed: -0.05 },
+    ],
+    outerPlanets: [
+      { name: 'Gate Relay', position: polar(7.45, 18), radius: 0.52, gravity: 4.8, falloff: 3.1, core: 0xf2a366, glow: 0xffd18a, landable: true, landingRadius: 0.86, orbitAngularSpeed: 0.07, spinAngularSpeed: 0.08 },
+      { name: 'Crown Relay', position: polar(7.95, 48), radius: 0.5, gravity: 4.6, falloff: 3.0, core: 0x8f81ff, glow: 0xc8c0ff, landable: true, landingRadius: 0.84, orbitAngularSpeed: 0.07, spinAngularSpeed: -0.08 },
+      { name: 'Far Shepherd', position: polar(8.45, -18), radius: 0.4, gravity: 3.7, falloff: 2.6, core: 0xc0c7d6, glow: 0xf4f8ff, landable: true, landingRadius: 0.72, orbitAngularSpeed: 0.07, spinAngularSpeed: 0.08 },
+    ],
+  },
+];
+
+const SUPERNOVA_WORLD_SPECS = [
+  {
+    baseId: 'first-relay',
+    id: 'red-giant-arc',
+    name: 'Red Giant Relay',
+    summary: 'The inner launch world is quickly swallowed, but the outer relay stays safe long enough for a clean escape.',
+    growSeconds: 10.8,
+    endRadius: 1.56,
+    tutorial: {
+      type: 'red-giant',
+      copy: 'The sun grows over time. Close planets are consumed.',
+    },
+  },
+  { baseId: 'shielded-arc', id: 'swelling-window', name: 'Swelling Shield', summary: 'The shield planet blocks the easy lane while the red giant steadily erases the inside shortcut.', growSeconds: 10.0, endRadius: 1.72 },
+  { baseId: 'forked-harbor', id: 'engulfed-relay', name: 'Engulfed Harbor', summary: 'Several harbor worlds survive at different ranges, but the nearest one disappears if the route stalls.', growSeconds: 9.8, endRadius: 1.86 },
+  { baseId: 'periapsis-moon', id: 'giant-swell', name: 'Moon Swell', summary: 'A moon relay keeps orbiting while the swollen star turns the periapsis touch into a short-lived option.', growSeconds: 9.4, endRadius: 1.9 },
+  { baseId: 'inner-step', id: 'burnout-step', name: 'Burnout Step', summary: 'Step outward before the red giant reaches the start planet, then leave the relay cleanly.', growSeconds: 9.2, endRadius: 1.94 },
+  { baseId: 'moon-switch', id: 'red-switch', name: 'Red Switch', summary: 'The switch route is playable only if the first touch happens before the inner system is engulfed.', growSeconds: 9.0, endRadius: 2.02 },
+  { baseId: 'false-periapsis', id: 'perihelion-flare', name: 'Perihelion Flare', summary: 'The tempting close relay is disappearing under the swelling star, so timing matters from launch.', growSeconds: 8.8, endRadius: 2.08 },
+  { baseId: 'crown-window', id: 'crown-inferno', name: 'Crown Inferno', summary: 'The crown worlds keep their rhythm while the red giant eats the inner recovery path.', growSeconds: 8.6, endRadius: 2.16 },
+  { baseId: 'counterspin-gate', id: 'counterflare-gate', name: 'Counterflare Gate', summary: 'Counterspin can still save the exit, but the star expands into the middle of the gate.', growSeconds: 8.4, endRadius: 2.22 },
+  { baseId: 'final-circuit', id: 'supernova-circuit', name: 'Supernova Circuit', summary: 'The last route is a full relay circuit raced against a red giant swallowing the close worlds.', growSeconds: 8.2, endRadius: 2.32 },
+];
+
 const EXPANSION_LEVEL_DEFINITIONS = [
   ...ICY_WORLD_SPECS.map((spec) => makeIcyVariant(spec)),
   ...PORTAL_WORLD_SPECS.map((spec) => makePortalVariant(spec)),
@@ -1954,6 +2430,9 @@ const EXPANSION_LEVEL_DEFINITIONS = [
   ...DYING_WORLD_SPECS.map((spec, index) => makeDyingVariant(spec, index)),
   ...FLICKER_WORLD_SPECS.map((spec) => makeFlickerVariant(spec)),
   ...HOSTILE_WORLD_SPECS.map((spec) => makeHostileVariant(spec)),
+  ...ASTEROID_WORLD_SPECS.map((spec) => makeAsteroidBeltLevel(spec)),
+  ...SUPERNOVA_WORLD_SPECS.map((spec, index) => makeSupernovaVariant(spec, index)),
+  ...DUST_WORLD_SPECS.map((spec) => makeDustVariant(spec)),
 ];
 
 const LEVEL_DEFINITIONS = [...CORE_LEVEL_DEFINITIONS, ...EXPANSION_LEVEL_DEFINITIONS];
@@ -2099,6 +2578,36 @@ const CAMPAIGN_LEVEL_ORDER = [
   'sentry-switch',
   'flak-gate',
   'hostile-circuit',
+  'belt-gap',
+  'drifting-gap',
+  'inner-slot',
+  'twin-gaps',
+  'narrow-orbit',
+  'relay-through',
+  'double-ring',
+  'sunward-slot',
+  'offset-maze',
+  'belt-gauntlet',
+  'red-giant-arc',
+  'swelling-window',
+  'engulfed-relay',
+  'giant-swell',
+  'burnout-step',
+  'red-switch',
+  'perihelion-flare',
+  'crown-inferno',
+  'counterflare-gate',
+  'supernova-circuit',
+  'dust-drift',
+  'silt-window',
+  'veil-relay',
+  'powder-harbor',
+  'brownout-step',
+  'dust-switch',
+  'nebula-transfer',
+  'cloud-halo',
+  'crown-haze',
+  'dust-circuit',
 ];
 
 const campaignOrderIndex = new Map(
@@ -2229,6 +2738,14 @@ function polarFromPoint(point) {
     radius: length(point),
     angleDeg: Math.atan2(point.y, point.x) * 180 / Math.PI,
   };
+}
+
+function asteroidPositionAtTime(asteroid, sun, time) {
+  const angleDeg = (asteroid.baseAngleDeg ?? asteroid.position?.angleDeg ?? 0)
+    + (asteroid.orbitAngularSpeed ?? 0) * time * 180 / Math.PI;
+  const direction = directionFromAngleDeg(angleDeg);
+  const orbitRadius = asteroid.orbitRadius ?? asteroid.position?.radius ?? 0;
+  return vec(sun.x + direction.x * orbitRadius, sun.y + direction.y * orbitRadius);
 }
 
 function angleDegBetween(from, to) {
@@ -2628,8 +3145,45 @@ function getOrbitState(level, planetIndex, time, cache = new Map()) {
   return state;
 }
 
+export function getRedGiantProgress(level, time = level?.time ?? 0) {
+  if (!level?.redGiant) {
+    return 0;
+  }
+
+  const startTime = level.redGiant.startTimeSeconds ?? level.startTimeSeconds ?? 0;
+  const growSeconds = Math.max(0.001, level.redGiant.growSeconds ?? DEFAULT_RED_GIANT_GROW_SECONDS);
+  return clamp((time - startTime) / growSeconds, 0, 1);
+}
+
+export function getPrimarySunCollisionRadius(level, time = level?.time ?? 0) {
+  const baseRadius = level?.primarySunBody?.collisionRadius ?? SUN_COLLISION_RADIUS;
+  if (!level?.redGiant) {
+    return baseRadius;
+  }
+
+  const startRadius = level.redGiant.startRadius ?? baseRadius;
+  const endRadius = level.redGiant.endRadius ?? DEFAULT_RED_GIANT_END_RADIUS;
+  const progress = getRedGiantProgress(level, time);
+  const ease = progress * progress * (3 - 2 * progress);
+  return startRadius + (endRadius - startRadius) * ease;
+}
+
+export function getPrimarySunVisualRadius(level, time = level?.time ?? 0) {
+  const collisionRadius = getPrimarySunCollisionRadius(level, time);
+  return Math.max(collisionRadius, level?.primarySunBody?.radius ?? SUN_COLLISION_RADIUS);
+}
+
+function getPlanetSunEngulfRadius(level, planet) {
+  if (!level?.redGiant || planet?.redGiantVulnerable === false) {
+    return planet?.fallIntoSunRadius;
+  }
+
+  return getPrimarySunCollisionRadius(level) + (planet.radius ?? 0.4) * 0.72;
+}
+
 function updatePlanetCollapseState(level, planet) {
-  if (!planet.fallIntoSunRadius) {
+  const dynamicEngulfRadius = getPlanetSunEngulfRadius(level, planet);
+  if (!dynamicEngulfRadius) {
     planet.active = true;
     planet.infallFade = 1;
     planet.collapseState = 'stable';
@@ -2638,7 +3192,7 @@ function updatePlanetCollapseState(level, planet) {
 
   const currentTime = level.time ?? 0;
   const sunDistance = distanceBetween(planet.position, level.sun);
-  const fallRadius = Math.max(0.001, planet.fallIntoSunRadius);
+  const fallRadius = Math.max(0.001, dynamicEngulfRadius);
   const fadeStartRadius = Math.max(fallRadius + 0.001, planet.sunFadeStartRadius ?? fallRadius + planet.radius * 2.2 + 0.45);
   const plungeDuration = planet.sunPlungeDuration ?? 0.82;
 
@@ -2772,6 +3326,14 @@ export function setLevelTime(level, time) {
   });
   level.portals?.forEach((portal) => {
     setOrbitalBodyTime(portal, time, systemCenter);
+  });
+  level.dustClouds?.forEach((cloud) => {
+    setOrbitalBodyTime(cloud, time, systemCenter);
+  });
+  level.asteroids?.forEach((asteroid) => {
+    const position = asteroidPositionAtTime(asteroid, systemCenter, time);
+    asteroid.position.x = position.x;
+    asteroid.position.y = position.y;
   });
   return level;
 }
@@ -3295,6 +3857,27 @@ export function createLevelRuntime(index) {
       cooldownSeconds: portal.cooldownSeconds ?? PORTAL_COOLDOWN_SECONDS,
     }))
     : [];
+  const dustClouds = Array.isArray(source.dustClouds)
+    ? source.dustClouds.map((cloud, cloudIndex) => ({
+      ...createOrbitalBodyRuntime(normalizeDustCloud(cloud, cloudIndex), systemCenter, cloudIndex),
+      radius: cloud.radius ?? DEFAULT_DUST_CLOUD_RADIUS,
+      drag: cloud.drag ?? DEFAULT_DUST_CLOUD_DRAG,
+      opacity: cloud.opacity ?? 1,
+    }))
+    : [];
+  const asteroids = Array.isArray(source.asteroids)
+    ? source.asteroids.map((asteroid, asteroidIndex) => ({
+      ...asteroid,
+      index: asteroidIndex,
+      radius: asteroid.radius ?? 0.22,
+      orbitRadius: asteroid.orbitRadius ?? asteroid.position?.radius ?? 0,
+      baseAngleDeg: asteroid.baseAngleDeg ?? asteroid.position?.angleDeg ?? 0,
+      orbitAngularSpeed: asteroid.orbitAngularSpeed ?? 0,
+      position: scalePointFromSun(pointFromPolar(asteroid.position), systemCenter),
+      spinSpeed: asteroid.spinSpeed ?? 0.24,
+      color: asteroid.color ?? 0x8d929a,
+    }))
+    : [];
   const startPlanetIndex = inferStartPlanetIndex(source, planets);
   const startPlanet = planets[startPlanetIndex];
   const startAngleDeg = source.startAngleDeg
@@ -3323,6 +3906,7 @@ export function createLevelRuntime(index) {
     startAngleDeg,
     startTimeSeconds: source.startTimeSeconds ?? 0,
     time: source.startTimeSeconds ?? 0,
+    sunGravityStrength: source.sunGravityStrength ?? FIXED_SOLAR_GRAVITY_STRENGTH,
     goalOpenSeconds: source.goalOpenSeconds ?? DEFAULT_GOAL_OPEN_SECONDS,
     goalRadius: source.goalRadius ?? COURSE.goalRadius,
     goalPullRadius: source.goalPullRadius ?? COURSE.goalPullRadius,
@@ -3333,6 +3917,8 @@ export function createLevelRuntime(index) {
     planets,
     extraSuns,
     portals,
+    dustClouds,
+    asteroids,
   };
 
   if (!level.planets[level.startPlanetIndex].landable) {
@@ -3509,6 +4095,26 @@ function resolvePlanetContact(level, ball) {
   return null;
 }
 
+function resolveAsteroidContact(level, ball) {
+  for (const asteroid of level.asteroids ?? []) {
+    const touchRadius = (asteroid.radius ?? 0.22) + COURSE.ballRadius * PLANET_COLLISION_PADDING;
+    if (distanceBetween(ball.position, asteroid.position) <= touchRadius) {
+      const eventState = cloneBallRuntimeState(ball);
+      ball.velocity.x = 0;
+      ball.velocity.y = 0;
+      return {
+        type: 'crash',
+        reason: 'asteroid',
+        asteroidIndex: asteroid.index,
+        eventState,
+        displayEventState: cloneBallRuntimeState(eventState),
+      };
+    }
+  }
+
+  return null;
+}
+
 function resolveSunContact(level, ball, previousPosition = null) {
   if (isSegmentInPulsarJets(level, previousPosition, ball.position, ball.time ?? level.time ?? 0)) {
     const eventState = cloneBallRuntimeState(ball);
@@ -3517,7 +4123,7 @@ function resolveSunContact(level, ball, previousPosition = null) {
     return { type: 'crash', reason: 'pulsar', eventState, displayEventState: cloneBallRuntimeState(eventState) };
   }
 
-  const touchRadius = (level.primarySunBody?.collisionRadius ?? SUN_COLLISION_RADIUS) + COURSE.ballRadius * PLANET_COLLISION_PADDING;
+  const touchRadius = getPrimarySunCollisionRadius(level, ball.time ?? level.time ?? 0) + COURSE.ballRadius * PLANET_COLLISION_PADDING;
   if (distanceBetween(ball.position, level.sun) <= touchRadius) {
     const eventState = cloneBallRuntimeState(ball);
     ball.velocity.x = 0;
@@ -3626,7 +4232,7 @@ export function samplePlanetGravity(level, point) {
   }
 
   const solarBodies = [
-    { position: level.sun, gravityStrength: level.primarySunBody?.gravityStrength ?? FIXED_SOLAR_GRAVITY_STRENGTH },
+    { position: level.sun, gravityStrength: level.primarySunBody?.gravityStrength ?? level.sunGravityStrength ?? FIXED_SOLAR_GRAVITY_STRENGTH },
     ...(level.extraSuns ?? []).map((solarBody) => ({
       position: solarBody.position,
       gravityStrength: solarBody.gravityStrength ?? DEFAULT_EXTRA_SUN_GRAVITY_STRENGTH,
@@ -3664,8 +4270,26 @@ function sampleBallAcceleration(level, point) {
   return acceleration;
 }
 
-function getBallFriction(delta) {
-  return Math.pow(BALL_FRICTION_BASE, delta * 60);
+function getDustDragFactorAtPoint(level, point, delta) {
+  let dragFactor = 1;
+
+  for (const cloud of level.dustClouds ?? []) {
+    const radius = Math.max(0.001, cloud.radius ?? DEFAULT_DUST_CLOUD_RADIUS);
+    const distance = distanceBetween(point, cloud.position);
+    if (distance >= radius + COURSE.ballRadius) {
+      continue;
+    }
+
+    const depth = clamp(1 - distance / radius, 0, 1);
+    const drag = Math.max(0, cloud.drag ?? DEFAULT_DUST_CLOUD_DRAG) * DUST_CLOUD_DRAG_MULTIPLIER;
+    dragFactor *= Math.exp(-drag * (0.34 + depth * 0.66) * delta);
+  }
+
+  return dragFactor;
+}
+
+function getBallFriction(level, point, delta) {
+  return Math.pow(BALL_FRICTION_BASE, delta * 60) * getDustDragFactorAtPoint(level, point, delta);
 }
 
 export function stepBall(level, ball, delta) {
@@ -3760,7 +4384,13 @@ export function stepBall(level, ball, delta) {
     return contactResult;
   }
 
-  const friction = getBallFriction(delta);
+  const asteroidContactResult = resolveAsteroidContact(level, ball);
+  if (asteroidContactResult) {
+    asteroidContactResult.portalEvent = portalEvent;
+    return asteroidContactResult;
+  }
+
+  const friction = getBallFriction(level, ball.position, delta);
   ball.velocity.x *= friction;
   ball.velocity.y *= friction;
 
@@ -3786,7 +4416,7 @@ export function stepBall(level, ball, delta) {
 
 export function reverseStepBall(level, ball, delta, options = {}) {
   const currentTime = ball.time ?? level.time ?? 0;
-  const friction = getBallFriction(delta);
+  const friction = getBallFriction(level, ball.position, delta);
   const velocityBeforeFriction = vec(
     ball.velocity.x / friction,
     ball.velocity.y / friction,

@@ -22,6 +22,8 @@ import {
   getGoalRemainingFraction,
   getGoalRemainingTime,
   getLavaOverheatRemaining,
+  getPrimarySunVisualRadius,
+  getRedGiantProgress,
   getPlanetSplitAxis,
   getPulsarJetState,
   getPlanetSlideAngularSpeed,
@@ -431,6 +433,12 @@ world.add(extraSunsRoot);
 
 const portalsRoot = new THREE.Group();
 world.add(portalsRoot);
+
+const dustCloudsRoot = new THREE.Group();
+world.add(dustCloudsRoot);
+
+const asteroidsRoot = new THREE.Group();
+world.add(asteroidsRoot);
 
 const startPad = new THREE.Mesh(
   new THREE.RingGeometry(0.62, 0.98, 48),
@@ -880,10 +888,13 @@ const state = {
 let planetVisuals = [];
 let extraSunVisuals = [];
 let portalVisuals = [];
+let dustCloudVisuals = [];
+let asteroidVisuals = [];
 let gravityFieldVisuals = null;
 let gravityFieldSamples = [];
 let physicsAccumulator = 0;
 const planetTextureCache = new Map();
+const dustCloudTextureCache = new Map();
 let lastGravityFieldRefreshTime = Number.NEGATIVE_INFINITY;
 let lastGoalTimerFraction = Number.NaN;
 const gravityFieldTintColor = new THREE.Color();
@@ -1250,12 +1261,30 @@ function updateLaunchMarker() {
 
 function updateSunVisual() {
   sunGroup.position.set(state.level.sun.x, 0, state.level.sun.y);
+  const visualRadius = getPrimarySunVisualRadius(state.level, state.level.time ?? 0);
+  const redGiantProgress = getRedGiantProgress(state.level, state.level.time ?? 0);
+  const sunScale = state.level.redGiant ? visualRadius / 0.42 : 1;
+  const coreScale = sunScale;
+  sunCore.scale.setScalar(coreScale);
+  sunCore.position.y = state.level.redGiant ? visualRadius : 0.42;
+  sunGlow.scale.setScalar(state.level.redGiant ? sunScale * (1 + redGiantProgress * 0.18) : 1);
+  sunCorona.scale.setScalar(state.level.redGiant ? sunScale * (1.05 + redGiantProgress * 0.12) : 1);
+
   if (state.level.pulsarJets) {
     sunGlow.material.color.setHex(0x67dfff);
     sunCorona.material.color.setHex(0xd8f7ff);
     sunCore.material.color.setHex(0xf4fbff);
     sunCore.material.emissive.setHex(0x83dfff);
     sunCore.material.emissiveIntensity = 1.7;
+    return;
+  }
+
+  if (state.level.redGiant) {
+    sunGlow.material.color.setHex(0xff5c32);
+    sunCorona.material.color.setHex(0xff2f1f);
+    sunCore.material.color.setHex(0xff8a4a);
+    sunCore.material.emissive.setHex(0xff321c);
+    sunCore.material.emissiveIntensity = 1.45 + redGiantProgress * 0.75;
     return;
   }
 
@@ -2747,6 +2776,158 @@ function createCanvasTexture(width, height, draw) {
   return texture;
 }
 
+function rgbaFromColor(color, alpha) {
+  return `rgba(${Math.round(color.r * 255)}, ${Math.round(color.g * 255)}, ${Math.round(color.b * 255)}, ${alpha})`;
+}
+
+function createDustCloudSeed(cloud, index = 0, salt = 0) {
+  const x = Math.round((cloud.position.x + 20) * 1000);
+  const y = Math.round((cloud.position.y + 20) * 1000);
+  const radius = Math.round((cloud.radius ?? 1) * 1000);
+  return ((x * 73856093) ^ (y * 19349663) ^ (radius * 83492791) ^ (index * 2654435761) ^ salt) >>> 0;
+}
+
+function drawDustGradientEllipse(ctx, x, y, rx, ry, rotation, innerColor, outerColor, alpha = 1) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(rotation);
+  ctx.scale(rx, ry);
+  const gradient = ctx.createRadialGradient(0, 0, 0.02, 0, 0, 1);
+  gradient.addColorStop(0, innerColor);
+  gradient.addColorStop(0.42, innerColor);
+  gradient.addColorStop(1, outerColor);
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = gradient;
+  ctx.beginPath();
+  ctx.arc(0, 0, 1, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function createDustCloudTexture(cloud, index = 0, variant = 'body') {
+  const key = [
+    cloud.id ?? index,
+    cloud.position.x.toFixed(3),
+    cloud.position.y.toFixed(3),
+    (cloud.radius ?? 1).toFixed(3),
+    (cloud.drag ?? 0).toFixed(3),
+    variant,
+  ].join(':');
+
+  if (dustCloudTextureCache.has(key)) {
+    return dustCloudTextureCache.get(key);
+  }
+
+  const texture = createCanvasTexture(512, 512, (ctx, width, height) => {
+    const random = createSeededRandom(createDustCloudSeed(cloud, index, variant === 'filament' ? 71 : 37));
+    const centerX = width * (0.48 + (random() - 0.5) * 0.06);
+    const centerY = height * (0.52 + (random() - 0.5) * 0.06);
+    const warm = new THREE.Color(0xd6a06d).lerp(new THREE.Color(0xffd3a3), random() * 0.35);
+    const cool = new THREE.Color(0x65c7ff).lerp(new THREE.Color(0xd7f2ff), random() * 0.24);
+    const rose = new THREE.Color(0xff7f9f).lerp(new THREE.Color(0xc28aff), random() * 0.32);
+    const deep = new THREE.Color(0x1a2240).lerp(new THREE.Color(0x4b2f62), random() * 0.35);
+    const accents = [warm, cool, rose];
+
+    ctx.clearRect(0, 0, width, height);
+    ctx.globalCompositeOperation = 'lighter';
+
+    drawDustGradientEllipse(
+      ctx,
+      centerX,
+      centerY,
+      width * 0.42,
+      height * 0.26,
+      -0.35 + random() * 0.7,
+      rgbaFromColor(deep, variant === 'filament' ? 0.24 : 0.36),
+      rgbaFromColor(deep, 0),
+      1,
+    );
+
+    for (let i = 0; i < 30; i += 1) {
+      const angle = random() * Math.PI * 2;
+      const distance = Math.pow(random(), 0.68) * width * 0.26;
+      const color = accents[i % accents.length].clone().lerp(deep, random() * 0.32);
+      const alpha = variant === 'filament'
+        ? 0.06 + random() * 0.12
+        : 0.09 + random() * 0.15;
+      drawDustGradientEllipse(
+        ctx,
+        centerX + Math.cos(angle) * distance,
+        centerY + Math.sin(angle) * distance * 0.78,
+        width * (0.14 + random() * 0.22),
+        height * (0.045 + random() * 0.11),
+        angle + (random() - 0.5) * 1.8,
+        rgbaFromColor(color, alpha),
+        rgbaFromColor(color, 0),
+        1,
+      );
+    }
+
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    for (let i = 0; i < 34; i += 1) {
+      const angle = -0.55 + random() * 1.1 + (i % 2 === 0 ? Math.PI : 0);
+      const startDistance = width * (0.06 + random() * 0.18);
+      const endDistance = width * (0.24 + random() * 0.18);
+      const startX = centerX + Math.cos(angle) * startDistance;
+      const startY = centerY + Math.sin(angle) * startDistance * 0.54;
+      const endX = centerX + Math.cos(angle + (random() - 0.5) * 0.5) * endDistance;
+      const endY = centerY + Math.sin(angle + (random() - 0.5) * 0.7) * endDistance * 0.58;
+      const color = accents[Math.floor(random() * accents.length)];
+      ctx.strokeStyle = rgbaFromColor(color, variant === 'filament' ? 0.2 : 0.11);
+      ctx.lineWidth = width * (0.006 + random() * 0.016);
+      ctx.beginPath();
+      ctx.moveTo(startX, startY);
+      ctx.bezierCurveTo(
+        centerX + (random() - 0.5) * width * 0.48,
+        centerY + (random() - 0.5) * height * 0.24,
+        centerX + (random() - 0.5) * width * 0.48,
+        centerY + (random() - 0.5) * height * 0.24,
+        endX,
+        endY,
+      );
+      ctx.stroke();
+    }
+
+    ctx.globalCompositeOperation = 'destination-out';
+    for (let i = 0; i < 52; i += 1) {
+      const angle = random() * Math.PI * 2;
+      const distance = Math.pow(random(), 0.8) * width * 0.38;
+      const cutRadius = width * (0.012 + random() * 0.035);
+      const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, cutRadius);
+      ctx.save();
+      ctx.translate(centerX + Math.cos(angle) * distance, centerY + Math.sin(angle) * distance * 0.72);
+      gradient.addColorStop(0, 'rgba(0, 0, 0, 0.5)');
+      gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(0, 0, cutRadius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    ctx.globalCompositeOperation = 'source-over';
+    for (let i = 0; i < 90; i += 1) {
+      const angle = random() * Math.PI * 2;
+      const distance = Math.pow(random(), 0.55) * width * 0.42;
+      const x = centerX + Math.cos(angle) * distance;
+      const y = centerY + Math.sin(angle) * distance * 0.7;
+      ctx.fillStyle = random() > 0.65
+        ? rgbaFromColor(cool, 0.25 + random() * 0.35)
+        : rgbaFromColor(warm, 0.16 + random() * 0.28);
+      ctx.beginPath();
+      ctx.arc(x, y, 0.45 + random() * 1.25, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  });
+  texture.wrapS = THREE.ClampToEdgeWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  dustCloudTextureCache.set(key, texture);
+  return texture;
+}
+
 function drawEllipse(ctx, x, y, rx, ry, rotation, fillStyle, alpha = 1) {
   ctx.save();
   ctx.globalAlpha = alpha;
@@ -3278,6 +3459,11 @@ function getPlanetTexture(planet) {
 state.controlShots = createControlShots(state.level);
 
 function getWindowStatusText() {
+  if (state.level.redGiant) {
+    const progress = getRedGiantProgress(state.level, state.ball.time ?? state.level.time ?? 0);
+    return `Red giant ${Math.round(progress * 100)}%`;
+  }
+
   if (isGoalLocked(state.level)) {
     return 'Goal locked';
   }
@@ -3295,6 +3481,10 @@ function getRunStatusText() {
 
   if (state.ball.crashed) {
     return 'Retry armed';
+  }
+
+  if (state.level.redGiant) {
+    return `Shot ${Math.min(getActiveStageIndex() + 1, state.controlShots.length)} · Sun expanding`;
   }
 
   const lavaPlanet = getAnchoredLavaPlanet();
@@ -3364,10 +3554,20 @@ function describeFailureHint(reason) {
   }
 
   if (reason === 'sun') {
+    if (state.level.redGiant) {
+      return `Retry ${state.level.name}. The red giant expands through the inner lane.`;
+    }
     return `Retry ${state.level.name}. Skim the well, don't drop into it.`;
   }
 
+  if (reason === 'asteroid') {
+    return `Retry ${state.level.name}. Wait for the belt gap or aim through the open lane.`;
+  }
+
   if (reason === 'planet-consumed') {
+    if (state.level.redGiant) {
+      return `Retry ${state.level.name}. Launch before the red giant reaches the planet.`;
+    }
     return `Retry ${state.level.name}. Launch before the planet is consumed.`;
   }
 
@@ -3606,6 +3806,9 @@ function hideGameOverModal() {
 
 function getFailureTitle(reason) {
   if (reason === 'sun') {
+    if (state.level.redGiant) {
+      return 'Caught by the red giant.';
+    }
     return 'Burned in the sun.';
   }
 
@@ -3623,6 +3826,10 @@ function getFailureTitle(reason) {
 
   if (reason === 'planet-vanished') {
     return 'Planet vanished.';
+  }
+
+  if (reason === 'asteroid') {
+    return 'Shattered on the belt.';
   }
 
   if (reason === 'goal-closed') {
@@ -3908,7 +4115,7 @@ function createGravityFieldSample(baseX, baseY, halfWidth, halfHeight, target) {
   const solarBodies = [
     {
       position: state.level.sun,
-      gravityStrength: state.level.primarySunBody?.gravityStrength ?? FIXED_SOLAR_GRAVITY_STRENGTH,
+      gravityStrength: state.level.primarySunBody?.gravityStrength ?? state.level.sunGravityStrength ?? FIXED_SOLAR_GRAVITY_STRENGTH,
     },
     ...((state.level.extraSuns ?? []).map((solarBody) => ({
       position: solarBody.position,
@@ -4184,6 +4391,124 @@ function rebuildPortals() {
   });
 }
 
+function rebuildDustClouds() {
+  clearGroup(dustCloudsRoot);
+  dustCloudVisuals = (state.level.dustClouds ?? []).map((cloud, index) => {
+    const group = new THREE.Group();
+    const radius = cloud.radius ?? 1;
+    const bodyTexture = createDustCloudTexture(cloud, index, 'body');
+    const filamentTexture = createDustCloudTexture(cloud, index, 'filament');
+    const stretch = 1.18 + (index % 3) * 0.11;
+    const squash = 0.74 + (index % 2) * 0.08;
+    const bodyGeometry = new THREE.PlaneGeometry(radius * 3.75 * stretch, radius * 3.05 * squash);
+    const filamentGeometry = new THREE.PlaneGeometry(radius * 4.35 * stretch, radius * 3.55 * squash);
+    const glowColor = new THREE.Color(index % 2 === 0 ? 0x9fdcff : 0xffc08c);
+    const hazeRotation = (index * 47) * Math.PI / 180;
+    const bodyRotation = ((index * 61) + 18) * Math.PI / 180;
+    const emberRotation = ((index * 37) - 12) * Math.PI / 180;
+
+    const haze = new THREE.Mesh(
+      filamentGeometry,
+      new THREE.MeshBasicMaterial({
+        map: filamentTexture,
+        color: glowColor,
+        transparent: true,
+        opacity: 0.5 * (cloud.opacity ?? 1),
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+      }),
+    );
+    haze.rotation.x = -Math.PI / 2;
+    haze.rotation.z = hazeRotation;
+    haze.position.y = 0.064;
+    haze.renderOrder = 3;
+    group.add(haze);
+
+    const body = new THREE.Mesh(
+      bodyGeometry,
+      new THREE.MeshBasicMaterial({
+        map: bodyTexture,
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.94 * (cloud.opacity ?? 1),
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      }),
+    );
+    body.rotation.x = -Math.PI / 2;
+    body.rotation.z = bodyRotation;
+    body.position.y = 0.078;
+    body.renderOrder = 4;
+    group.add(body);
+
+    const ember = new THREE.Mesh(
+      new THREE.PlaneGeometry(radius * 2.05 * stretch, radius * 1.08 * squash),
+      new THREE.MeshBasicMaterial({
+        map: filamentTexture,
+        color: new THREE.Color(0xffb56f).lerp(new THREE.Color(0x7ddcff), index % 2 === 0 ? 0.18 : 0.42),
+        transparent: true,
+        opacity: 0.58 * (cloud.opacity ?? 1),
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+      }),
+    );
+    ember.rotation.x = -Math.PI / 2;
+    ember.rotation.z = emberRotation;
+    ember.position.y = 0.092;
+    ember.renderOrder = 5;
+    group.add(ember);
+
+    const boundary = new THREE.Mesh(
+      new THREE.RingGeometry(radius, radius + 0.035, 96),
+      new THREE.MeshBasicMaterial({
+        color: new THREE.Color(0xf7d59c).lerp(new THREE.Color(0x9ddcff), index % 2 === 0 ? 0.38 : 0.58),
+        transparent: true,
+        opacity: 0.34 * (cloud.opacity ?? 1),
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      }),
+    );
+    boundary.rotation.x = -Math.PI / 2;
+    boundary.position.y = 0.105;
+    boundary.renderOrder = 6;
+    group.add(boundary);
+
+    const boundaryGlow = new THREE.Mesh(
+      new THREE.RingGeometry(radius - 0.055, radius + 0.09, 96),
+      new THREE.MeshBasicMaterial({
+        color: new THREE.Color(0xffc27d).lerp(new THREE.Color(0x76d8ff), index % 2 === 0 ? 0.28 : 0.5),
+        transparent: true,
+        opacity: 0.09 * (cloud.opacity ?? 1),
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+      }),
+    );
+    boundaryGlow.rotation.x = -Math.PI / 2;
+    boundaryGlow.position.y = 0.101;
+    boundaryGlow.renderOrder = 6;
+    group.add(boundaryGlow);
+
+    group.position.set(cloud.position.x, 0, cloud.position.y);
+    dustCloudsRoot.add(group);
+    return {
+      group,
+      haze,
+      body,
+      ember,
+      boundary,
+      boundaryGlow,
+      cloud,
+      radius,
+      hazeRotation,
+      bodyRotation,
+      emberRotation,
+    };
+  });
+}
+
 function createSplitSurfaceDisc(radius, color, opacity, thetaStart) {
   const disc = new THREE.Mesh(
     new THREE.CircleGeometry(radius, 48, thetaStart, Math.PI),
@@ -4198,6 +4523,52 @@ function createSplitSurfaceDisc(radius, color, opacity, thetaStart) {
   disc.rotation.x = -Math.PI / 2;
   disc.renderOrder = 7;
   return disc;
+}
+
+function rebuildAsteroids() {
+  clearGroup(asteroidsRoot);
+  asteroidVisuals = (state.level.asteroids ?? []).map((asteroid, index) => {
+    const group = new THREE.Group();
+    const color = new THREE.Color(asteroid.color ?? 0x8f949c);
+    const glowColor = mixColors(color, new THREE.Color(0xd7e3ff), 0.22);
+    const radius = asteroid.radius ?? 0.22;
+
+    const halo = new THREE.Mesh(
+      new THREE.CircleGeometry(radius * 1.9, 18),
+      new THREE.MeshBasicMaterial({
+        color: glowColor,
+        transparent: true,
+        opacity: 0.12,
+        depthWrite: false,
+      }),
+    );
+    halo.rotation.x = -Math.PI / 2;
+    halo.position.y = 0.035;
+    group.add(halo);
+
+    const body = new THREE.Mesh(
+      new THREE.DodecahedronGeometry(radius, 0),
+      new THREE.MeshStandardMaterial({
+        color,
+        emissive: mixColors(color, new THREE.Color(0x31445a), 0.5),
+        emissiveIntensity: 0.08,
+        roughness: 0.96,
+        metalness: 0.04,
+      }),
+    );
+    body.position.y = radius * 0.72;
+    body.scale.set(
+      1 + ((index * 13) % 7) * 0.035,
+      0.72 + ((index * 11) % 5) * 0.045,
+      0.86 + ((index * 17) % 6) * 0.04,
+    );
+    body.rotation.set(index * 0.71, index * 1.13, index * 0.43);
+    group.add(body);
+
+    group.position.set(asteroid.position.x, 0, asteroid.position.y);
+    asteroidsRoot.add(group);
+    return { group, body, halo, asteroid };
+  });
 }
 
 function rebuildPlanets() {
@@ -4779,6 +5150,8 @@ function applyLevel(index) {
   lastGravityFieldRefreshTime = state.level.time ?? 0;
   rebuildExtraSuns();
   rebuildPortals();
+  rebuildDustClouds();
+  rebuildAsteroids();
   rebuildPlanets();
 }
 
@@ -4826,6 +5199,7 @@ function syncTutorialOverlay() {
   const tutorial = getActiveTutorial();
   tutorialCard.hidden = !tutorial;
   tutorialCard.classList.toggle('is-monolith', tutorial?.type === 'monolith');
+  tutorialCard.classList.toggle('is-dust', tutorial?.type === 'dust');
   if (!tutorial) {
     return;
   }
@@ -5623,6 +5997,8 @@ function updatePhysics(delta) {
                 ? 'Burned on the lava world.'
                 : result.reason === 'turret'
                   ? 'Shot down by a turret.'
+                : result.reason === 'asteroid'
+                  ? 'Asteroid impact.'
                 : result.reason === 'planet'
                   ? 'Planet impact.'
                   : 'Lost in open space.';
@@ -5630,7 +6006,7 @@ function updatePhysics(delta) {
     beginCrash(
       message,
       hint,
-      result.reason === 'sun' || result.reason === 'pulsar' || result.reason === 'turret'
+      result.reason === 'sun' || result.reason === 'pulsar' || result.reason === 'turret' || result.reason === 'asteroid'
         ? result.reason
         : result.reason === 'planet-consumed'
           ? 'sun'
@@ -5696,10 +6072,14 @@ function updateDecor(time) {
   updateLaunchMarker();
   startPad.scale.setScalar(1 + Math.sin(time * 2.7) * 0.06);
   startCore.material.opacity = 0.58 + Math.sin(time * 3.8) * 0.12;
-  sunGlow.scale.setScalar(1 + Math.sin(time * 1.2) * 0.08);
-  sunGlow.material.opacity = 0.16 + Math.sin(time * 1.6) * 0.03;
+  const sunVisualRadius = getPrimarySunVisualRadius(state.level, worldTime);
+  const redGiantProgress = getRedGiantProgress(state.level, worldTime);
+  const redGiantSunScale = state.level.redGiant ? sunVisualRadius / 0.42 : 1;
+  sunGlow.scale.setScalar(redGiantSunScale * (state.level.redGiant ? 1 + redGiantProgress * 0.18 : 1) * (1 + Math.sin(time * 1.2) * 0.08));
+  sunGlow.material.opacity = (0.16 + Math.sin(time * 1.6) * 0.03) * (state.level.redGiant ? 1.18 : 1);
   sunCorona.rotation.z = time * 0.28;
-  sunCorona.material.opacity = 0.3 + Math.sin(time * 2.1) * 0.04;
+  sunCorona.scale.setScalar(redGiantSunScale * (state.level.redGiant ? 1.05 + redGiantProgress * 0.12 : 1));
+  sunCorona.material.opacity = (0.3 + Math.sin(time * 2.1) * 0.04) * (state.level.redGiant ? 1.12 : 1);
   sunCore.rotation.y = time * 0.22;
   extraSunVisuals.forEach((visual, index) => {
     visual.group.position.set(visual.solarBody.position.x, 0, visual.solarBody.position.y);
@@ -5715,6 +6095,31 @@ function updateDecor(time) {
     visual.aura.scale.setScalar(1 + Math.sin(time * (2.6 + index * 0.2) + index) * 0.08);
     visual.aura.material.opacity = 0.09 + Math.sin(time * 2.2 + index) * 0.03;
     visual.ring.material.opacity = 0.72 + Math.sin(time * 3 + index) * 0.08;
+  });
+  dustCloudVisuals.forEach((visual, index) => {
+    const opacity = visual.cloud.opacity ?? 1;
+    visual.group.position.set(visual.cloud.position.x, 0, visual.cloud.position.y);
+    visual.group.rotation.y = Math.sin(time * 0.18 + index) * 0.05;
+    visual.haze.rotation.z = visual.hazeRotation + time * (0.08 + index * 0.015);
+    visual.body.rotation.z = visual.bodyRotation - time * (0.045 + index * 0.007);
+    visual.ember.rotation.z = visual.emberRotation + time * (0.12 + index * 0.016);
+    visual.haze.material.opacity = (0.38 + Math.sin(time * 1.4 + index) * 0.06) * opacity;
+    visual.body.material.opacity = (0.8 + Math.sin(time * 1.1 + index * 0.6) * 0.08) * opacity;
+    visual.ember.material.opacity = (0.42 + Math.sin(time * 2.2 + index) * 0.08) * opacity;
+    visual.boundary.rotation.z = -time * (0.08 + index * 0.01);
+    visual.boundaryGlow.rotation.z = time * (0.12 + index * 0.012);
+    visual.boundary.material.opacity = (0.28 + Math.sin(time * 2 + index) * 0.06) * opacity;
+    visual.boundaryGlow.material.opacity = (0.07 + Math.sin(time * 2.5 + index) * 0.025) * opacity;
+    visual.haze.scale.set(1 + Math.sin(time * 0.9 + index) * 0.035, 1 + Math.cos(time * 0.7 + index) * 0.025, 1);
+    visual.body.scale.set(1 + Math.sin(time * 0.8 + index * 0.7) * 0.045, 1 + Math.cos(time * 0.95 + index) * 0.035, 1);
+    visual.ember.scale.set(1 + Math.sin(time * 1.2 + index * 0.5) * 0.06, 1 + Math.cos(time * 1.1 + index) * 0.045, 1);
+  });
+
+  asteroidVisuals.forEach((visual, index) => {
+    visual.group.position.set(visual.asteroid.position.x, 0, visual.asteroid.position.y);
+    visual.body.rotation.y += (visual.asteroid.spinSpeed ?? 0.24) * 0.012;
+    visual.body.rotation.x += (visual.asteroid.spinSpeed ?? 0.24) * 0.004;
+    visual.halo.material.opacity = 0.1 + Math.sin(time * 2.1 + index) * 0.025;
   });
 
   const gravityFieldRefreshDue =
