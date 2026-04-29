@@ -20,6 +20,7 @@ import {
   getGoalRemainingFraction,
   getGoalRemainingTime,
   getLavaOverheatRemaining,
+  getPlanetSplitAxis,
   getPlanetSlideAngularSpeed,
   getPlanetVelocity,
   getPlanetSurfaceVelocity,
@@ -204,6 +205,7 @@ const PHYSICS_STEP = 1 / 120;
 const UNDO_REWIND_SPEED = -8;
 const GOAL_CLOSE_ANIMATION_DURATION = 0.46;
 const GOAL_CLOSE_MODAL_DELAY = 0.12;
+const GOAL_UNLOCK_REVEAL_DURATION = 0.52;
 const MAX_PHYSICS_STEPS_PER_FRAME = 4;
 const ballRestY = COURSE.ballRadius - 0.01;
 const BALL_STRETCH_SPEED_THRESHOLD = 1.6;
@@ -2798,6 +2800,10 @@ function describeFailureHint(reason) {
     return `Retry ${state.level.name}. Leave ${lavaPlanet?.name ?? 'the lava world'} before the ball overheats.`;
   }
 
+  if (reason === 'split-side') {
+    return `Retry ${state.level.name}. Touch down on the teal side of split planets.`;
+  }
+
   const closestLandingMiss = describeClosestLandingMiss();
   if (closestLandingMiss) {
     return `Retry ${state.level.name}. ${closestLandingMiss}`;
@@ -3020,6 +3026,10 @@ function getFailureTitle(reason) {
 
   if (reason === 'goal-closed') {
     return 'Black hole closed.';
+  }
+
+  if (reason === 'split-side') {
+    return 'Hit the dead side.';
   }
 
   if (reason === 'planet') {
@@ -3506,6 +3516,22 @@ function rebuildPortals() {
   });
 }
 
+function createSplitSurfaceDisc(radius, color, opacity, thetaStart) {
+  const disc = new THREE.Mesh(
+    new THREE.CircleGeometry(radius, 48, thetaStart, Math.PI),
+    new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    }),
+  );
+  disc.rotation.x = -Math.PI / 2;
+  disc.renderOrder = 7;
+  return disc;
+}
+
 function rebuildPlanets() {
   clearGroup(orbitPathsRoot);
   clearGroup(planetsRoot);
@@ -3622,11 +3648,14 @@ function rebuildPlanets() {
     let accentBand = null;
     let monolith = null;
     let monolithRing = null;
+    let monolithBeacon = null;
     let iceSkidArc = null;
     let iceHaloRing = null;
     let iceInnerRing = null;
     let lavaHaloRing = null;
     let lavaWarningRing = null;
+    let splitSafeDisc = null;
+    let splitHazardDisc = null;
 
     if (planet.landable) {
       atmosphereShell = new THREE.Mesh(
@@ -3679,7 +3708,7 @@ function rebuildPlanets() {
       new THREE.TorusGeometry(planet.radius + 0.16, 0.035, 12, 72),
       new THREE.MeshBasicMaterial({
         color: planet.landable
-          ? (isIcePlanet ? 0xf5ffff : isLavaPlanet ? 0xffd36a : 0x7df3d1)
+          ? (planet.goalUnlock ? 0xffd07a : (isIcePlanet ? 0xf5ffff : isLavaPlanet ? 0xffd36a : 0x7df3d1))
           : 0xffc08a,
         transparent: true,
         opacity: planet.landable ? (isIcePlanet ? 0.78 : isLavaPlanet ? 0.8 : 0.68) : 0.42,
@@ -3690,6 +3719,27 @@ function rebuildPlanets() {
     orbitRing.position.y = planet.radius * 0.84;
     orbitRing.renderOrder = 4;
     group.add(orbitRing);
+
+    if (planet.splitSurface) {
+      splitSafeDisc = createSplitSurfaceDisc(
+        planet.radius * 1.075,
+        isIcePlanet ? 0xeaffff : isLavaPlanet ? 0xffdc94 : 0x62ffd7,
+        0.34,
+        -Math.PI / 2,
+      );
+      splitSafeDisc.position.y = planet.radius * 1.5;
+      group.add(splitSafeDisc);
+
+      splitHazardDisc = createSplitSurfaceDisc(
+        planet.radius * 1.08,
+        0xff604f,
+        0.46,
+        Math.PI / 2,
+      );
+      splitHazardDisc.position.y = planet.radius * 1.505;
+      group.add(splitHazardDisc);
+
+    }
 
     if (isIcePlanet) {
       iceHaloRing = new THREE.Mesh(
@@ -3793,31 +3843,45 @@ function rebuildPlanets() {
 
     if (planet.goalUnlock) {
       monolith = new THREE.Mesh(
-        new THREE.BoxGeometry(0.12, planet.radius * 1.15, 0.12),
+        new THREE.BoxGeometry(0.18, planet.radius * 1.45, 0.18),
         new THREE.MeshStandardMaterial({
-          color: 0xf4e7b6,
-          emissive: 0x8ad9ff,
-          emissiveIntensity: 0.4,
-          roughness: 0.3,
-          metalness: 0.55,
+          color: 0xffefc6,
+          emissive: 0xffc46b,
+          emissiveIntensity: 0.62,
+          roughness: 0.22,
+          metalness: 0.62,
         }),
       );
-      monolith.position.set(0, planet.radius * 1.35, 0);
+      monolith.position.set(0, planet.radius * 1.5, 0);
       monolith.rotation.z = 0.2;
       group.add(monolith);
 
       monolithRing = new THREE.Mesh(
-        new THREE.RingGeometry(planet.radius + 0.28, planet.radius + 0.45, 48),
+        new THREE.RingGeometry(planet.radius + 0.34, planet.radius + 0.56, 64),
         new THREE.MeshBasicMaterial({
           color: 0xffd68f,
           transparent: true,
-          opacity: 0.22,
+          opacity: 0.34,
           side: THREE.DoubleSide,
+          depthWrite: false,
         }),
       );
       monolithRing.rotation.x = -Math.PI / 2;
       monolithRing.position.y = 0.08;
       group.add(monolithRing);
+
+      monolithBeacon = new THREE.Mesh(
+        new THREE.CircleGeometry(planet.radius + 0.92, 64),
+        new THREE.MeshBasicMaterial({
+          color: 0xffc66c,
+          transparent: true,
+          opacity: 0.12,
+          depthWrite: false,
+        }),
+      );
+      monolithBeacon.rotation.x = -Math.PI / 2;
+      monolithBeacon.position.y = 0.035;
+      group.add(monolithBeacon);
     }
 
     group.position.set(planet.position.x, 0, planet.position.y);
@@ -3834,11 +3898,14 @@ function rebuildPlanets() {
       landingRing,
       monolith,
       monolithRing,
+      monolithBeacon,
       iceSkidArc,
       iceHaloRing,
       iceInnerRing,
       lavaHaloRing,
       lavaWarningRing,
+      splitSafeDisc,
+      splitHazardDisc,
       planet,
     };
   });
@@ -3937,6 +4004,7 @@ function getActiveTutorial() {
 function syncTutorialOverlay() {
   const tutorial = getActiveTutorial();
   tutorialCard.hidden = !tutorial;
+  tutorialCard.classList.toggle('is-monolith', tutorial?.type === 'monolith');
   if (!tutorial) {
     return;
   }
@@ -3957,6 +4025,8 @@ function resetBall(message, hint, options = {}) {
 
   if (options.advanceLevel) {
     applyLevel((state.levelIndex + 1) % LEVELS.length);
+  } else {
+    applyLevel(state.levelIndex);
   }
 
   if (!options.keepAdminReplay) {
@@ -4030,6 +4100,8 @@ function beginCrash(
   eventState = null,
   displayEventState = null,
   crashPlanetIndex = null,
+  failureReason = reason,
+  crashTargetPosition = null,
 ) {
   hideGameOverModal();
   hideGoalCloseAnimation();
@@ -4039,7 +4111,7 @@ function beginCrash(
   state.ball.crashed = true;
   state.ball.goaling = false;
   state.ball.transition = 0;
-  state.ball.crashReason = reason;
+  state.ball.crashReason = failureReason;
   state.ball.crashKind = crashKind;
   state.ball.crashPlanetIndex = crashPlanetIndex;
   setVec(state.ball.crashStartPosition, state.ball.position);
@@ -4051,7 +4123,7 @@ function beginCrash(
   setVec(
     state.ball.crashTargetPosition,
     state.ball.crashKind === 'sun'
-      ? state.level.sun
+      ? (crashTargetPosition ?? state.level.sun)
       : crashPlanet
         ? crashPlanet.position
         : state.ball.position,
@@ -4553,7 +4625,7 @@ function updatePhysics(delta) {
             ? 'sun'
             : state.ball.crashKind === 'lava'
               ? 'lava'
-              : 'planet',
+              : state.ball.crashReason,
           state.hint,
           { countReset: true },
         );
@@ -4568,7 +4640,7 @@ function updatePhysics(delta) {
 
     if (state.ball.transition >= 1) {
       ballGroup.visible = false;
-      showGameOverModal(state.ball.crashKind === 'planet' ? 'planet' : 'bounds', state.hint, { countReset: true });
+      showGameOverModal(state.ball.crashKind === 'planet' ? state.ball.crashReason : 'bounds', state.hint, { countReset: true });
     }
     return;
   }
@@ -4644,9 +4716,11 @@ function updatePhysics(delta) {
         ? 'Event horizon collapsed.'
         : result.reason === 'sun'
           ? 'Burned in the sun.'
-          : result.reason === 'lava'
-            ? 'Burned on the lava world.'
-          : result.reason === 'planet'
+          : result.reason === 'split-side'
+            ? 'Wrong side.'
+            : result.reason === 'lava'
+              ? 'Burned on the lava world.'
+            : result.reason === 'planet'
             ? 'Planet impact.'
             : 'Lost in open space.';
     const hint = describeFailureHint(result.reason);
@@ -4657,12 +4731,14 @@ function updatePhysics(delta) {
         ? 'sun'
         : result.reason === 'lava'
           ? 'lava'
-        : result.reason === 'planet'
+        : (result.reason === 'planet' || result.reason === 'split-side')
           ? 'planet'
           : 'bounds',
       result.eventState ?? null,
       result.displayEventState ?? null,
       result.planetIndex ?? null,
+      result.reason ?? message,
+      result.crashTargetPosition ?? null,
     );
     return;
   }
@@ -4675,10 +4751,20 @@ function updatePhysics(delta) {
 
 function updateDecor(time) {
   const worldTime = state.level.time ?? 0;
+  const goalLocked = isGoalLocked(state.level);
   const goalOpen = isGoalOpen(state.level, worldTime);
   const goalTimeLeft = getGoalRemainingTime(state.level, worldTime);
   const goalTimerFraction = getGoalRemainingFraction(state.level, worldTime);
   const showGoalTimer = Number.isFinite(goalTimeLeft) && Number.isFinite(goalTimerFraction);
+  const goalRevealProgress = state.level.goalUnlockRequired && state.level.goalUnlocked
+    ? clamp(
+      (worldTime - (state.level.goalUnlockTime ?? worldTime)) / GOAL_UNLOCK_REVEAL_DURATION,
+      0,
+      1,
+    )
+    : 1;
+  const goalRevealEase = THREE.MathUtils.smootherstep(goalRevealProgress, 0, 1);
+  const goalRevealFlash = 1 - goalRevealEase;
   const goalCloseAnimationProgress = state.goalCloseAnimation.active
     ? clamp(state.goalCloseAnimation.elapsed / GOAL_CLOSE_ANIMATION_DURATION, 0, 1)
     : 0;
@@ -4738,6 +4824,8 @@ function updateDecor(time) {
 
   if (keepGoalCollapsed) {
     const collapseEase = THREE.MathUtils.smootherstep(goalCloseProgress, 0, 1);
+    blackHoleDisc.visible = true;
+    blackHoleRing.visible = true;
     blackHoleDisc.material.color.setHex(0x202832);
     blackHoleDisc.scale.setScalar(1 - collapseEase * 0.92);
     blackHoleRing.rotation.z = time * 0.2 - collapseEase * 0.9;
@@ -4745,14 +4833,34 @@ function updateDecor(time) {
     blackHoleRing.material.opacity = Math.max(0, 0.48 - collapseEase * 0.44);
     goalTimerTrack.material.opacity = 0;
     goalTimerArc.material.opacity = 0;
+  } else if (goalLocked) {
+    blackHoleDisc.visible = false;
+    blackHoleRing.visible = false;
+    goalTimerTrack.material.opacity = 0;
+    goalTimerArc.material.opacity = 0;
   } else {
-    blackHoleDisc.material.color.setHex(goalOpen ? palette.blackHole.getHex() : 0x191f26);
-    blackHoleDisc.scale.setScalar(1);
-    blackHoleRing.rotation.z = time * (goalOpen ? 0.9 : 0.25);
-    blackHoleRing.scale.setScalar(goalOpen ? 1 + Math.sin(time * 4.2) * 0.08 : 0.92);
-    blackHoleRing.material.opacity = goalOpen
-      ? 0.46 + goalTimerFraction * 0.12 + Math.sin(time * 4.2) * 0.04
-      : 0.18;
+    blackHoleDisc.visible = true;
+    blackHoleRing.visible = true;
+    blackHoleDisc.material.color.copy(
+      goalOpen
+        ? mixColors(new THREE.Color(0x8d7aff), palette.blackHole, goalRevealEase)
+        : mixColors(new THREE.Color(0x5f6677), new THREE.Color(0x191f26), goalRevealEase),
+    );
+    blackHoleDisc.scale.setScalar(THREE.MathUtils.lerp(0.62, 1, goalRevealEase));
+    blackHoleRing.rotation.z = time * (goalOpen ? 0.9 : 0.25) + (1 - goalRevealEase) * 1.2;
+    blackHoleRing.scale.setScalar(
+      THREE.MathUtils.lerp(
+        2.15,
+        goalOpen ? 1 + Math.sin(time * 4.2) * 0.08 : 0.92,
+        goalRevealEase,
+      ),
+    );
+    blackHoleRing.material.opacity = Math.max(
+      0.22 * goalRevealFlash,
+      goalOpen
+        ? 0.46 + (showGoalTimer ? goalTimerFraction * 0.12 : 0) + Math.sin(time * 4.2) * 0.04
+        : 0.18
+    ) * Math.max(0.35, goalRevealEase);
     goalTimerTrack.material.opacity = showGoalTimer ? (goalOpen ? 0.22 : 0.08) : 0;
     goalTimerArc.material.opacity = showGoalTimer && goalOpen
       ? 0.56 + goalTimerFraction * 0.28 + Math.sin(time * 5.6) * 0.03
@@ -4782,6 +4890,14 @@ function updateDecor(time) {
     if (visual.accentBand) {
       visual.accentBand.rotation.z = 0.34 + time * (0.24 + index * 0.03);
       visual.accentBand.material.opacity = 0.24 + Math.sin(time * 2.2 + index) * 0.04;
+    }
+    if (visual.splitSafeDisc && visual.splitHazardDisc) {
+      const splitAxis = getPlanetSplitAxis(visual.planet, worldTime);
+      const splitAngle = Math.atan2(splitAxis.y, splitAxis.x);
+      visual.splitSafeDisc.rotation.z = -splitAngle;
+      visual.splitHazardDisc.rotation.z = -splitAngle;
+      visual.splitSafeDisc.material.opacity = 0.31 + Math.sin(time * 2.6 + index) * 0.035;
+      visual.splitHazardDisc.material.opacity = 0.42 + Math.sin(time * 2.1 + index) * 0.04;
     }
     if (visual.landingRing) {
       const selected = state.ball.landedPlanetIndex === index;
@@ -4833,9 +4949,13 @@ function updateDecor(time) {
     }
     if (visual.monolith) {
       const unlocked = state.level.goalUnlocked;
-      visual.monolith.material.emissiveIntensity = unlocked ? 1.15 : 0.42 + Math.sin(time * 2.4) * 0.08;
-      visual.monolithRing.material.opacity = unlocked ? 0.34 + Math.sin(time * 4.1) * 0.05 : 0.18 + Math.sin(time * 2.6) * 0.04;
-      visual.monolithRing.scale.setScalar(unlocked ? 1.08 + Math.sin(time * 3.4) * 0.04 : 1);
+      visual.monolith.material.emissiveIntensity = unlocked ? 1.15 : 0.78 + Math.sin(time * 2.4) * 0.12;
+      visual.monolithRing.material.opacity = unlocked ? 0.34 + Math.sin(time * 4.1) * 0.05 : 0.44 + Math.sin(time * 2.6) * 0.08;
+      visual.monolithRing.scale.setScalar(unlocked ? 1.08 + Math.sin(time * 3.4) * 0.04 : 1.08 + Math.sin(time * 2.8) * 0.08);
+      if (visual.monolithBeacon) {
+        visual.monolithBeacon.material.opacity = unlocked ? 0.08 : 0.16 + Math.sin(time * 2.2 + index) * 0.04;
+        visual.monolithBeacon.scale.setScalar(unlocked ? 1.02 : 1.06 + Math.sin(time * 2 + index) * 0.06);
+      }
     }
     visual.orbitPath.position.set(visual.planet.orbitCenter.x, 0, visual.planet.orbitCenter.y);
   });
