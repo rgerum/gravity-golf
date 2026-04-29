@@ -293,6 +293,9 @@ const sunCore = new THREE.Mesh(
 sunCore.position.y = 0.42;
 sunGroup.add(sunCore);
 
+const sunShockwaveRoot = new THREE.Group();
+world.add(sunShockwaveRoot);
+
 const extraSunsRoot = new THREE.Group();
 world.add(extraSunsRoot);
 
@@ -661,6 +664,7 @@ const state = {
   })),
   ballTraceCursor: 0,
   ballTraceCarry: 0,
+  sunShockwaves: [],
   message: 'Plot the first slingshot.',
   hint: 'Use the planets to curve into the event horizon.',
   debug: {
@@ -837,6 +841,38 @@ function updateLaunchMarker() {
 
 function updateSunVisual() {
   sunGroup.position.set(state.level.sun.x, 0, state.level.sun.y);
+}
+
+function syncPlanetCollapseEffects() {
+  planetVisuals.forEach((visual) => {
+    const collapseState = visual.planet.collapseState ?? 'stable';
+    if (visual.lastCollapseState !== 'plunging' && collapseState === 'plunging') {
+      spawnSunShockwave(0.85 + (visual.planet.radius ?? 0.4) * 0.75);
+    }
+    visual.lastCollapseState = collapseState;
+  });
+}
+
+function maybeCrashAnchoredBallOnConsumedPlanet() {
+  const planetIndex = state.ball.anchorPlanetIndex;
+  if (planetIndex === null || planetIndex === undefined) {
+    return false;
+  }
+
+  const planet = state.level.planets[planetIndex];
+  if (!planet || planet.collapseState !== 'consumed') {
+    return false;
+  }
+
+  beginCrash(
+    'Consumed by the sun.',
+    'The launch world fell into the sun before the next shot.',
+    'sun',
+    null,
+    null,
+    planetIndex,
+  );
+  return true;
 }
 
 function formatDistance(value) {
@@ -1815,6 +1851,7 @@ function startUndo() {
   state.roundSettled = false;
   state.relayPulse = 0;
   resetBallTrace();
+  clearSunShockwaves();
   lastGoalTimerFraction = Number.NaN;
   syncHud();
 }
@@ -2583,6 +2620,10 @@ function describeFailureHint(reason) {
     return `Retry ${state.level.name}. Skim the well, don't drop into it.`;
   }
 
+  if (reason === 'planet-consumed') {
+    return `Retry ${state.level.name}. Launch before the planet is consumed.`;
+  }
+
   const closestLandingMiss = describeClosestLandingMiss();
   if (closestLandingMiss) {
     return `Retry ${state.level.name}. ${closestLandingMiss}`;
@@ -2803,6 +2844,10 @@ function getFailureTitle(reason) {
     return 'Burned in the sun.';
   }
 
+  if (reason === 'planet-consumed') {
+    return 'Consumed by the sun.';
+  }
+
   if (reason === 'goal-closed') {
     return 'Black hole closed.';
   }
@@ -2943,6 +2988,58 @@ function clearGroup(group) {
   });
 }
 
+function clearSunShockwaves() {
+  state.sunShockwaves.forEach((shockwave) => {
+    shockwave.mesh.geometry.dispose();
+    disposeMaterial(shockwave.mesh.material);
+    sunShockwaveRoot.remove(shockwave.mesh);
+  });
+  state.sunShockwaves = [];
+}
+
+function spawnSunShockwave(strength = 1) {
+  const mesh = new THREE.Mesh(
+    new THREE.RingGeometry(0.44, 0.5, 96),
+    new THREE.MeshBasicMaterial({
+      color: 0xffd27a,
+      transparent: true,
+      opacity: 0.72,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    }),
+  );
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.position.set(state.level.sun.x, 0.075, state.level.sun.y);
+  mesh.renderOrder = 7;
+  sunShockwaveRoot.add(mesh);
+  state.sunShockwaves.push({
+    mesh,
+    age: 0,
+    life: 0.72,
+    strength: clamp(strength, 0.65, 1.8),
+  });
+}
+
+function updateSunShockwaves(delta) {
+  for (let index = state.sunShockwaves.length - 1; index >= 0; index -= 1) {
+    const shockwave = state.sunShockwaves[index];
+    shockwave.age += delta;
+    const t = clamp(shockwave.age / shockwave.life, 0, 1);
+    const ease = t * t * (3 - 2 * t);
+    const radius = THREE.MathUtils.lerp(0.5, 3.8 * shockwave.strength, ease);
+    shockwave.mesh.scale.setScalar(radius);
+    shockwave.mesh.material.opacity = (1 - t) * 0.76;
+    shockwave.mesh.position.set(state.level.sun.x, 0.075, state.level.sun.y);
+
+    if (t >= 1) {
+      shockwave.mesh.geometry.dispose();
+      disposeMaterial(shockwave.mesh.material);
+      sunShockwaveRoot.remove(shockwave.mesh);
+      state.sunShockwaves.splice(index, 1);
+    }
+  }
+}
+
 function mixFieldColor(target, intensity, tintWeight, tintR, tintG, tintB) {
   if (intensity < 0.55) {
     target.lerpColors(gravityFieldPalette.low, gravityFieldPalette.mid, intensity / 0.55);
@@ -2986,6 +3083,10 @@ function createGravityFieldSample(baseX, baseY, halfWidth, halfHeight, target) {
   let tintB = 0;
 
   for (const planet of state.level.planets) {
+    if (planet.active === false) {
+      continue;
+    }
+
     const deltaX = planet.position.x - baseX;
     const deltaY = planet.position.y - baseY;
     const distanceSq = deltaX * deltaX + deltaY * deltaY;
@@ -3305,8 +3406,15 @@ function rebuildPlanets() {
       : mixColors(glowColor, new THREE.Color(0xffdfa9), 0.22);
 
     const orbitPathPoints = [];
-    for (let step = 0; step <= 128; step += 1) {
-      const anomaly = (step / 128) * Math.PI * 2;
+    const isDecayingOrbit = Boolean(planet.orbitDecayRate);
+    const pathSteps = isDecayingOrbit ? 180 : 128;
+    const pathDuration = Math.min(18, Math.max(8, (planet.orbitSemiMajor ?? 4) / Math.max(0.001, planet.orbitDecayRate ?? 0.2) * 0.28));
+    for (let step = 0; step <= pathSteps; step += 1) {
+      const pathT = step / pathSteps;
+      const pathTime = isDecayingOrbit ? pathT * pathDuration : 0;
+      const anomaly = isDecayingOrbit
+        ? ((planet.orbitPhase ?? 0) + pathTime * (planet.orbitSpeed ?? 0))
+        : (pathT * Math.PI * 2);
       const eccentricity = planet.orbitEccentricity ?? 0;
       const eccentricAnomaly = eccentricity < 0.000001
         ? anomaly
@@ -3323,19 +3431,33 @@ function rebuildPlanets() {
           }
           return estimate;
         })();
-      const localX = planet.orbitSemiMajor * (Math.cos(eccentricAnomaly) - eccentricity);
-      const localY = planet.orbitSemiMinor * Math.sin(eccentricAnomaly);
+      const minOrbitRadius = Math.min(
+        planet.orbitSemiMajor,
+        planet.orbitMinRadius ?? planet.orbitSemiMajor * 0.35,
+      );
+      const decayedSemiMajor = isDecayingOrbit
+        ? (() => {
+          const decayDistance = planet.orbitSemiMajor - minOrbitRadius;
+          const timeToMinimum = decayDistance / Math.max(0.000001, planet.orbitDecayRate);
+          const fallProgress = Math.min(1, pathTime / Math.max(0.001, timeToMinimum));
+          return planet.orbitSemiMajor - decayDistance * fallProgress ** 1.55;
+        })()
+        : planet.orbitSemiMajor;
+      const decayScale = decayedSemiMajor / Math.max(0.001, planet.orbitSemiMajor);
+      const localX = decayedSemiMajor * (Math.cos(eccentricAnomaly) - eccentricity);
+      const localY = planet.orbitSemiMinor * decayScale * Math.sin(eccentricAnomaly);
       const rotation = planet.orbitRotation ?? 0;
       const x = localX * Math.cos(rotation) - localY * Math.sin(rotation);
       const y = localX * Math.sin(rotation) + localY * Math.cos(rotation);
       orbitPathPoints.push(new THREE.Vector3(x, 0.028, y));
     }
-    const orbitPath = new THREE.LineLoop(
+    const OrbitPathClass = isDecayingOrbit ? THREE.Line : THREE.LineLoop;
+    const orbitPath = new OrbitPathClass(
       new THREE.BufferGeometry().setFromPoints(orbitPathPoints),
       new THREE.LineBasicMaterial({
         color: orbitPathColor,
         transparent: true,
-        opacity: planet.landable ? 0.24 : 0.16,
+        opacity: isDecayingOrbit ? 0.34 : (planet.landable ? 0.24 : 0.16),
         depthWrite: false,
       }),
     );
@@ -3575,6 +3697,7 @@ function rebuildPlanets() {
       iceHaloRing,
       iceInnerRing,
       planet,
+      lastCollapseState: planet.collapseState ?? 'stable',
     };
   });
 }
@@ -3726,6 +3849,7 @@ function resetBall(message, hint, options = {}) {
   state.roundSettled = true;
   state.relayPulse = 0;
   resetBallTrace();
+  clearSunShockwaves();
   resetBallRenderState();
   seedFlightHistoryFromCurrentState();
   state.message = message;
@@ -4292,6 +4416,9 @@ function updatePhysics(delta) {
       if (Math.abs(appliedDelta) > 0.000001) {
         setLevelTime(state.level, nextTime);
         state.ball.time = nextTime;
+        if (maybeCrashAnchoredBallOnConsumedPlanet()) {
+          return;
+        }
         advanceBallAnchor(state.level, state.ball, appliedDelta);
       }
       if (maybeLaunchAdminReplayShot()) {
@@ -4335,6 +4462,8 @@ function updatePhysics(delta) {
     const message =
       result.reason === 'goal-closed'
         ? 'Event horizon collapsed.'
+        : result.reason === 'planet-consumed'
+          ? 'Consumed by the sun.'
         : result.reason === 'sun'
           ? 'Burned in the sun.'
           : result.reason === 'planet'
@@ -4346,7 +4475,9 @@ function updatePhysics(delta) {
       hint,
       result.reason === 'sun'
         ? 'sun'
-        : result.reason === 'planet'
+        : result.reason === 'planet-consumed'
+          ? 'sun'
+          : result.reason === 'planet'
           ? 'planet'
           : 'bounds',
       result.eventState ?? null,
@@ -4379,6 +4510,7 @@ function updateDecor(time) {
   windowStatusPill.textContent = getWindowStatusText();
   windowStatusPill.classList.toggle('is-hot', goalTimeLeft < 2.5);
   updateSunVisual();
+  syncPlanetCollapseEffects();
   updateLaunchMarker();
   startPad.scale.setScalar(1 + Math.sin(time * 2.7) * 0.06);
   startCore.material.opacity = 0.58 + Math.sin(time * 3.8) * 0.12;
@@ -4447,37 +4579,47 @@ function updateDecor(time) {
   planetVisuals.forEach((visual, index) => {
     const pulse = 1 + Math.sin(time * (1.5 + index * 0.35) + index) * 0.05;
     const isLandable = Boolean(visual.planet.landable);
+    const planetVisibility = visual.planet.infallFade ?? (visual.planet.active === false ? 0 : 1);
+    const collisionPulse = visual.planet.collisionPulse ?? 0;
     const relayPulse = state.ball.landedPlanetIndex === index ? state.relayPulse : 0;
+    visual.group.visible = planetVisibility > 0.02;
+    visual.orbitPath.visible = planetVisibility > 0.02;
+    visual.group.scale.setScalar((0.72 + planetVisibility * 0.28) * (1 + collisionPulse * 0.08));
     visual.group.position.set(visual.planet.position.x, 0, visual.planet.position.y);
+    visual.body.material.emissiveIntensity = (
+      isLandable
+        ? (visual.planet.surfaceType === 'ice' ? 0.28 : 0.08)
+        : 0.16
+    ) + collisionPulse * 0.45;
     visual.glow.material.opacity = isLandable
-      ? 0.13 + Math.sin(time * 2 + index) * 0.03 + relayPulse * 0.12
-      : 0.16 + Math.sin(time * 1.7 + index) * 0.04;
+      ? (0.13 + Math.sin(time * 2 + index) * 0.03 + relayPulse * 0.12 + collisionPulse * 0.16) * planetVisibility
+      : (0.16 + Math.sin(time * 1.7 + index) * 0.04 + collisionPulse * 0.18) * planetVisibility;
     visual.orbitRing.rotation.z = time * (0.35 + index * 0.12);
     visual.body.rotation.y = -worldTime * (visual.planet.spinSpeed ?? 0);
     if (visual.atmosphereShell) {
       visual.atmosphereShell.rotation.y = -worldTime * (visual.planet.spinSpeed ?? 0) * 0.85;
       visual.atmosphereShell.material.opacity = isLandable
-        ? 0.13 + Math.sin(time * 2.8 + index) * 0.025
-        : 0.11 + Math.sin(time * 1.9 + index) * 0.02;
+        ? (0.13 + Math.sin(time * 2.8 + index) * 0.025) * planetVisibility
+        : (0.11 + Math.sin(time * 1.9 + index) * 0.02) * planetVisibility;
     }
     if (visual.accentBand) {
       visual.accentBand.rotation.z = 0.34 + time * (0.24 + index * 0.03);
-      visual.accentBand.material.opacity = 0.24 + Math.sin(time * 2.2 + index) * 0.04;
+      visual.accentBand.material.opacity = (0.24 + Math.sin(time * 2.2 + index) * 0.04) * planetVisibility;
     }
     if (visual.landingRing) {
       const selected = state.ball.landedPlanetIndex === index;
       visual.landingRing.scale.setScalar(1 + relayPulse * 0.18);
       visual.landingRing.material.opacity = selected
-        ? 0.34 + Math.sin(time * 4.4) * 0.06 + relayPulse * 0.28
-        : 0.16 + Math.sin(time * 3 + index) * 0.03;
+        ? (0.34 + Math.sin(time * 4.4) * 0.06 + relayPulse * 0.28) * planetVisibility
+        : (0.16 + Math.sin(time * 3 + index) * 0.03) * planetVisibility;
       if (visual.planet.surfaceType === 'ice') {
-        visual.landingRing.material.opacity += 0.08;
+        visual.landingRing.material.opacity += 0.08 * planetVisibility;
       }
-      visual.orbitRing.material.opacity = selected ? 0.9 : 0.62 + Math.sin(time * 2.5 + index) * 0.06;
-      visual.orbitPath.material.opacity = selected ? 0.5 : 0.22 + Math.sin(time * 1.6 + index) * 0.025;
+      visual.orbitRing.material.opacity = (selected ? 0.9 : 0.62 + Math.sin(time * 2.5 + index) * 0.06) * planetVisibility;
+      visual.orbitPath.material.opacity = (selected ? 0.5 : 0.22 + Math.sin(time * 1.6 + index) * 0.025) * planetVisibility;
     } else {
-      visual.orbitRing.material.opacity = 0.38 + Math.sin(time * 1.8 + index) * 0.04;
-      visual.orbitPath.material.opacity = 0.14 + Math.sin(time * 1.4 + index) * 0.02;
+      visual.orbitRing.material.opacity = (0.38 + Math.sin(time * 1.8 + index) * 0.04) * planetVisibility;
+      visual.orbitPath.material.opacity = (0.14 + Math.sin(time * 1.4 + index) * 0.02) * planetVisibility;
     }
     if (visual.iceSkidArc) {
       const selected = state.ball.anchorPlanetIndex === index;
@@ -4491,11 +4633,11 @@ function updateDecor(time) {
       }
     }
     if (visual.iceHaloRing) {
-      visual.iceHaloRing.material.opacity = 0.28 + Math.sin(time * 2.6 + index) * 0.04;
+      visual.iceHaloRing.material.opacity = (0.28 + Math.sin(time * 2.6 + index) * 0.04) * planetVisibility;
       visual.iceHaloRing.scale.setScalar(1 + Math.sin(time * 2 + index) * 0.025);
     }
     if (visual.iceInnerRing) {
-      visual.iceInnerRing.material.opacity = 0.18 + Math.sin(time * 3.1 + index) * 0.04;
+      visual.iceInnerRing.material.opacity = (0.18 + Math.sin(time * 3.1 + index) * 0.04) * planetVisibility;
       visual.iceInnerRing.rotation.z = time * (0.16 + index * 0.01);
     }
     if (visual.monolith) {
@@ -4618,6 +4760,7 @@ function animate() {
   }
 
   updateBallTrace(delta);
+  updateSunShockwaves(delta);
   updateBallTransforms();
   updateCueVisual();
   updateDecor(time);
