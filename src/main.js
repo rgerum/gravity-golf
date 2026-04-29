@@ -30,6 +30,7 @@ import {
   isPointInPulsarJets,
   isGoalLocked,
   isGoalOpen,
+  getTurretLineState,
   length,
   lengthSq,
   launchVelocity,
@@ -532,6 +533,59 @@ world.add(orbitPathsRoot);
 const planetsRoot = new THREE.Group();
 world.add(planetsRoot);
 
+const turretShotRoot = new THREE.Group();
+turretShotRoot.visible = false;
+world.add(turretShotRoot);
+
+const turretShotBeam = new THREE.Line(
+  new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(0, 0.28, 0),
+    new THREE.Vector3(0, 0.28, 0),
+  ]),
+  new THREE.LineBasicMaterial({
+    color: 0xfff0a8,
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    depthTest: false,
+    blending: THREE.AdditiveBlending,
+  }),
+);
+turretShotBeam.renderOrder = 24;
+turretShotRoot.add(turretShotBeam);
+
+const turretShotProjectile = new THREE.Mesh(
+  new THREE.SphereGeometry(0.085, 18, 18),
+  new THREE.MeshBasicMaterial({
+    color: 0xfff3bf,
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    depthTest: false,
+    blending: THREE.AdditiveBlending,
+  }),
+);
+turretShotProjectile.position.y = 0.32;
+turretShotProjectile.renderOrder = 25;
+turretShotRoot.add(turretShotProjectile);
+
+const turretShotImpact = new THREE.Mesh(
+  new THREE.RingGeometry(0.12, 0.24, 32),
+  new THREE.MeshBasicMaterial({
+    color: 0xff5665,
+    transparent: true,
+    opacity: 0,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+    depthTest: false,
+    blending: THREE.AdditiveBlending,
+  }),
+);
+turretShotImpact.rotation.x = -Math.PI / 2;
+turretShotImpact.position.y = 0.34;
+turretShotImpact.renderOrder = 25;
+turretShotRoot.add(turretShotImpact);
+
 const ballGroup = new THREE.Group();
 world.add(ballGroup);
 ballGroup.renderOrder = 20;
@@ -739,6 +793,7 @@ const state = {
   lastAttemptTrail: [],
   lastAttemptOutcome: '',
   bestApproach: null,
+  turretShot: null,
   adminMode: (() => {
     try {
       return window.localStorage.getItem(ADMIN_STORAGE_KEY) === '1';
@@ -1274,6 +1329,47 @@ function updatePulsarJets(time) {
   pulsarWarningRing.rotation.z = time * 1.8;
 }
 
+function setTurretShotBeam(start, end, opacity) {
+  const beamPositions = turretShotBeam.geometry.attributes.position;
+  beamPositions.setXYZ(0, start.x, 0.28, start.y);
+  beamPositions.setXYZ(1, end.x, 0.28, end.y);
+  beamPositions.needsUpdate = true;
+  turretShotBeam.material.opacity = opacity;
+}
+
+function updateTurretShotVisual(delta) {
+  const shot = state.turretShot;
+  if (!shot) {
+    turretShotRoot.visible = false;
+    turretShotBeam.material.opacity = 0;
+    turretShotProjectile.material.opacity = 0;
+    turretShotImpact.material.opacity = 0;
+    return;
+  }
+
+  shot.elapsed += delta;
+  const duration = shot.turretType === 'missile' ? 0.46 : 0.3;
+  const progress = clamp(shot.elapsed / duration, 0, 1);
+  const ease = THREE.MathUtils.smootherstep(progress, 0, 1);
+  const projectile = {
+    x: THREE.MathUtils.lerp(shot.start.x, shot.end.x, ease),
+    y: THREE.MathUtils.lerp(shot.start.y, shot.end.y, ease),
+  };
+  const flash = Math.max(0, 1 - progress);
+  const impact = clamp((progress - 0.58) / 0.42, 0, 1);
+
+  turretShotRoot.visible = true;
+  setTurretShotBeam(shot.start, projectile, 0.18 + flash * 0.72);
+  turretShotBeam.material.color.setHex(shot.turretType === 'missile' ? 0xffe38f : 0xff626a);
+  turretShotProjectile.position.set(projectile.x, 0.32, projectile.y);
+  turretShotProjectile.scale.setScalar(shot.turretType === 'missile' ? 1.35 - impact * 0.25 : 1 + flash * 0.65);
+  turretShotProjectile.material.opacity = 0.95 * (1 - impact * 0.85);
+  turretShotProjectile.material.color.setHex(shot.turretType === 'missile' ? 0xfff0b0 : 0xff6a72);
+  turretShotImpact.position.set(shot.end.x, 0.34, shot.end.y);
+  turretShotImpact.scale.setScalar(0.7 + impact * 2.6);
+  turretShotImpact.material.opacity = impact > 0 ? 0.72 * (1 - impact) : 0;
+}
+
 function formatDistance(value) {
   return value < 1 ? value.toFixed(2) : value.toFixed(1);
 }
@@ -1611,6 +1707,7 @@ function applyCheckpointState(checkpoint) {
   state.ball.goaling = false;
   state.ball.crashed = false;
   state.ball.transition = 0;
+  state.turretShot = null;
   state.ball.crashReason = '';
   state.ball.crashKind = '';
   state.ball.crashPlanetIndex = null;
@@ -2255,6 +2352,7 @@ function startUndo() {
   state.roundSettled = false;
   state.relayPulse = 0;
   resetBallTrace();
+  state.turretShot = null;
   lastGoalTimerFraction = Number.NaN;
   syncHud();
 }
@@ -3220,6 +3318,13 @@ function describeFailureHint(reason) {
     return `Retry ${state.level.name}. Time the crossing between the paired jets.`;
   }
 
+  if (reason === 'turret') {
+    const hostilePlanet = state.ball.crashPlanetIndex !== null && state.ball.crashPlanetIndex !== undefined
+      ? state.level.planets[state.ball.crashPlanetIndex]
+      : null;
+    return `Retry ${state.level.name}. Stay out of ${hostilePlanet?.name ?? 'the hostile planet'} sight line.`;
+  }
+
   if (reason === 'sun') {
     return `Retry ${state.level.name}. Skim the well, don't drop into it.`;
   }
@@ -3457,6 +3562,10 @@ function getFailureTitle(reason) {
 
   if (reason === 'pulsar') {
     return 'Caught in the pulsar jet.';
+  }
+
+  if (reason === 'turret') {
+    return 'Shot down by a turret.';
   }
 
   if (reason === 'goal-closed') {
@@ -4102,6 +4211,7 @@ function rebuildPlanets() {
     let lavaWarningRing = null;
     let splitSafeDisc = null;
     let splitHazardDisc = null;
+    const turretVisuals = [];
 
     if (planet.landable) {
       atmosphereShell = new THREE.Mesh(
@@ -4330,6 +4440,75 @@ function rebuildPlanets() {
       group.add(monolithBeacon);
     }
 
+    for (const turret of planet.turrets ?? []) {
+      const turretGroup = new THREE.Group();
+      const lineLength = turret.range ?? 2.8;
+      const lineStart = planet.radius + COURSE.ballRadius * 0.34;
+      const sightLine = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(lineStart, 0.16, 0),
+          new THREE.Vector3(lineStart + lineLength, 0.16, 0),
+        ]),
+        new THREE.LineBasicMaterial({
+          color: turret.type === 'missile' ? 0xffdf7a : 0xff665f,
+          transparent: true,
+          opacity: 0.68,
+          depthWrite: false,
+          depthTest: false,
+          blending: THREE.AdditiveBlending,
+        }),
+      );
+      sightLine.renderOrder = 12;
+      turretGroup.add(sightLine);
+
+      const sightGlow = new THREE.Mesh(
+        new THREE.PlaneGeometry(lineLength, Math.max(0.04, (turret.width ?? 0.07) * 2.6)),
+        new THREE.MeshBasicMaterial({
+          color: turret.type === 'missile' ? 0xffbb54 : 0xff4f5e,
+          transparent: true,
+          opacity: 0.12,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+          depthTest: false,
+          blending: THREE.AdditiveBlending,
+        }),
+      );
+      sightGlow.rotation.x = -Math.PI / 2;
+      sightGlow.position.set(lineStart + lineLength * 0.5, 0.11, 0);
+      sightGlow.renderOrder = 11;
+      turretGroup.add(sightGlow);
+
+      const turretBase = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.09, 0.13, 0.1, 16),
+        new THREE.MeshStandardMaterial({
+          color: 0x2a313a,
+          emissive: turret.type === 'missile' ? 0x6f4310 : 0x5a1616,
+          emissiveIntensity: 0.36,
+          roughness: 0.42,
+          metalness: 0.48,
+        }),
+      );
+      turretBase.position.set(lineStart - 0.04, planet.radius * 1.52, 0);
+      turretBase.rotation.z = Math.PI / 2;
+      turretGroup.add(turretBase);
+
+      const barrel = new THREE.Mesh(
+        new THREE.BoxGeometry(turret.type === 'missile' ? 0.42 : 0.34, 0.07, 0.07),
+        new THREE.MeshStandardMaterial({
+          color: turret.type === 'missile' ? 0x3d4552 : 0x252b34,
+          emissive: turret.type === 'missile' ? 0xff9d36 : 0xff4048,
+          emissiveIntensity: 0.32,
+          roughness: 0.36,
+          metalness: 0.58,
+        }),
+      );
+      barrel.position.set(lineStart + 0.12, planet.radius * 1.56, 0);
+      turretGroup.add(barrel);
+
+      group.add(turretGroup);
+      turretVisuals.push({ group: turretGroup, sightLine, sightGlow, turret });
+    }
+
     group.position.set(planet.position.x, 0, planet.position.y);
     planetsRoot.add(group);
 
@@ -4352,6 +4531,7 @@ function rebuildPlanets() {
       lavaWarningRing,
       splitSafeDisc,
       splitHazardDisc,
+      turretVisuals,
       planet,
     };
   });
@@ -4515,6 +4695,7 @@ function resetBall(message, hint, options = {}) {
   state.dragPower = 0;
   state.roundSettled = true;
   state.relayPulse = 0;
+  state.turretShot = null;
   resetBallTrace();
   resetBallRenderState();
   seedFlightHistoryFromCurrentState();
@@ -4536,6 +4717,7 @@ function beginGoal(result = null) {
   state.ball.velocity.x = 0;
   state.ball.velocity.y = 0;
   state.relayPulse = 0;
+  state.turretShot = null;
   state.message = 'Event horizon captured.';
   state.hint = 'Course clear. Loading the next route.';
   syncHud();
@@ -4550,6 +4732,7 @@ function beginCrash(
   crashPlanetIndex = null,
   failureReason = reason,
   crashTargetPosition = null,
+  crashDetails = null,
 ) {
   hideGameOverModal();
   hideGoalCloseAnimation();
@@ -4572,6 +4755,8 @@ function beginCrash(
     state.ball.crashTargetPosition,
     state.ball.crashKind === 'sun' || state.ball.crashKind === 'pulsar'
       ? (crashTargetPosition ?? state.level.sun)
+      : state.ball.crashKind === 'turret'
+        ? state.ball.position
       : crashPlanet
         ? crashPlanet.position
         : state.ball.position,
@@ -4579,6 +4764,17 @@ function beginCrash(
   state.ball.velocity.x = 0;
   state.ball.velocity.y = 0;
   state.relayPulse = 0;
+  if (crashKind === 'turret' && crashDetails?.turret && crashPlanet) {
+    const lineState = getTurretLineState(crashPlanet, crashDetails.turret, state.ball.time ?? state.level.time ?? 0);
+    state.turretShot = {
+      elapsed: 0,
+      start: cloneVec(lineState.start),
+      end: cloneVec(state.ball.position),
+      turretType: crashDetails.turret.type ?? 'tank',
+    };
+  } else {
+    state.turretShot = null;
+  }
   state.message = reason;
   state.hint = hint;
   syncHud();
@@ -5058,8 +5254,8 @@ function updatePhysics(delta) {
   }
 
   if (state.ball.crashed) {
-    if (state.ball.crashKind === 'sun' || state.ball.crashKind === 'pulsar' || state.ball.crashKind === 'planet' || state.ball.crashKind === 'lava') {
-      const solarCrash = state.ball.crashKind === 'sun' || state.ball.crashKind === 'pulsar';
+    if (state.ball.crashKind === 'sun' || state.ball.crashKind === 'pulsar' || state.ball.crashKind === 'turret' || state.ball.crashKind === 'planet' || state.ball.crashKind === 'lava') {
+      const solarCrash = state.ball.crashKind === 'sun' || state.ball.crashKind === 'pulsar' || state.ball.crashKind === 'turret';
       state.ball.transition += delta * (solarCrash ? 4.8 : state.ball.crashKind === 'lava' ? 5 : 4.3);
       const t = Math.min(1, state.ball.transition);
       state.ball.position.x = THREE.MathUtils.lerp(
@@ -5082,7 +5278,11 @@ function updatePhysics(delta) {
         Math.max(0.04, 1 - t * (solarCrash ? 0.94 : 0.88)),
       );
       ballShadow.material.opacity = 0.28 * (1 - t);
-      if (solarCrash) {
+      if (state.ball.crashKind === 'turret') {
+        ballMesh.material.color.copy(palette.ball).lerp(new THREE.Color(0xff5058), Math.min(1, t * 1.15));
+        ballMesh.material.emissive.setHex(0xff3040);
+        ballMesh.material.emissiveIntensity = THREE.MathUtils.lerp(0.2, 2.8, t);
+      } else if (solarCrash) {
         ballMesh.material.color.copy(palette.ball).lerp(palette.band, Math.min(1, t * 1.1));
         ballMesh.material.emissive.copy(palette.band);
         ballMesh.material.emissiveIntensity = THREE.MathUtils.lerp(0, 2.4, t);
@@ -5140,13 +5340,19 @@ function updatePhysics(delta) {
         state.ball.time = nextTime;
         const anchorResult = advanceBallAnchor(state.level, state.ball, appliedDelta);
         if (anchorResult?.type === 'crash') {
+          const anchoredMessage = anchorResult.reason === 'turret'
+            ? 'Shot down by a turret.'
+            : 'Burned on the lava world.';
           beginCrash(
-            'Burned on the lava world.',
-            describeFailureHint('lava'),
-            'lava',
+            anchoredMessage,
+            describeFailureHint(anchorResult.reason ?? 'lava'),
+            anchorResult.reason === 'turret' ? 'turret' : 'lava',
             anchorResult.eventState ?? null,
             anchorResult.displayEventState ?? null,
             anchorResult.planetIndex ?? null,
+            anchorResult.reason ?? 'lava',
+            anchorResult.crashTargetPosition ?? null,
+            { turret: anchorResult.turret ?? null },
           );
           return;
         }
@@ -5204,6 +5410,8 @@ function updatePhysics(delta) {
               ? 'Wrong side.'
               : result.reason === 'lava'
                 ? 'Burned on the lava world.'
+                : result.reason === 'turret'
+                  ? 'Shot down by a turret.'
                 : result.reason === 'planet'
                   ? 'Planet impact.'
                   : 'Lost in open space.';
@@ -5211,7 +5419,7 @@ function updatePhysics(delta) {
     beginCrash(
       message,
       hint,
-      result.reason === 'sun' || result.reason === 'pulsar'
+      result.reason === 'sun' || result.reason === 'pulsar' || result.reason === 'turret'
         ? result.reason
         : result.reason === 'lava'
           ? 'lava'
@@ -5223,6 +5431,7 @@ function updatePhysics(delta) {
       result.planetIndex ?? null,
       result.reason ?? message,
       result.crashTargetPosition ?? null,
+      { turret: result.turret ?? null },
     );
     return;
   }
@@ -5442,6 +5651,13 @@ function updateDecor(time) {
         visual.monolithBeacon.scale.setScalar(unlocked ? 1.02 : 1.06 + Math.sin(time * 2 + index) * 0.06);
       }
     }
+    for (const turretVisual of visual.turretVisuals ?? []) {
+      const lineState = getTurretLineState(visual.planet, turretVisual.turret, worldTime);
+      const angle = Math.atan2(lineState.direction.y, lineState.direction.x);
+      turretVisual.group.rotation.y = -angle;
+      turretVisual.sightLine.material.opacity = 0.54 + Math.sin(time * 5.2 + index) * 0.12;
+      turretVisual.sightGlow.material.opacity = 0.08 + Math.sin(time * 4.6 + index) * 0.035;
+    }
     visual.orbitPath.position.set(visual.planet.orbitCenter.x, 0, visual.planet.orbitCenter.y);
   });
 }
@@ -5556,6 +5772,7 @@ function animate() {
   }
 
   updateBallTrace(delta);
+  updateTurretShotVisual(delta);
   updateBallTransforms();
   updateCueVisual();
   updateDecor(time);

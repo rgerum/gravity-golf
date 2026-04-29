@@ -51,6 +51,8 @@ const DEFAULT_PULSAR_JET_LENGTH = 12.2;
 const DEFAULT_PULSAR_JET_WIDTH = 0.34;
 const DEFAULT_PULSAR_JET_INNER_RADIUS = 0.5;
 const PULSAR_SEGMENT_COLLISION_SAMPLES = 8;
+const DEFAULT_TURRET_RANGE = 5.6;
+const DEFAULT_TURRET_LINE_WIDTH = 0.13;
 
 function polar(radius, angleDeg) {
   return { radius, angleDeg };
@@ -70,6 +72,7 @@ export const WORLD_DEFINITIONS = [
   { id: 'split-worlds', name: 'Split Worlds' },
   { id: 'lava-reach', name: 'Lava Reach' },
   { id: 'pulsars', name: 'Pulsars' },
+  { id: 'hostile-planets', name: 'Hostile Planets' },
 ];
 
 const CORE_LEVEL_DEFINITIONS = [
@@ -1189,6 +1192,21 @@ const WORLD_THEMES = {
       { core: 0xeaf8ff, glow: 0xffffff },
     ],
   },
+  hostile: {
+    landable: [
+      { core: 0x6fc4ff, glow: 0xb4ebff },
+      { core: 0x8be28f, glow: 0xd2ffc8 },
+      { core: 0xffcf68, glow: 0xffefad },
+    ],
+    hazards: [
+      { core: 0xff5f67, glow: 0xffb0a0 },
+      { core: 0xff8e5d, glow: 0xffd0a2 },
+      { core: 0xad83ff, glow: 0xe1cfff },
+    ],
+    moons: [
+      { core: 0xe9eef7, glow: 0xffffff },
+    ],
+  },
 };
 
 function cloneLaunchPresets(launchPresets) {
@@ -1206,7 +1224,12 @@ function cloneAdminSolutions(adminSolutions) {
 }
 
 function clonePlanets(planets) {
-  return planets.map((planet) => ({ ...planet }));
+  return planets.map((planet) => ({
+    ...planet,
+    turrets: Array.isArray(planet.turrets)
+      ? planet.turrets.map((turret) => ({ ...turret }))
+      : planet.turrets,
+  }));
 }
 
 function cloneLevel(baseId, overrides = {}) {
@@ -1526,6 +1549,35 @@ function makePulsarVariant(spec) {
   return level;
 }
 
+function normalizeTurret(turret = {}, turretIndex = 0) {
+  return {
+    id: turret.id ?? `turret-${turretIndex + 1}`,
+    type: turret.type ?? (turretIndex % 2 === 0 ? 'tank' : 'missile'),
+    angleDeg: turret.angleDeg ?? 0,
+    range: turret.range ?? DEFAULT_TURRET_RANGE,
+    width: turret.width ?? DEFAULT_TURRET_LINE_WIDTH,
+    phaseSeconds: turret.phaseSeconds ?? 0,
+  };
+}
+
+function makeHostileVariant(spec) {
+  const level = variantLevel('hostile', spec);
+  level.summary = spec.summary;
+  level.tutorial = spec.tutorial ?? null;
+  level.planets = level.planets.map((planet, index) => {
+    const turrets = spec.turrets?.[index];
+    if (!turrets) {
+      return planet;
+    }
+    const turretList = Array.isArray(turrets) ? turrets : [turrets];
+    return {
+      ...planet,
+      turrets: turretList.map((turret, turretIndex) => normalizeTurret(turret, turretIndex)),
+    };
+  });
+  return level;
+}
+
 function makeSplitVariant(spec) {
   const level = variantLevel('prism', spec);
   const splitPlanets = spec.splitPlanets ?? {};
@@ -1650,6 +1702,26 @@ const PULSAR_WORLD_SPECS = [
   { baseId: 'final-circuit', id: 'pulsar-circuit', name: 'Pulsar Circuit', summary: 'The final circuit becomes a timing run through repeated twin jets before the clean relay escape.', angleDeg: -40, angularSpeedDeg: 2, phaseSeconds: 0.65, periodSeconds: 3.5, activeSeconds: 0.58, width: 0.24 },
 ];
 
+const HOSTILE_WORLD_SPECS = [
+  {
+    baseId: 'first-arc',
+    id: 'sentry-arc',
+    name: 'Sentry Arc',
+    summary: 'A gun line marks the forbidden shortcut. Bend around the sun without crossing the sentry sight.',
+    tutorial: { type: 'turret', copy: 'Cross a turret sight line and the shot is destroyed.' },
+    turrets: { 0: { type: 'tank', angleDeg: 112, range: 4.2 } },
+  },
+  { baseId: 'fast-window', id: 'watch-relay', name: 'Watch Window', summary: 'The launch window still opens and closes while the sentry line watches the direct lane.', turrets: { 0: { type: 'missile', angleDeg: 96, range: 4.4 } } },
+  { baseId: 'forked-harbor', id: 'gun-harbor', name: 'Gun Harbor', summary: 'Both harbors are visible, but the armed worlds make one corridor too costly to cross.', turrets: { 1: { type: 'tank', angleDeg: 12, range: 4.5 }, 3: { type: 'missile', angleDeg: 214, range: 5.0 } } },
+  { baseId: 'inner-step', id: 'crossfire-step', name: 'Crossfire Step', summary: 'Step outward through the relay while two sight lines divide the middle of the system.', turrets: { 1: { type: 'tank', angleDeg: 236, range: 4.5 }, 2: { type: 'missile', angleDeg: 122, range: 5.2 } } },
+  { baseId: 'moon-switch', id: 'launcher-switch', name: 'Launcher Switch', summary: 'The switch route survives, but missile sight lines punish the lazy middle exit.', turrets: { 2: { type: 'missile', angleDeg: 250, range: 5.0 }, 4: { type: 'tank', angleDeg: 180, range: 3.8 } } },
+  { baseId: 'long-transfer', id: 'battery-transfer', name: 'Battery Transfer', summary: 'The outer station is still the answer; armed giants cut off the impatient transfer.', turrets: { 2: { type: 'tank', angleDeg: 92, range: 5.2 }, 4: { type: 'missile', angleDeg: 202, range: 4.8 } } },
+  { baseId: 'halo-run', id: 'siege-halo', name: 'Siege Halo', summary: 'A wide halo route threads past planetary batteries watching the inner shortcut.', turrets: { 1: { type: 'tank', angleDeg: 318, range: 4.5 }, 4: { type: 'missile', angleDeg: 214, range: 5.4 } } },
+  { baseId: 'rim-switch', id: 'sentry-switch', name: 'Sentry Switch', summary: 'Stabilize on the switch worlds and avoid the sight line guarding the rim burn.', turrets: { 2: { type: 'tank', angleDeg: 78, range: 4.9 }, 4: { type: 'missile', angleDeg: 190, range: 4.8 } } },
+  { baseId: 'counterspin-gate', id: 'flak-gate', name: 'Flak Gate', summary: 'The counterspin route now has flak lines covering the obvious recovery paths.', turrets: { 1: { type: 'tank', angleDeg: 24, range: 4.6 }, 3: { type: 'missile', angleDeg: 238, range: 5.3 } } },
+  { baseId: 'final-circuit', id: 'hostile-circuit', name: 'Hostile Circuit', summary: 'The final relay circuit becomes a hostile run through overlapping planet sight lines.', turrets: { 1: { type: 'tank', angleDeg: 312, range: 4.8 }, 2: { type: 'missile', angleDeg: 88, range: 5.2 }, 3: { type: 'tank', angleDeg: 210, range: 4.6 } } },
+];
+
 const EXPANSION_LEVEL_DEFINITIONS = [
   ...ICY_WORLD_SPECS.map((spec) => makeIcyVariant(spec)),
   ...PORTAL_WORLD_SPECS.map((spec) => makePortalVariant(spec)),
@@ -1658,6 +1730,7 @@ const EXPANSION_LEVEL_DEFINITIONS = [
   ...SPLIT_WORLD_SPECS.map((spec) => makeSplitVariant(spec)),
   ...LAVA_WORLD_SPECS.map((spec) => makeLavaVariant(spec)),
   ...PULSAR_WORLD_SPECS.map((spec) => makePulsarVariant(spec)),
+  ...HOSTILE_WORLD_SPECS.map((spec) => makeHostileVariant(spec)),
 ];
 
 const LEVEL_DEFINITIONS = [...CORE_LEVEL_DEFINITIONS, ...EXPANSION_LEVEL_DEFINITIONS];
@@ -1773,6 +1846,16 @@ const CAMPAIGN_LEVEL_ORDER = [
   'guarded-pulsar',
   'counterpulse-gate',
   'pulsar-circuit',
+  'sentry-arc',
+  'watch-relay',
+  'gun-harbor',
+  'crossfire-step',
+  'launcher-switch',
+  'battery-transfer',
+  'siege-halo',
+  'sentry-switch',
+  'flak-gate',
+  'hostile-circuit',
 ];
 
 const campaignOrderIndex = new Map(
@@ -2400,6 +2483,8 @@ export function advanceBallAnchor(level, ball, delta) {
     return;
   }
 
+  const previousPosition = cloneVec(ball.position);
+
   if (planet.spinSpeed) {
     ball.anchorNormal = normalize(rotateVector(ball.anchorNormal ?? vec(1, 0), planet.spinSpeed * delta));
   }
@@ -2409,6 +2494,11 @@ export function advanceBallAnchor(level, ball, delta) {
   }
 
   syncBallToAnchor(level, ball);
+  const turretContactResult = resolveTurretSightContact(level, ball, previousPosition);
+  if (turretContactResult) {
+    return turretContactResult;
+  }
+
   return updateBallHeat(level, ball, delta);
 }
 
@@ -2522,6 +2612,127 @@ function isSegmentInPulsarJets(level, fromPoint, toPoint, time = level.time ?? 0
   return false;
 }
 
+export function getTurretLineState(planet, turret, time = 0) {
+  const localAngle = (turret?.angleDeg ?? 0) + (planet?.spinSpeed ?? 0) * time * 180 / Math.PI;
+  const direction = directionFromAngleDeg(localAngle);
+  const muzzleDistance = (planet?.radius ?? 0) + COURSE.ballRadius * 0.32;
+  const start = vec(
+    planet.position.x + direction.x * muzzleDistance,
+    planet.position.y + direction.y * muzzleDistance,
+  );
+  const end = vec(
+    start.x + direction.x * (turret?.range ?? DEFAULT_TURRET_RANGE),
+    start.y + direction.y * (turret?.range ?? DEFAULT_TURRET_RANGE),
+  );
+  return {
+    start,
+    end,
+    direction,
+    width: turret?.width ?? DEFAULT_TURRET_LINE_WIDTH,
+  };
+}
+
+function distanceSqPointToSegment(point, segmentStart, segmentEnd) {
+  const segment = vec(segmentEnd.x - segmentStart.x, segmentEnd.y - segmentStart.y);
+  const segmentLengthSq = lengthSq(segment);
+  if (segmentLengthSq < 0.000001) {
+    return lengthSq(vec(point.x - segmentStart.x, point.y - segmentStart.y));
+  }
+  const t = clamp(
+    ((point.x - segmentStart.x) * segment.x + (point.y - segmentStart.y) * segment.y) / segmentLengthSq,
+    0,
+    1,
+  );
+  const closest = vec(segmentStart.x + segment.x * t, segmentStart.y + segment.y * t);
+  return lengthSq(vec(point.x - closest.x, point.y - closest.y));
+}
+
+function orientation(a, b, c) {
+  return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+}
+
+function isPointOnSegment(point, segmentStart, segmentEnd) {
+  const epsilon = 0.000001;
+  return (
+    point.x >= Math.min(segmentStart.x, segmentEnd.x) - epsilon
+    && point.x <= Math.max(segmentStart.x, segmentEnd.x) + epsilon
+    && point.y >= Math.min(segmentStart.y, segmentEnd.y) - epsilon
+    && point.y <= Math.max(segmentStart.y, segmentEnd.y) + epsilon
+    && Math.abs(orientation(segmentStart, segmentEnd, point)) <= epsilon
+  );
+}
+
+function segmentsIntersect(a, b, c, d) {
+  const abC = orientation(a, b, c);
+  const abD = orientation(a, b, d);
+  const cdA = orientation(c, d, a);
+  const cdB = orientation(c, d, b);
+  const epsilon = 0.000001;
+
+  if (Math.abs(abC) <= epsilon && isPointOnSegment(c, a, b)) {
+    return true;
+  }
+  if (Math.abs(abD) <= epsilon && isPointOnSegment(d, a, b)) {
+    return true;
+  }
+  if (Math.abs(cdA) <= epsilon && isPointOnSegment(a, c, d)) {
+    return true;
+  }
+  if (Math.abs(cdB) <= epsilon && isPointOnSegment(b, c, d)) {
+    return true;
+  }
+
+  return (
+    ((abC > 0 && abD < 0) || (abC < 0 && abD > 0))
+    && ((cdA > 0 && cdB < 0) || (cdA < 0 && cdB > 0))
+  );
+}
+
+function distanceSqBetweenSegments(a, b, c, d) {
+  if (segmentsIntersect(a, b, c, d)) {
+    return 0;
+  }
+  return Math.min(
+    distanceSqPointToSegment(a, c, d),
+    distanceSqPointToSegment(b, c, d),
+    distanceSqPointToSegment(c, a, b),
+    distanceSqPointToSegment(d, a, b),
+  );
+}
+
+function resolveTurretSightContact(level, ball, previousPosition) {
+  if (!previousPosition) {
+    return null;
+  }
+
+  const time = ball.time ?? level.time ?? 0;
+  for (let planetIndex = 0; planetIndex < level.planets.length; planetIndex += 1) {
+    const planet = level.planets[planetIndex];
+    for (const turret of planet.turrets ?? []) {
+      const lineState = getTurretLineState(planet, turret, time);
+      const hitWidth = lineState.width + COURSE.ballRadius * 0.42;
+      if (distanceSqBetweenSegments(previousPosition, ball.position, lineState.start, lineState.end) > hitWidth * hitWidth) {
+        continue;
+      }
+
+      const eventState = cloneBallRuntimeState(ball);
+      ball.velocity.x = 0;
+      ball.velocity.y = 0;
+      return {
+        type: 'crash',
+        reason: 'turret',
+        planetIndex,
+        planetName: planet.name ?? 'hostile planet',
+        turret,
+        eventState,
+        displayEventState: cloneBallRuntimeState(eventState),
+      };
+    }
+  }
+
+  return null;
+}
+
 function cloneBallRuntimeState(ball) {
   return {
     position: cloneVec(ball.position),
@@ -2607,6 +2818,13 @@ export function createLevelRuntime(index) {
       index: planetIndex,
       radius: scaledRadius,
       landingRadius: planet.landingRadius ? planet.landingRadius * PLANET_RADIUS_SCALE : planet.landingRadius,
+      turrets: Array.isArray(planet.turrets)
+        ? planet.turrets.map((turret, turretIndex) => ({
+          ...normalizeTurret(turret, turretIndex),
+          range: (turret.range ?? DEFAULT_TURRET_RANGE) * PLANET_RADIUS_SCALE,
+          width: (turret.width ?? DEFAULT_TURRET_LINE_WIDTH) * PLANET_RADIUS_SCALE,
+        }))
+        : [],
       ...createOrbitDefaults(planet, basePosition, orbitCenterPosition, planetIndex),
       ...createSpinDefaults(planet, scaledRadius, planetIndex),
       orbitCenterIndex,
@@ -3044,6 +3262,12 @@ export function stepBall(level, ball, delta) {
   if (sunContactResult) {
     sunContactResult.portalEvent = portalEvent;
     return sunContactResult;
+  }
+
+  const turretContactResult = resolveTurretSightContact(level, ball, portalEvent ? null : previousPosition);
+  if (turretContactResult) {
+    turretContactResult.portalEvent = portalEvent;
+    return turretContactResult;
   }
 
   const contactResult = resolvePlanetContact(level, ball);

@@ -139,6 +139,7 @@ function createMisses() {
     settled: 0,
     timeout: 0,
     landed: 0,
+    turret: 0,
   };
 }
 
@@ -745,7 +746,7 @@ function main() {
       );
     }
     console.log(
-      `  Misses: planet=${misses.planet}, goalClosed=${misses.goalClosed}, bounds=${misses.bounds}, settled=${misses.settled}, timeout=${misses.timeout}, landed=${misses.landed}`,
+      `  Misses: planet=${misses.planet}, turret=${misses.turret}, goalClosed=${misses.goalClosed}, bounds=${misses.bounds}, settled=${misses.settled}, timeout=${misses.timeout}, landed=${misses.landed}`,
     );
 
     if (robustSolutions.length === 0) {
