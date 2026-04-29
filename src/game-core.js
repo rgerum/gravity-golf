@@ -72,6 +72,7 @@ export const WORLD_DEFINITIONS = [
   { id: 'split-worlds', name: 'Split Worlds' },
   { id: 'lava-reach', name: 'Lava Reach' },
   { id: 'pulsars', name: 'Pulsars' },
+  { id: 'dying-systems', name: 'Dying Systems' },
   { id: 'hostile-planets', name: 'Hostile Planets' },
 ];
 
@@ -1207,6 +1208,21 @@ const WORLD_THEMES = {
       { core: 0xe9eef7, glow: 0xffffff },
     ],
   },
+  collapse: {
+    landable: [
+      { core: 0xffb15f, glow: 0xffdf9b },
+      { core: 0x7bd0ff, glow: 0xbdeaff },
+      { core: 0xb799ff, glow: 0xe1d5ff },
+    ],
+    hazards: [
+      { core: 0xff665f, glow: 0xffa37e },
+      { core: 0xff86a6, glow: 0xffbccb },
+      { core: 0xff9b68, glow: 0xffd0a4 },
+    ],
+    moons: [
+      { core: 0xf4efe6, glow: 0xffffff },
+    ],
+  },
 };
 
 function cloneLaunchPresets(launchPresets) {
@@ -1600,6 +1616,46 @@ function makeSplitVariant(spec) {
   return level;
 }
 
+function makeDyingVariant(spec, specIndex) {
+  const level = variantLevel('collapse', {
+    ...spec,
+    summary: spec.summary ?? 'The system is losing altitude. Every planet drifts inward while the shot window collapses.',
+  });
+  const decayScale = spec.decayScale ?? (1 + specIndex * 0.055);
+  level.systemState = 'dying';
+  level.planets = level.planets.map((planet, index) => {
+    const isMoon = planet.orbitAround !== undefined;
+    const authoredOrbitRadius = planet.position?.radius ?? 4;
+    const fallIntoSunRadius = isMoon
+      ? Math.max(0.34, Math.min(authoredOrbitRadius * 0.72, (planet.radius ?? 0.5) * 1.1))
+      : Math.max(0.9, Math.min(authoredOrbitRadius * 0.78, (planet.radius ?? 0.5) + 0.85));
+    const speedMultiplier = isMoon ? 1.75 : 2.35;
+    const minimumOrbitSpeed = isMoon ? 1.45 : 0.72;
+    const authoredOrbitSpeed = planet.orbitAngularSpeed !== undefined
+      ? planet.orbitAngularSpeed * speedMultiplier
+      : minimumOrbitSpeed * (index % 2 === 0 ? 1 : -1);
+    const orbitAngularSpeed = Math.abs(authoredOrbitSpeed) < minimumOrbitSpeed
+      ? Number((minimumOrbitSpeed * (authoredOrbitSpeed < 0 ? -1 : 1)).toFixed(4))
+      : Number(authoredOrbitSpeed.toFixed(4));
+    const orbitMinRadius = isMoon
+      ? Math.max(0.18, fallIntoSunRadius * 0.55)
+      : Math.max(0.32, fallIntoSunRadius * 0.62);
+    const visibleOrbitSpeed = Math.abs(orbitAngularSpeed);
+    const targetCollapseOrbits = spec.collapseOrbits
+      ?? clamp(1.55 + specIndex * 0.12 + index * 0.08, 1.55, 2.95);
+    const targetCollapseSeconds = (Math.PI * 2 / visibleOrbitSpeed) * targetCollapseOrbits;
+    const decayDistance = Math.max(0.001, authoredOrbitRadius - orbitMinRadius);
+    return {
+      ...planet,
+      orbitAngularSpeed,
+      orbitDecayRate: Number((decayDistance / targetCollapseSeconds * decayScale).toFixed(4)),
+      orbitMinRadius,
+      fallIntoSunRadius,
+    };
+  });
+  return level;
+}
+
 const ICY_WORLD_SPECS = [
   { baseId: 'first-relay', id: 'polar-relay', name: 'Polar Relay', summary: 'Land on a frozen relay, then let the ball drift around the ice before you launch again.', defaultSlideAngularSpeed: 0.8, slideAngularSpeeds: { 0: 0.72, 1: -0.82 } },
   { baseId: 'mirror-harbor', id: 'frost-gate', name: 'Frost Gate', summary: 'The two-gate relay only works if you let the icy harbor drift into the correct launch face.', defaultSlideAngularSpeed: 0.82 },
@@ -1722,6 +1778,19 @@ const HOSTILE_WORLD_SPECS = [
   { baseId: 'final-circuit', id: 'hostile-circuit', name: 'Hostile Circuit', summary: 'The final relay circuit becomes a hostile run through overlapping planet sight lines.', turrets: { 1: { type: 'tank', angleDeg: 312, range: 4.8 }, 2: { type: 'missile', angleDeg: 88, range: 5.2 }, 3: { type: 'tank', angleDeg: 210, range: 4.6 } } },
 ];
 
+const DYING_WORLD_SPECS = [
+  { baseId: 'first-arc', id: 'decay-arc', name: 'Decay Arc', summary: 'The launch world is already falling inward, so the clean bend changes every second.', goalOpenSecondsDelta: -1 },
+  { baseId: 'fast-window', id: 'sinking-window', name: 'Sinking Window', summary: 'The fast lane is no longer stable; wait too long and the planet has dropped into a tighter spiral.', decayScale: 1.08, goalOpenSecondsDelta: -1 },
+  { baseId: 'first-relay', id: 'collapsing-relay', name: 'Collapsing Relay', summary: 'Both relay worlds drift toward the sun, shortening the handoff while you aim.', decayScale: 1.05, goalOpenSecondsDelta: -1 },
+  { baseId: 'hot-giant', id: 'falling-giant', name: 'Falling Giant', summary: 'The unsafe giant is spiraling inward, dragging the bend with it instead of holding a stable guard lane.', decayScale: 1.1 },
+  { baseId: 'inner-step', id: 'infall-step', name: 'Infall Step', summary: 'The inner start keeps sinking, so the outer relay must be reached before the system tightens.', decayScale: 1.12, goalOpenSecondsDelta: -1 },
+  { baseId: 'forked-harbor', id: 'failing-harbor', name: 'Failing Harbor', summary: 'The two harbors are falling at different rates, turning a forked route into a moving collapse.', decayScale: 1.18, goalOpenSecondsDelta: -1 },
+  { baseId: 'moon-catch', id: 'decaying-moon', name: 'Decaying Moon', summary: 'The moon still catches cleanly, but its parent orbit is sinking toward the sun throughout the route.', decayScale: 1.14, goalOpenSecondsDelta: -1 },
+  { baseId: 'crown-window', id: 'crown-collapse', name: 'Crown Collapse', summary: 'The crown worlds spiral inward while the north relay window narrows into the sun.', decayScale: 1.22, goalOpenSecondsDelta: -1 },
+  { baseId: 'counterspin-gate', id: 'counterfall-gate', name: 'Counterfall Gate', summary: 'Counterspin still helps, but every guard and runway is on a slow inward fall.', decayScale: 1.26 },
+  { baseId: 'final-circuit', id: 'terminal-circuit', name: 'Terminal Circuit', summary: 'The final dying system is all pressure: the circuit falls inward from the first touch to the last burn.', decayScale: 1.3, goalOpenSecondsDelta: -1 },
+];
+
 const EXPANSION_LEVEL_DEFINITIONS = [
   ...ICY_WORLD_SPECS.map((spec) => makeIcyVariant(spec)),
   ...PORTAL_WORLD_SPECS.map((spec) => makePortalVariant(spec)),
@@ -1730,6 +1799,7 @@ const EXPANSION_LEVEL_DEFINITIONS = [
   ...SPLIT_WORLD_SPECS.map((spec) => makeSplitVariant(spec)),
   ...LAVA_WORLD_SPECS.map((spec) => makeLavaVariant(spec)),
   ...PULSAR_WORLD_SPECS.map((spec) => makePulsarVariant(spec)),
+  ...DYING_WORLD_SPECS.map((spec, index) => makeDyingVariant(spec, index)),
   ...HOSTILE_WORLD_SPECS.map((spec) => makeHostileVariant(spec)),
 ];
 
@@ -1846,6 +1916,16 @@ const CAMPAIGN_LEVEL_ORDER = [
   'guarded-pulsar',
   'counterpulse-gate',
   'pulsar-circuit',
+  'decay-arc',
+  'sinking-window',
+  'collapsing-relay',
+  'falling-giant',
+  'infall-step',
+  'failing-harbor',
+  'decaying-moon',
+  'crown-collapse',
+  'counterfall-gate',
+  'terminal-circuit',
   'sentry-arc',
   'watch-relay',
   'gun-harbor',
@@ -1985,6 +2065,25 @@ function solveKeplerEquation(meanAnomaly, eccentricity) {
   }
 
   return eccentricAnomaly;
+}
+
+function getOrbitDecayScale(body, time = 0) {
+  if (!body?.orbitDecayRate || !body.orbitSemiMajor) {
+    return 1;
+  }
+
+  const elapsed = Math.max(0, time);
+  const minimumRadius = clamp(
+    body.orbitMinRadius ?? body.orbitSemiMajor * 0.35,
+    0.001,
+    body.orbitSemiMajor,
+  );
+  const decayDistance = body.orbitSemiMajor - minimumRadius;
+  const timeToMinimum = decayDistance / Math.max(0.000001, body.orbitDecayRate);
+  const fallProgress = clamp(elapsed / Math.max(0.001, timeToMinimum), 0, 1);
+  const acceleratedProgress = fallProgress ** 1.55;
+  const decayedRadius = body.orbitSemiMajor - decayDistance * acceleratedProgress;
+  return decayedRadius / body.orbitSemiMajor;
 }
 
 function validateLevelDefinition(level) {
@@ -2175,12 +2274,14 @@ function getOrbitalBodyState(body, time, orbitCenter) {
     };
   }
 
+  const deltaTime = 0.0005;
   const anomaly = wrapAngleRad(body.orbitPhase + time * body.orbitSpeed);
-  const offset = getOrbitOffset(body, anomaly);
-  const nextOffset = getOrbitOffset(body, anomaly + 0.0005);
+  const nextAnomaly = wrapAngleRad(body.orbitPhase + (time + deltaTime) * body.orbitSpeed);
+  const offset = getOrbitOffset(body, anomaly, time);
+  const nextOffset = getOrbitOffset(body, nextAnomaly, time + deltaTime);
   const velocityOffset = vec(
-    (nextOffset.x - offset.x) / 0.0005,
-    (nextOffset.y - offset.y) / 0.0005,
+    (nextOffset.x - offset.x) / deltaTime,
+    (nextOffset.y - offset.y) / deltaTime,
   );
   return {
     position: vec(
@@ -2188,8 +2289,8 @@ function getOrbitalBodyState(body, time, orbitCenter) {
       orbitCenter.y + offset.y,
     ),
     velocity: vec(
-      velocityOffset.x * body.orbitSpeed,
-      velocityOffset.y * body.orbitSpeed,
+      velocityOffset.x,
+      velocityOffset.y,
     ),
     orbitCenter: cloneVec(orbitCenter),
   };
@@ -2241,16 +2342,20 @@ function getDynamicOrbitAnchorState(level, planet, time) {
   };
 }
 
-function getOrbitOffset(planet, anomaly) {
+function getOrbitOffset(planet, anomaly, time = 0) {
   if (!planet.orbitSemiMajor || !planet.orbitSpeed) {
     return vec(0, 0);
   }
 
+  const decayScale = getOrbitDecayScale(planet, time);
+  const orbitSemiMajor = planet.orbitSemiMajor * decayScale;
+  const orbitSemiMinor = planet.orbitSemiMinor * decayScale;
+
   if (planet.orbitEccentricity < 0.000001) {
     return rotateVector(
       vec(
-        Math.cos(anomaly) * planet.orbitSemiMajor,
-        Math.sin(anomaly) * planet.orbitSemiMajor,
+        Math.cos(anomaly) * orbitSemiMajor,
+        Math.sin(anomaly) * orbitSemiMajor,
       ),
       planet.orbitRotation ?? 0,
     );
@@ -2259,8 +2364,8 @@ function getOrbitOffset(planet, anomaly) {
   const eccentricAnomaly = solveKeplerEquation(anomaly, planet.orbitEccentricity);
   return rotateVector(
     vec(
-      planet.orbitSemiMajor * (Math.cos(eccentricAnomaly) - planet.orbitEccentricity),
-      planet.orbitSemiMinor * Math.sin(eccentricAnomaly),
+      orbitSemiMajor * (Math.cos(eccentricAnomaly) - planet.orbitEccentricity),
+      orbitSemiMinor * Math.sin(eccentricAnomaly),
     ),
     planet.orbitRotation ?? 0,
   );
@@ -2298,12 +2403,14 @@ function getOrbitState(level, planetIndex, time, cache = new Map()) {
     return state;
   }
 
+  const deltaTime = 0.0005;
   const meanAnomaly = wrapAngleRad(planet.orbitPhase + time * planet.orbitSpeed);
-  const offset = getOrbitOffset(planet, meanAnomaly);
-  const nextOffset = getOrbitOffset(planet, meanAnomaly + 0.0005);
+  const nextMeanAnomaly = wrapAngleRad(planet.orbitPhase + (time + deltaTime) * planet.orbitSpeed);
+  const offset = getOrbitOffset(planet, meanAnomaly, time);
+  const nextOffset = getOrbitOffset(planet, nextMeanAnomaly, time + deltaTime);
   const velocityOffset = vec(
-    (nextOffset.x - offset.x) / 0.0005,
-    (nextOffset.y - offset.y) / 0.0005,
+    (nextOffset.x - offset.x) / deltaTime,
+    (nextOffset.y - offset.y) / deltaTime,
   );
   const state = {
     position: vec(
@@ -2311,13 +2418,108 @@ function getOrbitState(level, planetIndex, time, cache = new Map()) {
       orbitCenter.y + offset.y,
     ),
     velocity: vec(
-      centerVelocity.x + velocityOffset.x * planet.orbitSpeed,
-      centerVelocity.y + velocityOffset.y * planet.orbitSpeed,
+      centerVelocity.x + velocityOffset.x,
+      centerVelocity.y + velocityOffset.y,
     ),
     orbitCenter,
   };
   cache.set(planetIndex, state);
   return state;
+}
+
+function updatePlanetCollapseState(level, planet) {
+  if (!planet.fallIntoSunRadius) {
+    planet.active = true;
+    planet.infallFade = 1;
+    planet.collapseState = 'stable';
+    return;
+  }
+
+  const currentTime = level.time ?? 0;
+  const sunDistance = distanceBetween(planet.position, level.sun);
+  const fallRadius = Math.max(0.001, planet.fallIntoSunRadius);
+  const fadeStartRadius = Math.max(fallRadius + 0.001, planet.sunFadeStartRadius ?? fallRadius + planet.radius * 2.2 + 0.45);
+  const plungeDuration = planet.sunPlungeDuration ?? 0.82;
+
+  if (planet.plungeStartTime !== undefined && currentTime < planet.plungeStartTime - 0.0001) {
+    delete planet.plungeStartTime;
+    delete planet.plungeStartPosition;
+    planet.collapseState = 'orbiting';
+  }
+
+  if (planet.plungeStartTime === undefined && sunDistance <= fallRadius) {
+    planet.plungeStartTime = currentTime;
+    planet.plungeStartPosition = cloneVec(planet.position);
+    planet.plungeStartRadius = sunDistance;
+    planet.plungeStartAngle = Math.atan2(planet.position.y - level.sun.y, planet.position.x - level.sun.x);
+    planet.plungeDirection = (planet.orbitSpeed ?? 0) < 0 ? -1 : 1;
+  }
+
+  if (planet.plungeStartTime !== undefined) {
+    const rawProgress = clamp((currentTime - planet.plungeStartTime) / plungeDuration, 0, 1);
+    const progress = rawProgress * rawProgress * (3 - 2 * rawProgress);
+    const startRadius = Math.max(0.001, planet.plungeStartRadius ?? sunDistance);
+    const radius = startRadius * (1 - progress);
+    const angle = (planet.plungeStartAngle ?? 0) + (planet.plungeDirection ?? 1) * rawProgress * Math.PI * 1.45;
+    planet.position.x = level.sun.x + Math.cos(angle) * radius;
+    planet.position.y = level.sun.y + Math.sin(angle) * radius;
+    planet.infallFade = rawProgress >= 1 ? 0 : 1;
+    planet.active = false;
+    planet.collapseState = rawProgress >= 1 ? 'consumed' : 'plunging';
+    return;
+  }
+
+  const accelerationCue = clamp((fadeStartRadius - sunDistance) / (fadeStartRadius - fallRadius), 0, 1);
+  planet.infallFade = 1;
+  planet.infallStress = accelerationCue;
+  planet.active = true;
+  planet.collapseState = 'orbiting';
+}
+
+function separateActivePlanetOverlaps(level) {
+  if (level.systemState !== 'dying') {
+    return;
+  }
+
+  for (let pass = 0; pass < 3; pass += 1) {
+    for (let leftIndex = 0; leftIndex < level.planets.length; leftIndex += 1) {
+      const left = level.planets[leftIndex];
+      if (left.active === false) {
+        continue;
+      }
+
+      for (let rightIndex = leftIndex + 1; rightIndex < level.planets.length; rightIndex += 1) {
+        const right = level.planets[rightIndex];
+        if (right.active === false) {
+          continue;
+        }
+
+        const minimumDistance = left.radius + right.radius + 0.08;
+        const delta = vec(right.position.x - left.position.x, right.position.y - left.position.y);
+        const distance = length(delta);
+        if (distance >= minimumDistance) {
+          continue;
+        }
+
+        const normal = distance > 0.000001
+          ? vec(delta.x / distance, delta.y / distance)
+          : directionFromAngleDeg((leftIndex * 137.5 + rightIndex * 51.3) % 360);
+        const overlap = minimumDistance - Math.max(distance, 0.000001);
+        const leftMass = Math.max(0.001, left.radius ** 2);
+        const rightMass = Math.max(0.001, right.radius ** 2);
+        const totalMass = leftMass + rightMass;
+        const leftShare = rightMass / totalMass;
+        const rightShare = leftMass / totalMass;
+
+        left.position.x -= normal.x * overlap * leftShare;
+        left.position.y -= normal.y * overlap * leftShare;
+        right.position.x += normal.x * overlap * rightShare;
+        right.position.y += normal.y * overlap * rightShare;
+        left.collisionPulse = Math.max(left.collisionPulse ?? 0, clamp(overlap / minimumDistance, 0, 1));
+        right.collisionPulse = Math.max(right.collisionPulse ?? 0, clamp(overlap / minimumDistance, 0, 1));
+      }
+    }
+  }
 }
 
 export function setLevelTime(level, time) {
@@ -2333,12 +2535,16 @@ export function setLevelTime(level, time) {
   });
   const orbitStateCache = new Map();
   level.planets.forEach((planet) => {
+    planet.collisionPulse = 0;
     const orbitState = getOrbitState(level, planet.index, time, orbitStateCache);
     planet.position.x = orbitState.position.x;
     planet.position.y = orbitState.position.y;
     planet.orbitCenter.x = orbitState.orbitCenter.x;
     planet.orbitCenter.y = orbitState.orbitCenter.y;
+    updatePlanetCollapseState(level, planet);
   });
+  separateActivePlanetOverlaps(level);
+  level.planets.forEach((planet) => updatePlanetCollapseState(level, planet));
   level.portals?.forEach((portal) => {
     setOrbitalBodyTime(portal, time, systemCenter);
   });
@@ -2465,7 +2671,7 @@ function updateBallHeat(level, ball, delta) {
 
 export function getPlanetVelocity(level, planetIndex, time = level.time ?? 0) {
   const planet = level.planets[planetIndex];
-  if (!planet) {
+  if (!planet || planet.collapseState === 'consumed') {
     return vec(0, 0);
   }
 
@@ -2478,7 +2684,7 @@ export function advanceBallAnchor(level, ball, delta) {
   }
 
   const planet = level.planets[ball.anchorPlanetIndex];
-  if (!planet) {
+  if (!planet || planet.collapseState === 'consumed') {
     ball.anchorPlanetIndex = null;
     return;
   }
@@ -2937,7 +3143,7 @@ export function syncBallToAnchor(level, ball) {
   }
 
   const planet = level.planets[ball.anchorPlanetIndex];
-  if (!planet) {
+  if (!planet || planet.collapseState === 'consumed') {
     ball.anchorPlanetIndex = null;
     return;
   }
@@ -2966,7 +3172,7 @@ function landBallOnPlanet(ball, planet, planetIndex) {
 function findContainingLandingPlanetIndex(level, position) {
   for (let index = 0; index < level.planets.length; index += 1) {
     const planet = level.planets[index];
-    if (!planet.landable) {
+    if (!planet.landable || planet.active === false) {
       continue;
     }
 
@@ -2982,6 +3188,13 @@ function findContainingLandingPlanetIndex(level, position) {
 function resolvePlanetContact(level, ball) {
   for (let index = 0; index < level.planets.length; index += 1) {
     const planet = level.planets[index];
+    if (planet.active === false) {
+      if (ball.launchGracePlanetIndex === index) {
+        ball.launchGracePlanetIndex = null;
+      }
+      continue;
+    }
+
     const toPlanet = vec(
       planet.position.x - ball.position.x,
       planet.position.y - ball.position.y,
@@ -3152,6 +3365,10 @@ export function samplePlanetGravity(level, point) {
   const netGravity = vec(0, 0);
 
   for (const planet of level.planets) {
+    if (planet.active === false) {
+      continue;
+    }
+
     const toPlanet = vec(
       planet.position.x - point.x,
       planet.position.y - point.y,
@@ -3212,6 +3429,27 @@ function getBallFriction(delta) {
 }
 
 export function stepBall(level, ball, delta) {
+  if (
+    ball.anchorPlanetIndex !== null
+    && ball.anchorPlanetIndex !== undefined
+    && level.planets[ball.anchorPlanetIndex]?.collapseState === 'consumed'
+  ) {
+    const eventState = cloneBallRuntimeState(ball);
+    const consumedPlanet = level.planets[ball.anchorPlanetIndex];
+    ball.anchorPlanetIndex = null;
+    ball.anchorNormal = null;
+    ball.velocity.x = 0;
+    ball.velocity.y = 0;
+    return {
+      type: 'crash',
+      reason: 'planet-consumed',
+      planetIndex: consumedPlanet?.index ?? null,
+      planetName: consumedPlanet?.name ?? 'collapsing planet',
+      eventState,
+      displayEventState: cloneBallRuntimeState(eventState),
+    };
+  }
+
   if (lengthSq(ball.velocity) < 0.000001) {
     ball.velocity.x = 0;
     ball.velocity.y = 0;
@@ -3511,6 +3749,10 @@ export function simulateShot(level, shot, options = {}) {
     minGoalDistance = Math.min(minGoalDistance, distanceBetween(ball.position, level.goalCenter));
 
     for (const planet of level.planets) {
+      if (planet.active === false) {
+        continue;
+      }
+
       const clearance =
         distanceBetween(ball.position, planet.position) -
         (planet.radius + COURSE.ballRadius * PLANET_COLLISION_PADDING);
