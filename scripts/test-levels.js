@@ -140,6 +140,7 @@ function createMisses() {
     settled: 0,
     timeout: 0,
     landed: 0,
+    turret: 0,
   };
 }
 
@@ -154,6 +155,7 @@ function simulateSequence(level, shots, options) {
   let startTime = 0;
   let anchorPlanetIndex = level.startPlanetIndex ?? null;
   let anchorNormal = directionFromAngleDeg(level.startAngleDeg ?? 180);
+  let heat = 0;
   let landingCount = 0;
   let totalTime = 0;
   let totalSteps = 0;
@@ -170,6 +172,7 @@ function simulateSequence(level, shots, options) {
       startTime,
       anchorPlanetIndex,
       anchorNormal,
+      heat,
       landingCount,
     });
 
@@ -211,6 +214,7 @@ function simulateSequence(level, shots, options) {
     startTime = result.finalTime;
     anchorPlanetIndex = result.anchorPlanetIndex;
     anchorNormal = result.anchorNormal;
+    heat = result.heat ?? 0;
     landingCount = result.landingCount;
   }
 
@@ -743,7 +747,7 @@ function main() {
       );
     }
     console.log(
-      `  Misses: planet=${misses.planet}, goalClosed=${misses.goalClosed}, bounds=${misses.bounds}, settled=${misses.settled}, timeout=${misses.timeout}, landed=${misses.landed}`,
+      `  Misses: planet=${misses.planet}, turret=${misses.turret}, goalClosed=${misses.goalClosed}, bounds=${misses.bounds}, settled=${misses.settled}, timeout=${misses.timeout}, landed=${misses.landed}`,
     );
 
     if (robustSolutions.length === 0) {
