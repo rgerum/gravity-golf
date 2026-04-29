@@ -128,12 +128,12 @@ app.innerHTML = `
           <div class="world-map-backdrop"></div>
           <div class="world-map-panel" role="dialog" aria-modal="true" aria-labelledby="worldMapTitle">
             <div class="world-map-copy">
-              <p class="world-map-kicker">WorldMap</p>
-              <h2 id="worldMapTitle">Galaxy Route</h2>
+              <h2 id="worldMapTitle">Finished Starter Belt</h2>
               <p class="world-map-progress" id="worldMapProgress">10 levels cleared</p>
             </div>
             <div class="world-map-stats" id="worldMapStats" aria-label="Completed world stats"></div>
             <div class="world-map-stage" aria-hidden="true">
+              <div class="galaxy-dust"></div>
               <div class="galaxy-core"></div>
               <div class="galaxy-ring galaxy-ring-outer"></div>
               <div class="galaxy-ring galaxy-ring-mid"></div>
@@ -145,7 +145,7 @@ app.innerHTML = `
               <div class="world-map-nodes" id="worldMapNodes"></div>
             </div>
             <div class="world-map-actions">
-              <button id="worldMapContinueButton" class="hud-button hud-button-primary" type="button">Continue</button>
+              <button id="worldMapContinueButton" class="hud-button hud-button-primary" type="button">Enter Relay Reach</button>
             </div>
           </div>
         </div>
@@ -180,6 +180,7 @@ const gameOverHint = document.querySelector('#gameOverHint');
 const gameOverRetryButton = document.querySelector('#gameOverRetryButton');
 const gameOverUndoButton = document.querySelector('#gameOverUndoButton');
 const worldMapModal = document.querySelector('#worldMapModal');
+const worldMapTitle = document.querySelector('#worldMapTitle');
 const worldMapProgress = document.querySelector('#worldMapProgress');
 const worldMapNodes = document.querySelector('#worldMapNodes');
 const worldMapTrailBase = document.querySelector('#worldMapTrailBase');
@@ -1138,8 +1139,16 @@ function syncWorldMap() {
 
   const completedWorldCount = getWorldMapCompletedWorldCount(state.worldMap.completedLevelCount);
   const activeWorldIndex = clamp(completedWorldCount, 0, WORLD_DEFINITIONS.length - 1);
+  const finishedWorldIndex = clamp(Math.max(0, completedWorldCount - 1), 0, WORLD_DEFINITIONS.length - 1);
+  const finishedWorld = WORLD_DEFINITIONS[finishedWorldIndex];
+  const enteringWorld = WORLD_DEFINITIONS[activeWorldIndex];
   const renderKey = `${state.worldMap.completedLevelCount}:${state.worldRunStats.worldIndex}:${state.worldRunStats.shots}:${state.worldRunStats.retries}:${state.worldRunStats.relays}:${state.worldRunStats.flightTime.toFixed(1)}`;
-  worldMapProgress.textContent = `${state.worldMap.completedLevelCount} levels cleared · ${completedWorldCount}/${WORLD_DEFINITIONS.length} sectors complete`;
+  worldMapTitle.innerHTML = `
+    <span class="world-map-title-prefix">Finished</span>
+    <strong class="world-map-title-name">${finishedWorld.name}</strong>
+  `;
+  worldMapProgress.textContent = `${state.worldMap.completedLevelCount} levels cleared · World ${activeWorldIndex + 1} of ${WORLD_DEFINITIONS.length}`;
+  worldMapContinueButton.textContent = `Enter ${enteringWorld.name}`;
   worldMapTrailBase.setAttribute('points', getWorldMapPointString(WORLD_MAP_POINTS));
   worldMapTrailProgress.setAttribute(
     'points',
@@ -1149,21 +1158,21 @@ function syncWorldMap() {
     const point = WORLD_MAP_POINTS[index];
     const completed = index < completedWorldCount;
     const active = index === activeWorldIndex;
+    const visibleLabel = completed || active;
     const className = [
       'world-map-node',
       completed ? 'is-complete' : '',
       active ? 'is-active' : '',
       point.x > 62 ? 'is-label-left' : '',
     ].filter(Boolean).join(' ');
-    const levelRangeStart = index * WORLD_SIZE + 1;
-    const levelRangeEnd = Math.min((index + 1) * WORLD_SIZE, LEVELS.length);
     return `
       <div class="${className}" style="--map-x: ${point.x}%; --map-y: ${point.y}%;">
         <span class="world-map-dot"></span>
-        <span class="world-map-label">
-          <strong>${worldDefinition.name}</strong>
-          <small>${levelRangeStart}-${levelRangeEnd}</small>
-        </span>
+        ${visibleLabel ? `
+          <span class="world-map-label">
+            <strong>${worldDefinition.name}</strong>
+          </span>
+        ` : ''}
       </div>
     `;
   }).join('');
