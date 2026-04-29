@@ -9,6 +9,8 @@ import {
   PLANET_GRAVITY_MULTIPLIER,
   SOLAR_GRAVITY_MULTIPLIER,
   SOLAR_GRAVITY_SOFTENING,
+  WORLD_DEFINITIONS,
+  WORLD_SIZE,
   addScaledVec,
   cloneVec,
   createBallState,
@@ -111,6 +113,31 @@ app.innerHTML = `
             </div>
           </div>
         </div>
+        <div class="world-map-modal" id="worldMapModal" hidden>
+          <div class="world-map-backdrop"></div>
+          <div class="world-map-panel" role="dialog" aria-modal="true" aria-labelledby="worldMapTitle">
+            <div class="world-map-copy">
+              <p class="world-map-kicker">WorldMap</p>
+              <h2 id="worldMapTitle">Galaxy Route</h2>
+              <p class="world-map-progress" id="worldMapProgress">10 levels cleared</p>
+            </div>
+            <div class="world-map-stats" id="worldMapStats" aria-label="Completed world stats"></div>
+            <div class="world-map-stage" aria-hidden="true">
+              <div class="galaxy-core"></div>
+              <div class="galaxy-ring galaxy-ring-outer"></div>
+              <div class="galaxy-ring galaxy-ring-mid"></div>
+              <div class="galaxy-ring galaxy-ring-inner"></div>
+              <svg class="world-map-path" viewBox="0 0 100 100" preserveAspectRatio="none">
+                <polyline id="worldMapTrailBase" points="" />
+                <polyline id="worldMapTrailProgress" points="" />
+              </svg>
+              <div class="world-map-nodes" id="worldMapNodes"></div>
+            </div>
+            <div class="world-map-actions">
+              <button id="worldMapContinueButton" class="hud-button hud-button-primary" type="button">Continue</button>
+            </div>
+          </div>
+        </div>
       </div>
     </main>
   </div>
@@ -140,6 +167,13 @@ const gameOverTitle = document.querySelector('#gameOverTitle');
 const gameOverHint = document.querySelector('#gameOverHint');
 const gameOverRetryButton = document.querySelector('#gameOverRetryButton');
 const gameOverUndoButton = document.querySelector('#gameOverUndoButton');
+const worldMapModal = document.querySelector('#worldMapModal');
+const worldMapProgress = document.querySelector('#worldMapProgress');
+const worldMapNodes = document.querySelector('#worldMapNodes');
+const worldMapTrailBase = document.querySelector('#worldMapTrailBase');
+const worldMapTrailProgress = document.querySelector('#worldMapTrailProgress');
+const worldMapContinueButton = document.querySelector('#worldMapContinueButton');
+const worldMapStats = document.querySelector('#worldMapStats');
 const sceneHost = document.querySelector('#scene');
 let gameOverVisibilityFrame = 0;
 
@@ -641,6 +675,24 @@ const state = {
     hint: '',
     countReset: false,
   },
+  worldMap: {
+    open: false,
+    nextLevelIndex: 0,
+    completedLevelCount: 0,
+    renderKey: '',
+  },
+  worldRunStats: {
+    worldIndex: initialLevel.worldIndex,
+    levelsCleared: 0,
+    shots: 0,
+    retries: 0,
+    relays: 0,
+    flightTime: 0,
+  },
+  levelStartStats: {
+    shots: 0,
+    resets: 0,
+  },
   goalCloseAnimation: {
     active: false,
     elapsed: 0,
@@ -783,6 +835,213 @@ function persistLastLevelIndex(levelIndex) {
   } catch {
     // Ignore persistence errors in restricted contexts.
   }
+}
+
+const WORLD_MAP_POINTS = WORLD_DEFINITIONS.map((_, index) => {
+  const count = Math.max(1, WORLD_DEFINITIONS.length);
+  const inwardT = count <= 1 ? 0 : index / (count - 1);
+  const radius = THREE.MathUtils.lerp(44, 8, inwardT);
+  const angle = -2.45 + index * 1.05;
+  return {
+    x: 50 + Math.cos(angle) * radius,
+    y: 50 + Math.sin(angle) * radius * 0.78,
+  };
+});
+
+function getWorldMapCompletedWorldCount(completedLevelCount) {
+  return clamp(
+    Math.floor(completedLevelCount / WORLD_SIZE),
+    0,
+    WORLD_DEFINITIONS.length,
+  );
+}
+
+function getWorldMapPointString(points) {
+  return points
+    .map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`)
+    .join(' ');
+}
+
+function createEmptyWorldRunStats(worldIndex) {
+  return {
+    worldIndex,
+    levelsCleared: 0,
+    shots: 0,
+    retries: 0,
+    relays: 0,
+    flightTime: 0,
+  };
+}
+
+function syncWorldRunForLevel(level) {
+  if (state.worldRunStats.worldIndex !== level.worldIndex) {
+    state.worldRunStats = createEmptyWorldRunStats(level.worldIndex);
+  }
+  state.levelStartStats.shots = state.shots;
+  state.levelStartStats.resets = state.resets;
+}
+
+function recordCompletedWorldLevelStats(completedLevelIndex) {
+  const completedLevel = LEVELS[completedLevelIndex];
+  const worldIndex = Math.floor(completedLevelIndex / WORLD_SIZE);
+  if (state.worldRunStats.worldIndex !== worldIndex) {
+    state.worldRunStats = createEmptyWorldRunStats(worldIndex);
+  }
+
+  state.worldRunStats.levelsCleared += 1;
+  state.worldRunStats.shots += Math.max(0, state.shots - state.levelStartStats.shots);
+  state.worldRunStats.retries += Math.max(0, state.resets - state.levelStartStats.resets);
+  state.worldRunStats.relays += Math.max(0, state.ball.landingCount ?? 0);
+  state.worldRunStats.flightTime += Math.max(
+    0,
+    (state.ball.time ?? state.level.time ?? 0) - (completedLevel.startTimeSeconds ?? 0),
+  );
+}
+
+function formatStatValue(value, format) {
+  if (format === 'time') {
+    return `${value.toFixed(1)}s`;
+  }
+  return String(Math.round(value));
+}
+
+function getWorldMapStats() {
+  const stats = state.worldRunStats;
+  const levelsCleared = Math.max(1, stats.levelsCleared);
+  return [
+    {
+      label: 'Launches',
+      value: stats.shots,
+      max: Math.max(WORLD_SIZE * 3, stats.shots),
+      format: 'integer',
+    },
+    {
+      label: 'Flight Time',
+      value: stats.flightTime,
+      max: Math.max(levelsCleared * 16, stats.flightTime),
+      format: 'time',
+    },
+  ];
+}
+
+function renderWorldMapStats() {
+  const stats = getWorldMapStats();
+  worldMapStats.innerHTML = stats.map((stat, index) => {
+    const ratio = clamp(stat.value / Math.max(1, stat.max), 0.04, 1);
+    return `
+      <div class="world-map-stat" style="--stat-ratio: ${ratio}; --stat-delay: ${index * 90}ms;">
+        <div class="world-map-stat-head">
+          <span>${stat.label}</span>
+          <strong data-final-value="${stat.value}" data-format="${stat.format}">0</strong>
+        </div>
+        <div class="world-map-stat-track">
+          <span></span>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function animateWorldMapStats() {
+  const values = [...worldMapStats.querySelectorAll('[data-final-value]')];
+  const startedAt = performance.now();
+  const duration = 1050;
+
+  function tick(now) {
+    const t = clamp((now - startedAt) / duration, 0, 1);
+    const eased = 1 - ((1 - t) ** 3);
+    values.forEach((node) => {
+      const finalValue = Number.parseFloat(node.dataset.finalValue ?? '0');
+      const format = node.dataset.format ?? 'integer';
+      node.textContent = formatStatValue(finalValue * eased, format);
+    });
+    if (t < 1 && state.worldMap.open) {
+      requestAnimationFrame(tick);
+    }
+  }
+
+  requestAnimationFrame(tick);
+}
+
+function syncWorldMap() {
+  worldMapModal.hidden = !state.worldMap.open;
+  worldMapModal.classList.toggle('is-open', state.worldMap.open);
+  worldMapModal.classList.toggle('is-visible', state.worldMap.open);
+  if (!state.worldMap.open) {
+    return;
+  }
+
+  const completedWorldCount = getWorldMapCompletedWorldCount(state.worldMap.completedLevelCount);
+  const activeWorldIndex = clamp(completedWorldCount, 0, WORLD_DEFINITIONS.length - 1);
+  const renderKey = `${state.worldMap.completedLevelCount}:${state.worldRunStats.worldIndex}:${state.worldRunStats.shots}:${state.worldRunStats.retries}:${state.worldRunStats.relays}:${state.worldRunStats.flightTime.toFixed(1)}`;
+  worldMapProgress.textContent = `${state.worldMap.completedLevelCount} levels cleared · ${completedWorldCount}/${WORLD_DEFINITIONS.length} sectors complete`;
+  worldMapTrailBase.setAttribute('points', getWorldMapPointString(WORLD_MAP_POINTS));
+  worldMapTrailProgress.setAttribute(
+    'points',
+    getWorldMapPointString(WORLD_MAP_POINTS.slice(0, activeWorldIndex + 1)),
+  );
+  worldMapNodes.innerHTML = WORLD_DEFINITIONS.map((worldDefinition, index) => {
+    const point = WORLD_MAP_POINTS[index];
+    const completed = index < completedWorldCount;
+    const active = index === activeWorldIndex;
+    const className = [
+      'world-map-node',
+      completed ? 'is-complete' : '',
+      active ? 'is-active' : '',
+      point.x > 62 ? 'is-label-left' : '',
+    ].filter(Boolean).join(' ');
+    const levelRangeStart = index * WORLD_SIZE + 1;
+    const levelRangeEnd = Math.min((index + 1) * WORLD_SIZE, LEVELS.length);
+    return `
+      <div class="${className}" style="--map-x: ${point.x}%; --map-y: ${point.y}%;">
+        <span class="world-map-dot"></span>
+        <span class="world-map-label">
+          <strong>${worldDefinition.name}</strong>
+          <small>${levelRangeStart}-${levelRangeEnd}</small>
+        </span>
+      </div>
+    `;
+  }).join('');
+
+  if (state.worldMap.renderKey !== renderKey) {
+    state.worldMap.renderKey = renderKey;
+    renderWorldMapStats();
+    animateWorldMapStats();
+  }
+}
+
+function showWorldMap(nextLevelIndex, completedLevelCount) {
+  state.worldMap.open = true;
+  state.worldMap.nextLevelIndex = nextLevelIndex;
+  state.worldMap.completedLevelCount = completedLevelCount;
+  state.worldMap.renderKey = '';
+  syncWorldMap();
+}
+
+function hideWorldMap() {
+  state.worldMap.open = false;
+  syncWorldMap();
+}
+
+function continueFromWorldMap() {
+  if (!state.worldMap.open) {
+    return;
+  }
+
+  const nextLevelIndex = state.worldMap.nextLevelIndex;
+  hideWorldMap();
+  applyLevel(nextLevelIndex);
+  resetBall(`Level ${state.levelIndex + 1}: ${state.level.name}.`, state.level.summary);
+}
+
+function shouldShowWorldMapAfterLevel(completedLevelIndex, nextLevelIndex) {
+  const completedLevelCount = completedLevelIndex + 1;
+  return (
+    completedLevelCount > 0
+    && completedLevelCount % WORLD_SIZE === 0
+    && completedLevelCount < LEVELS.length
+    && nextLevelIndex !== 0
+  );
 }
 
 function setGoalTimerArc(fraction) {
@@ -3608,6 +3867,7 @@ function applyLevel(index) {
   persistLastLevelIndex(state.levelIndex);
   state.level = createLevelRuntime(state.levelIndex);
   state.controlShots = createControlShots(state.level);
+  syncWorldRunForLevel(state.level);
   state.adminSolutionIndex = 0;
   clearAttemptMemory();
   clearUndoCheckpoints();
@@ -3648,6 +3908,7 @@ function syncHud() {
   syncPerfOverlay();
   syncTutorialOverlay();
   syncGameOverModal();
+  syncWorldMap();
 }
 
 function getActiveTutorial() {
@@ -4006,7 +4267,14 @@ function launchShot(direction, power, anchor) {
 }
 
 function onPointerDown(event) {
-  if (state.gameOver.open || state.goalCloseAnimation.active || ballIsMoving() || state.adminReplay.active || state.undo.active) {
+  if (
+    state.worldMap.open
+    || state.gameOver.open
+    || state.goalCloseAnimation.active
+    || ballIsMoving()
+    || state.adminReplay.active
+    || state.undo.active
+  ) {
     return;
   }
 
@@ -4104,6 +4372,7 @@ retryButton.addEventListener('click', restartLevel);
 undoButton.addEventListener('click', startUndo);
 gameOverRetryButton.addEventListener('click', restartLevel);
 gameOverUndoButton.addEventListener('click', startUndo);
+worldMapContinueButton.addEventListener('click', continueFromWorldMap);
 timeSpeedSlider.addEventListener('input', (event) => {
   const nextIndex = clamp(Number.parseInt(event.target.value, 10), 0, TIME_SPEED_VALUES.length - 1);
   state.timeSpeedIndex = nextIndex;
@@ -4114,6 +4383,14 @@ timeSpeedSlider.addEventListener('input', (event) => {
 });
 
 window.addEventListener('keydown', (event) => {
+  if (state.worldMap.open) {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      continueFromWorldMap();
+    }
+    return;
+  }
+
   if (!event.metaKey && !event.ctrlKey && !event.altKey && event.shiftKey && event.code === 'KeyF') {
     event.preventDefault();
     toggleFpsOverlay();
@@ -4167,6 +4444,12 @@ window.addEventListener('keydown', (event) => {
 });
 
 function updatePhysics(delta) {
+  if (state.worldMap.open) {
+    state.ball.velocity.x = 0;
+    state.ball.velocity.y = 0;
+    return;
+  }
+
   if (state.goalCloseAnimation.active) {
     state.goalCloseAnimation.elapsed += delta;
     state.ball.velocity.x = 0;
@@ -4213,8 +4496,15 @@ function updatePhysics(delta) {
 
     if (t >= 1) {
       ballGroup.visible = false;
+      const completedLevelIndex = state.levelIndex;
       const nextIndex = (state.levelIndex + 1) % LEVELS.length;
       const nextLevel = LEVELS[nextIndex];
+      recordCompletedWorldLevelStats(completedLevelIndex);
+      if (shouldShowWorldMapAfterLevel(completedLevelIndex, nextIndex)) {
+        state.score += 1;
+        showWorldMap(nextIndex, completedLevelIndex + 1);
+        return;
+      }
       resetBall(
         `Level ${nextIndex + 1}: ${nextLevel.name}.`,
         nextLevel.summary,
