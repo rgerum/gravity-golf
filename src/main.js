@@ -22,6 +22,8 @@ import {
   getGoalRemainingFraction,
   getGoalRemainingTime,
   getLavaOverheatRemaining,
+  getPrimarySunVisualRadius,
+  getRedGiantProgress,
   getPlanetSplitAxis,
   getPulsarJetState,
   getPlanetSlideAngularSpeed,
@@ -434,6 +436,9 @@ world.add(portalsRoot);
 
 const dustCloudsRoot = new THREE.Group();
 world.add(dustCloudsRoot);
+
+const asteroidsRoot = new THREE.Group();
+world.add(asteroidsRoot);
 
 const startPad = new THREE.Mesh(
   new THREE.RingGeometry(0.62, 0.98, 48),
@@ -884,6 +889,7 @@ let planetVisuals = [];
 let extraSunVisuals = [];
 let portalVisuals = [];
 let dustCloudVisuals = [];
+let asteroidVisuals = [];
 let gravityFieldVisuals = null;
 let gravityFieldSamples = [];
 let physicsAccumulator = 0;
@@ -1255,12 +1261,30 @@ function updateLaunchMarker() {
 
 function updateSunVisual() {
   sunGroup.position.set(state.level.sun.x, 0, state.level.sun.y);
+  const visualRadius = getPrimarySunVisualRadius(state.level, state.level.time ?? 0);
+  const redGiantProgress = getRedGiantProgress(state.level, state.level.time ?? 0);
+  const sunScale = state.level.redGiant ? visualRadius / 0.42 : 1;
+  const coreScale = sunScale;
+  sunCore.scale.setScalar(coreScale);
+  sunCore.position.y = state.level.redGiant ? visualRadius : 0.42;
+  sunGlow.scale.setScalar(state.level.redGiant ? sunScale * (1 + redGiantProgress * 0.18) : 1);
+  sunCorona.scale.setScalar(state.level.redGiant ? sunScale * (1.05 + redGiantProgress * 0.12) : 1);
+
   if (state.level.pulsarJets) {
     sunGlow.material.color.setHex(0x67dfff);
     sunCorona.material.color.setHex(0xd8f7ff);
     sunCore.material.color.setHex(0xf4fbff);
     sunCore.material.emissive.setHex(0x83dfff);
     sunCore.material.emissiveIntensity = 1.7;
+    return;
+  }
+
+  if (state.level.redGiant) {
+    sunGlow.material.color.setHex(0xff5c32);
+    sunCorona.material.color.setHex(0xff2f1f);
+    sunCore.material.color.setHex(0xff8a4a);
+    sunCore.material.emissive.setHex(0xff321c);
+    sunCore.material.emissiveIntensity = 1.45 + redGiantProgress * 0.75;
     return;
   }
 
@@ -3435,6 +3459,11 @@ function getPlanetTexture(planet) {
 state.controlShots = createControlShots(state.level);
 
 function getWindowStatusText() {
+  if (state.level.redGiant) {
+    const progress = getRedGiantProgress(state.level, state.ball.time ?? state.level.time ?? 0);
+    return `Red giant ${Math.round(progress * 100)}%`;
+  }
+
   if (isGoalLocked(state.level)) {
     return 'Goal locked';
   }
@@ -3452,6 +3481,10 @@ function getRunStatusText() {
 
   if (state.ball.crashed) {
     return 'Retry armed';
+  }
+
+  if (state.level.redGiant) {
+    return `Shot ${Math.min(getActiveStageIndex() + 1, state.controlShots.length)} · Sun expanding`;
   }
 
   const lavaPlanet = getAnchoredLavaPlanet();
@@ -3521,10 +3554,20 @@ function describeFailureHint(reason) {
   }
 
   if (reason === 'sun') {
+    if (state.level.redGiant) {
+      return `Retry ${state.level.name}. The red giant expands through the inner lane.`;
+    }
     return `Retry ${state.level.name}. Skim the well, don't drop into it.`;
   }
 
+  if (reason === 'asteroid') {
+    return `Retry ${state.level.name}. Wait for the belt gap or aim through the open lane.`;
+  }
+
   if (reason === 'planet-consumed') {
+    if (state.level.redGiant) {
+      return `Retry ${state.level.name}. Launch before the red giant reaches the planet.`;
+    }
     return `Retry ${state.level.name}. Launch before the planet is consumed.`;
   }
 
@@ -3756,6 +3799,9 @@ function hideGameOverModal() {
 
 function getFailureTitle(reason) {
   if (reason === 'sun') {
+    if (state.level.redGiant) {
+      return 'Caught by the red giant.';
+    }
     return 'Burned in the sun.';
   }
 
@@ -3769,6 +3815,10 @@ function getFailureTitle(reason) {
 
   if (reason === 'planet-consumed') {
     return 'Consumed by the sun.';
+  }
+
+  if (reason === 'asteroid') {
+    return 'Shattered on the belt.';
   }
 
   if (reason === 'goal-closed') {
@@ -4054,7 +4104,7 @@ function createGravityFieldSample(baseX, baseY, halfWidth, halfHeight, target) {
   const solarBodies = [
     {
       position: state.level.sun,
-      gravityStrength: state.level.primarySunBody?.gravityStrength ?? FIXED_SOLAR_GRAVITY_STRENGTH,
+      gravityStrength: state.level.primarySunBody?.gravityStrength ?? state.level.sunGravityStrength ?? FIXED_SOLAR_GRAVITY_STRENGTH,
     },
     ...((state.level.extraSuns ?? []).map((solarBody) => ({
       position: solarBody.position,
@@ -4462,6 +4512,52 @@ function createSplitSurfaceDisc(radius, color, opacity, thetaStart) {
   disc.rotation.x = -Math.PI / 2;
   disc.renderOrder = 7;
   return disc;
+}
+
+function rebuildAsteroids() {
+  clearGroup(asteroidsRoot);
+  asteroidVisuals = (state.level.asteroids ?? []).map((asteroid, index) => {
+    const group = new THREE.Group();
+    const color = new THREE.Color(asteroid.color ?? 0x8f949c);
+    const glowColor = mixColors(color, new THREE.Color(0xd7e3ff), 0.22);
+    const radius = asteroid.radius ?? 0.22;
+
+    const halo = new THREE.Mesh(
+      new THREE.CircleGeometry(radius * 1.9, 18),
+      new THREE.MeshBasicMaterial({
+        color: glowColor,
+        transparent: true,
+        opacity: 0.12,
+        depthWrite: false,
+      }),
+    );
+    halo.rotation.x = -Math.PI / 2;
+    halo.position.y = 0.035;
+    group.add(halo);
+
+    const body = new THREE.Mesh(
+      new THREE.DodecahedronGeometry(radius, 0),
+      new THREE.MeshStandardMaterial({
+        color,
+        emissive: mixColors(color, new THREE.Color(0x31445a), 0.5),
+        emissiveIntensity: 0.08,
+        roughness: 0.96,
+        metalness: 0.04,
+      }),
+    );
+    body.position.y = radius * 0.72;
+    body.scale.set(
+      1 + ((index * 13) % 7) * 0.035,
+      0.72 + ((index * 11) % 5) * 0.045,
+      0.86 + ((index * 17) % 6) * 0.04,
+    );
+    body.rotation.set(index * 0.71, index * 1.13, index * 0.43);
+    group.add(body);
+
+    group.position.set(asteroid.position.x, 0, asteroid.position.y);
+    asteroidsRoot.add(group);
+    return { group, body, halo, asteroid };
+  });
 }
 
 function rebuildPlanets() {
@@ -4987,6 +5083,7 @@ function applyLevel(index) {
   rebuildExtraSuns();
   rebuildPortals();
   rebuildDustClouds();
+  rebuildAsteroids();
   rebuildPlanets();
 }
 
@@ -5820,6 +5917,8 @@ function updatePhysics(delta) {
                 ? 'Burned on the lava world.'
                 : result.reason === 'turret'
                   ? 'Shot down by a turret.'
+                : result.reason === 'asteroid'
+                  ? 'Asteroid impact.'
                 : result.reason === 'planet'
                   ? 'Planet impact.'
                   : 'Lost in open space.';
@@ -5827,7 +5926,7 @@ function updatePhysics(delta) {
     beginCrash(
       message,
       hint,
-      result.reason === 'sun' || result.reason === 'pulsar' || result.reason === 'turret'
+      result.reason === 'sun' || result.reason === 'pulsar' || result.reason === 'turret' || result.reason === 'asteroid'
         ? result.reason
         : result.reason === 'planet-consumed'
           ? 'sun'
@@ -5891,10 +5990,14 @@ function updateDecor(time) {
   updateLaunchMarker();
   startPad.scale.setScalar(1 + Math.sin(time * 2.7) * 0.06);
   startCore.material.opacity = 0.58 + Math.sin(time * 3.8) * 0.12;
-  sunGlow.scale.setScalar(1 + Math.sin(time * 1.2) * 0.08);
-  sunGlow.material.opacity = 0.16 + Math.sin(time * 1.6) * 0.03;
+  const sunVisualRadius = getPrimarySunVisualRadius(state.level, worldTime);
+  const redGiantProgress = getRedGiantProgress(state.level, worldTime);
+  const redGiantSunScale = state.level.redGiant ? sunVisualRadius / 0.42 : 1;
+  sunGlow.scale.setScalar(redGiantSunScale * (state.level.redGiant ? 1 + redGiantProgress * 0.18 : 1) * (1 + Math.sin(time * 1.2) * 0.08));
+  sunGlow.material.opacity = (0.16 + Math.sin(time * 1.6) * 0.03) * (state.level.redGiant ? 1.18 : 1);
   sunCorona.rotation.z = time * 0.28;
-  sunCorona.material.opacity = 0.3 + Math.sin(time * 2.1) * 0.04;
+  sunCorona.scale.setScalar(redGiantSunScale * (state.level.redGiant ? 1.05 + redGiantProgress * 0.12 : 1));
+  sunCorona.material.opacity = (0.3 + Math.sin(time * 2.1) * 0.04) * (state.level.redGiant ? 1.12 : 1);
   sunCore.rotation.y = time * 0.22;
   extraSunVisuals.forEach((visual, index) => {
     visual.group.position.set(visual.solarBody.position.x, 0, visual.solarBody.position.y);
@@ -5928,6 +6031,13 @@ function updateDecor(time) {
     visual.haze.scale.set(1 + Math.sin(time * 0.9 + index) * 0.035, 1 + Math.cos(time * 0.7 + index) * 0.025, 1);
     visual.body.scale.set(1 + Math.sin(time * 0.8 + index * 0.7) * 0.045, 1 + Math.cos(time * 0.95 + index) * 0.035, 1);
     visual.ember.scale.set(1 + Math.sin(time * 1.2 + index * 0.5) * 0.06, 1 + Math.cos(time * 1.1 + index) * 0.045, 1);
+  });
+
+  asteroidVisuals.forEach((visual, index) => {
+    visual.group.position.set(visual.asteroid.position.x, 0, visual.asteroid.position.y);
+    visual.body.rotation.y += (visual.asteroid.spinSpeed ?? 0.24) * 0.012;
+    visual.body.rotation.x += (visual.asteroid.spinSpeed ?? 0.24) * 0.004;
+    visual.halo.material.opacity = 0.1 + Math.sin(time * 2.1 + index) * 0.025;
   });
 
   const gravityFieldRefreshDue =
