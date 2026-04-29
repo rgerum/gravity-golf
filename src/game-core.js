@@ -2423,7 +2423,14 @@ function resolvePlanetContact(level, ball) {
       const eventState = cloneBallRuntimeState(ball);
       ball.velocity.x = 0;
       ball.velocity.y = 0;
-      return { type: 'crash', reason: 'planet', eventState, displayEventState: cloneBallRuntimeState(eventState) };
+      return {
+        type: 'crash',
+        reason: 'planet',
+        planetIndex: index,
+        planetName: planet.name ?? 'gas giant',
+        eventState,
+        displayEventState: cloneBallRuntimeState(eventState),
+      };
     }
   }
 

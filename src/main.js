@@ -101,9 +101,9 @@ app.innerHTML = `
           <div class="game-over-backdrop"></div>
           <div class="game-over-panel" role="dialog" aria-modal="true" aria-labelledby="gameOverTitle">
             <div class="game-over-copy">
-              <p class="game-over-kicker">Failed</p>
+              <p class="game-over-kicker">Mission failed</p>
               <h2 id="gameOverTitle">Lost in space.</h2>
-              <p class="game-over-hint" id="gameOverHint">Retry the route or rewind to the previous boundary.</p>
+              <p class="game-over-hint" id="gameOverHint" hidden>Retry the route or rewind to the previous boundary.</p>
             </div>
             <div class="game-over-actions">
               <button id="gameOverRetryButton" class="hud-button" type="button">Retry</button>
@@ -121,6 +121,7 @@ const levelName = document.querySelector('#levelName');
 const levelKicker = document.querySelector('#levelKicker');
 const statusLine = document.querySelector('#statusLine');
 const statusHint = document.querySelector('#statusHint');
+const statusCard = document.querySelector('.status-card');
 const runStatusPill = document.querySelector('#runStatusPill');
 const windowStatusPill = document.querySelector('#windowStatusPill');
 const timeSpeedSlider = document.querySelector('#timeSpeedSlider');
@@ -199,6 +200,9 @@ const GOAL_CLOSE_ANIMATION_DURATION = 0.46;
 const GOAL_CLOSE_MODAL_DELAY = 0.12;
 const MAX_PHYSICS_STEPS_PER_FRAME = 4;
 const ballRestY = COURSE.ballRadius - 0.01;
+const BALL_STRETCH_SPEED_THRESHOLD = 1.6;
+const BALL_STRETCH_MAX = 0.18;
+const BALL_STRETCH_EASE = 0.18;
 const CONTROL_MIN_ANGLE = -180;
 const CONTROL_MAX_ANGLE = 180;
 const CONTROL_MIN_POWER = 0.2;
@@ -563,6 +567,7 @@ const state = {
     transition: 0,
     crashReason: '',
     crashKind: '',
+    crashPlanetIndex: null,
     crashStartPosition: cloneVec(initialBall.position),
     crashTargetPosition: cloneVec(initialBall.position),
     landingCount: 0,
@@ -781,6 +786,12 @@ function persistLastLevelIndex(levelIndex) {
 }
 
 function setGoalTimerArc(fraction) {
+  if (!Number.isFinite(fraction)) {
+    lastGoalTimerFraction = Number.NaN;
+    goalTimerArc.visible = false;
+    return;
+  }
+
   const normalizedFraction = clamp(fraction, 0, 1);
   if (
     Number.isFinite(lastGoalTimerFraction)
@@ -1164,6 +1175,7 @@ function applyCheckpointState(checkpoint) {
   state.ball.transition = 0;
   state.ball.crashReason = '';
   state.ball.crashKind = '';
+  state.ball.crashPlanetIndex = null;
   state.ball.landingCount = checkpoint.landingCount;
   state.ball.launchGracePlanetIndex = null;
   state.ball.anchorPlanetIndex = checkpoint.anchorPlanetIndex;
@@ -1191,13 +1203,7 @@ function applyCheckpointState(checkpoint) {
   state.currentAttemptTrail = [];
   state.currentAttemptMinGoalDistance = Number.POSITIVE_INFINITY;
   resetBallTrace();
-  ballGroup.visible = true;
-  ballGroup.scale.setScalar(1);
-  ballMesh.position.y = ballRestY;
-  ballMesh.material.color.copy(palette.ball);
-  ballMesh.material.emissive.setHex(0x000000);
-  ballMesh.material.emissiveIntensity = 0;
-  ballShadow.material.opacity = 0.28;
+  resetBallRenderState();
   lastGoalTimerFraction = Number.NaN;
   state.currentFlightStartCheckpoint = cloneCheckpoint(checkpoint);
   seedFlightHistoryFromCurrentState();
@@ -1352,6 +1358,7 @@ function applyPlaybackBallState(ballState) {
   state.ball.transition = 0;
   state.ball.crashReason = '';
   state.ball.crashKind = '';
+  state.ball.crashPlanetIndex = null;
   state.ball.landingCount = ballState.landingCount ?? state.ball.landingCount;
   state.ball.anchorPlanetIndex = ballState.anchorPlanetIndex ?? null;
   state.ball.anchorNormal = ballState.anchorNormal ? cloneVec(ballState.anchorNormal) : null;
@@ -1370,13 +1377,7 @@ function applyPlaybackBallState(ballState) {
   state.dragPower = 0;
   state.roundSettled = false;
   state.relayPulse = 0;
-  ballGroup.visible = true;
-  ballGroup.scale.setScalar(1);
-  ballMesh.position.y = ballRestY;
-  ballMesh.material.color.copy(palette.ball);
-  ballMesh.material.emissive.setHex(0x000000);
-  ballMesh.material.emissiveIntensity = 0;
-  ballShadow.material.opacity = 0.28;
+  resetBallRenderState();
 }
 
 function clearRewindPlaybackState() {
@@ -2401,11 +2402,12 @@ function createRockyPlanetTexture(planet) {
 function createGasGiantTexture(planet) {
   return createCanvasTexture(1024, 512, (ctx, width, height) => {
     const random = createSeededRandom(createPlanetSeed(planet, 29));
-    const core = new THREE.Color(planet.core);
-    const glow = new THREE.Color(planet.glow);
-    const cream = new THREE.Color(0xf3dfb6);
-    const rose = new THREE.Color(0xc88e63);
-    const slate = new THREE.Color(0x6e7497);
+    const ember = new THREE.Color(0x8f3026);
+    const rust = new THREE.Color(0xba4b35);
+    const scarlet = new THREE.Color(0xd86647);
+    const peach = new THREE.Color(0xf0a06e);
+    const cream = new THREE.Color(0xf6d0a0);
+    const slate = new THREE.Color(0x5c3750);
     const bands = 18;
 
     for (let index = 0; index < bands; index += 1) {
@@ -2413,11 +2415,11 @@ function createGasGiantTexture(planet) {
       const bandHeight = height / bands + 2;
       const mixAmount = index / Math.max(1, bands - 1);
       const bandColor = mixColors(
-        mixColors(cream, core, 0.28 + random() * 0.14),
-        mixColors(rose, glow, 0.24 + random() * 0.2),
-        0.2 + mixAmount * 0.55,
+        mixColors(ember, rust, 0.32 + random() * 0.18),
+        mixColors(peach, scarlet, 0.22 + mixAmount * 0.46),
+        0.18 + mixAmount * 0.62,
       );
-      bandColor.offsetHSL((random() - 0.5) * 0.04, 0, (random() - 0.5) * 0.08);
+      bandColor.offsetHSL((random() - 0.5) * 0.02, 0.04 + random() * 0.03, (random() - 0.5) * 0.1);
       ctx.fillStyle = colorHex(bandColor);
       ctx.fillRect(0, startY, width, bandHeight);
     }
@@ -2430,7 +2432,7 @@ function createGasGiantTexture(planet) {
         const wave = Math.sin(x * 0.02 + index * 0.85) * (4 + random() * 7);
         ctx.lineTo(x, y + wave);
       }
-      ctx.strokeStyle = colorHex(mixColors(core, slate, 0.42));
+      ctx.strokeStyle = colorHex(mixColors(scarlet, slate, 0.42));
       ctx.globalAlpha = 0.16;
       ctx.lineWidth = 4 + random() * 3;
       ctx.stroke();
@@ -2445,7 +2447,7 @@ function createGasGiantTexture(planet) {
         width * (0.04 + random() * 0.1),
         height * (0.006 + random() * 0.016),
         (random() - 0.5) * 0.2,
-        colorHex(mixColors(glow, cream, 0.4 + random() * 0.2)),
+        colorHex(mixColors(peach, cream, 0.4 + random() * 0.2)),
         0.08 + random() * 0.08,
       );
     }
@@ -2457,7 +2459,7 @@ function createGasGiantTexture(planet) {
       width * 0.12,
       height * 0.055,
       -0.18,
-      colorHex(mixColors(new THREE.Color(0xd88a59), glow, 0.18)),
+      colorHex(mixColors(new THREE.Color(0xe5754b), scarlet, 0.24)),
       0.58,
     );
     drawEllipse(
@@ -2733,12 +2735,11 @@ function syncGameOverActionAnchors() {
   const railLeft = railRect.left - modalRect.left;
   const railTop = railRect.top - modalRect.top;
   const railBottom = railRect.bottom - modalRect.top;
-  const gap = 8;
+  const gap = 14;
   const minLeft = 22;
-  const desiredTextWidth = 280;
-  const copyLeft = Math.max(minLeft, railLeft - gap - desiredTextWidth);
-  const copyRight = 6;
-  const copyWidth = Math.max(220, modalRect.width - copyLeft - copyRight);
+  const availableWidth = Math.max(220, railLeft - minLeft - gap);
+  const copyWidth = clamp(availableWidth, 220, 320);
+  const copyLeft = Math.max(minLeft, railLeft - gap - copyWidth);
   const copyHeight = gameOverCopy.getBoundingClientRect().height || 140;
   const copyTop = clamp(
     ((railTop + railBottom) * 0.5) - (copyHeight * 0.5),
@@ -2754,7 +2755,7 @@ function syncGameOverActionAnchors() {
 function syncGameOverModal() {
   const open = state.gameOver.open;
   gameOverTitle.textContent = state.gameOver.title;
-  gameOverHint.textContent = state.gameOver.hint;
+  gameOverHint.hidden = true;
   gameOverRetryButton.disabled = !canRetryLevel();
   gameOverUndoButton.disabled = !canRedo();
 
@@ -3351,7 +3352,7 @@ function rebuildPlanets() {
               ? mixColors(glowColor, new THREE.Color(0xffffff), 0.28)
               : mixColors(glowColor, new THREE.Color(0x9ce9ff), 0.16)
           )
-          : mixColors(glowColor, new THREE.Color(0xffe3ba), 0.12),
+          : mixColors(new THREE.Color(0xff845d), new THREE.Color(0xffc28c), 0.28),
         transparent: true,
         opacity: planet.landable ? (planet.surfaceType === 'ice' ? 0.24 : 0.16) : 0.18,
       }),
@@ -3374,9 +3375,9 @@ function rebuildPlanets() {
       : new THREE.MeshStandardMaterial({
         color: 0xffffff,
         map: surfaceTexture,
-        emissive: mixColors(coreColor, glowColor, 0.1),
-        emissiveIntensity: 0.12,
-        roughness: 0.9,
+        emissive: mixColors(new THREE.Color(0xa33324), new THREE.Color(0xff8d57), 0.38),
+        emissiveIntensity: 0.16,
+        roughness: 0.86,
         metalness: 0,
       });
 
@@ -3416,9 +3417,9 @@ function rebuildPlanets() {
       atmosphereShell = new THREE.Mesh(
         new THREE.SphereGeometry(planet.radius * 1.065, 48, 48),
         new THREE.MeshPhongMaterial({
-          color: mixColors(glowColor, new THREE.Color(0xffe2b3), 0.24),
+          color: mixColors(new THREE.Color(0xff8d66), new THREE.Color(0xffd2a8), 0.28),
           transparent: true,
-          opacity: 0.12,
+          opacity: 0.16,
           blending: THREE.AdditiveBlending,
           side: THREE.DoubleSide,
           depthWrite: false,
@@ -3429,9 +3430,9 @@ function rebuildPlanets() {
       accentBand = new THREE.Mesh(
         new THREE.TorusGeometry(planet.radius * 1.16, 0.045, 12, 96),
         new THREE.MeshBasicMaterial({
-          color: mixColors(glowColor, new THREE.Color(0xffd489), 0.42),
+          color: mixColors(new THREE.Color(0xff6e4e), new THREE.Color(0xffc57f), 0.34),
           transparent: true,
-          opacity: 0.3,
+          opacity: 0.38,
         }),
       );
       accentBand.rotation.x = Math.PI / 2.7;
@@ -3448,7 +3449,7 @@ function rebuildPlanets() {
       new THREE.MeshBasicMaterial({
         color: planet.landable
           ? (planet.surfaceType === 'ice' ? 0xf5ffff : 0x7df3d1)
-          : 0xfef3d0,
+          : 0xffc08a,
         transparent: true,
         opacity: planet.landable ? (planet.surfaceType === 'ice' ? 0.78 : 0.68) : 0.42,
         depthWrite: false,
@@ -3632,6 +3633,7 @@ function applyLevel(index) {
 function syncHud() {
   statusLine.textContent = state.message;
   statusHint.textContent = state.hint;
+  statusCard.hidden = true;
   runStatusPill.textContent = getRunStatusText();
   windowStatusPill.textContent = getWindowStatusText();
   runStatusPill.classList.toggle('is-hot', state.ball.anchorPlanetIndex !== null && state.ball.landingCount > 0);
@@ -3705,6 +3707,7 @@ function resetBall(message, hint, options = {}) {
   state.ball.transition = 0;
   state.ball.crashReason = '';
   state.ball.crashKind = '';
+  state.ball.crashPlanetIndex = null;
   state.ball.landingCount = freshBall.landingCount;
   state.ball.launchGracePlanetIndex = freshBall.launchGracePlanetIndex;
   state.ball.anchorPlanetIndex = freshBall.anchorPlanetIndex;
@@ -3723,13 +3726,7 @@ function resetBall(message, hint, options = {}) {
   state.roundSettled = true;
   state.relayPulse = 0;
   resetBallTrace();
-  ballGroup.visible = true;
-  ballGroup.scale.setScalar(1);
-  ballMesh.position.y = ballRestY;
-  ballMesh.material.color.copy(palette.ball);
-  ballMesh.material.emissive.setHex(0x000000);
-  ballMesh.material.emissiveIntensity = 0;
-  ballShadow.material.opacity = 0.28;
+  resetBallRenderState();
   seedFlightHistoryFromCurrentState();
   state.message = message;
   state.hint = hint;
@@ -3754,7 +3751,14 @@ function beginGoal(result = null) {
   syncHud();
 }
 
-function beginCrash(reason, hint, crashKind = 'planet', eventState = null, displayEventState = null) {
+function beginCrash(
+  reason,
+  hint,
+  crashKind = 'planet',
+  eventState = null,
+  displayEventState = null,
+  crashPlanetIndex = null,
+) {
   hideGameOverModal();
   hideGoalCloseAnimation();
   finalizeFlightHistory('crash', eventState, displayEventState);
@@ -3765,10 +3769,20 @@ function beginCrash(reason, hint, crashKind = 'planet', eventState = null, displ
   state.ball.transition = 0;
   state.ball.crashReason = reason;
   state.ball.crashKind = crashKind;
+  state.ball.crashPlanetIndex = crashPlanetIndex;
   setVec(state.ball.crashStartPosition, state.ball.position);
+  const crashPlanet = (
+    crashPlanetIndex !== null
+    && crashPlanetIndex !== undefined
+    && state.level.planets[crashPlanetIndex]
+  ) ? state.level.planets[crashPlanetIndex] : null;
   setVec(
     state.ball.crashTargetPosition,
-    state.ball.crashKind === 'sun' ? state.level.sun : state.ball.position,
+    state.ball.crashKind === 'sun'
+      ? state.level.sun
+      : crashPlanet
+        ? crashPlanet.position
+        : state.ball.position,
   );
   state.ball.velocity.x = 0;
   state.ball.velocity.y = 0;
@@ -3798,10 +3812,7 @@ function beginLanding(result) {
   state.dragPower = 0;
   state.roundSettled = true;
   state.relayPulse = 1;
-  ballGroup.visible = true;
-  ballGroup.scale.setScalar(1);
-  ballMesh.position.y = ballRestY;
-  ballShadow.material.opacity = 0.28;
+  resetBallRenderState();
   const landedPlanet = result.planetIndex !== null && result.planetIndex !== undefined
     ? state.level.planets[result.planetIndex]
     : null;
@@ -3875,6 +3886,49 @@ function updateDragState(worldPoint) {
 
 function updateBallTransforms() {
   ballGroup.position.set(state.ball.position.x, 0, state.ball.position.y);
+
+  let targetRotationY = 0;
+  let targetScaleX = 1;
+  let targetScaleY = 1;
+  let targetScaleZ = 1;
+
+  if (!state.ball.goaling && !state.ball.crashed) {
+    const speed = length(state.ball.velocity);
+    if (speed > BALL_STRETCH_SPEED_THRESHOLD) {
+      const direction = normalize(state.ball.velocity);
+      const stretchMix = clamp(
+        (speed - BALL_STRETCH_SPEED_THRESHOLD) / (11.8 - BALL_STRETCH_SPEED_THRESHOLD),
+        0,
+        1,
+      );
+      const stretchAmount = BALL_STRETCH_MAX * (0.35 + stretchMix * 0.65);
+      targetRotationY = Math.atan2(-direction.y, direction.x);
+      targetScaleX = 1 + stretchAmount;
+      targetScaleY = 1 - stretchAmount * 0.54;
+      targetScaleZ = 1 - stretchAmount * 0.36;
+    }
+  }
+
+  const rotationDelta = Math.atan2(
+    Math.sin(targetRotationY - ballMesh.rotation.y),
+    Math.cos(targetRotationY - ballMesh.rotation.y),
+  );
+  ballMesh.rotation.y += rotationDelta * BALL_STRETCH_EASE;
+  ballMesh.scale.x = THREE.MathUtils.lerp(ballMesh.scale.x, targetScaleX, BALL_STRETCH_EASE);
+  ballMesh.scale.y = THREE.MathUtils.lerp(ballMesh.scale.y, targetScaleY, BALL_STRETCH_EASE);
+  ballMesh.scale.z = THREE.MathUtils.lerp(ballMesh.scale.z, targetScaleZ, BALL_STRETCH_EASE);
+}
+
+function resetBallRenderState() {
+  ballGroup.visible = true;
+  ballGroup.scale.setScalar(1);
+  ballMesh.position.y = ballRestY;
+  ballMesh.rotation.set(0, 0, 0);
+  ballMesh.scale.set(1, 1, 1);
+  ballMesh.material.color.copy(palette.ball);
+  ballMesh.material.emissive.setHex(0x000000);
+  ballMesh.material.emissiveIntensity = 0;
+  ballShadow.material.opacity = 0.28;
 }
 
 function updateCueVisual() {
@@ -4171,8 +4225,8 @@ function updatePhysics(delta) {
   }
 
   if (state.ball.crashed) {
-    if (state.ball.crashKind === 'sun') {
-      state.ball.transition += delta * 4.8;
+    if (state.ball.crashKind === 'sun' || state.ball.crashKind === 'planet') {
+      state.ball.transition += delta * (state.ball.crashKind === 'sun' ? 4.8 : 4.3);
       const t = Math.min(1, state.ball.transition);
       state.ball.position.x = THREE.MathUtils.lerp(
         state.ball.crashStartPosition.x,
@@ -4185,16 +4239,28 @@ function updatePhysics(delta) {
         t,
       );
       updateBallTransforms();
-      ballMesh.position.y = THREE.MathUtils.lerp(ballRestY, -0.18, t);
-      ballGroup.scale.setScalar(Math.max(0.04, 1 - t * 0.94));
+      ballMesh.position.y = THREE.MathUtils.lerp(
+        ballRestY,
+        state.ball.crashKind === 'sun' ? -0.18 : -0.12,
+        t,
+      );
+      ballGroup.scale.setScalar(
+        Math.max(0.04, 1 - t * (state.ball.crashKind === 'sun' ? 0.94 : 0.88)),
+      );
       ballShadow.material.opacity = 0.28 * (1 - t);
-      ballMesh.material.color.copy(palette.ball).lerp(palette.band, Math.min(1, t * 1.1));
-      ballMesh.material.emissive.copy(palette.band);
-      ballMesh.material.emissiveIntensity = THREE.MathUtils.lerp(0, 2.4, t);
+      if (state.ball.crashKind === 'sun') {
+        ballMesh.material.color.copy(palette.ball).lerp(palette.band, Math.min(1, t * 1.1));
+        ballMesh.material.emissive.copy(palette.band);
+        ballMesh.material.emissiveIntensity = THREE.MathUtils.lerp(0, 2.4, t);
+      } else {
+        ballMesh.material.color.copy(palette.ball).lerp(new THREE.Color(0xd39c76), Math.min(1, t * 0.85));
+        ballMesh.material.emissive.setHex(0x000000);
+        ballMesh.material.emissiveIntensity = 0;
+      }
 
       if (t >= 1) {
         ballGroup.visible = false;
-        showGameOverModal('sun', state.hint, { countReset: true });
+        showGameOverModal(state.ball.crashKind === 'sun' ? 'sun' : 'planet', state.hint, { countReset: true });
       }
       return;
     }
@@ -4285,6 +4351,7 @@ function updatePhysics(delta) {
           : 'bounds',
       result.eventState ?? null,
       result.displayEventState ?? null,
+      result.planetIndex ?? null,
     );
     return;
   }
@@ -4300,6 +4367,7 @@ function updateDecor(time) {
   const goalOpen = isGoalOpen(state.level, worldTime);
   const goalTimeLeft = getGoalRemainingTime(state.level, worldTime);
   const goalTimerFraction = getGoalRemainingFraction(state.level, worldTime);
+  const showGoalTimer = Number.isFinite(goalTimeLeft) && Number.isFinite(goalTimerFraction);
   const goalCloseAnimationProgress = state.goalCloseAnimation.active
     ? clamp(state.goalCloseAnimation.elapsed / GOAL_CLOSE_ANIMATION_DURATION, 0, 1)
     : 0;
@@ -4367,11 +4435,13 @@ function updateDecor(time) {
     blackHoleRing.material.opacity = goalOpen
       ? 0.46 + goalTimerFraction * 0.12 + Math.sin(time * 4.2) * 0.04
       : 0.18;
-    goalTimerTrack.material.opacity = goalOpen ? 0.22 : 0.08;
-    goalTimerArc.material.opacity = goalOpen
+    goalTimerTrack.material.opacity = showGoalTimer ? (goalOpen ? 0.22 : 0.08) : 0;
+    goalTimerArc.material.opacity = showGoalTimer && goalOpen
       ? 0.56 + goalTimerFraction * 0.28 + Math.sin(time * 5.6) * 0.03
       : 0;
   }
+  goalTimerTrack.visible = showGoalTimer;
+  goalTimerArc.visible = showGoalTimer && goalTimerArc.visible;
   goalTimerArc.material.color.setHex(goalTimeLeft < 2.5 ? 0xff9f6e : 0x8fffe3);
 
   planetVisuals.forEach((visual, index) => {
