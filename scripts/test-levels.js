@@ -153,6 +153,7 @@ function simulateSequence(level, shots, options) {
   let startTime = 0;
   let anchorPlanetIndex = level.startPlanetIndex ?? null;
   let anchorNormal = directionFromAngleDeg(level.startAngleDeg ?? 180);
+  let heat = 0;
   let landingCount = 0;
   let totalTime = 0;
   let totalSteps = 0;
@@ -169,6 +170,7 @@ function simulateSequence(level, shots, options) {
       startTime,
       anchorPlanetIndex,
       anchorNormal,
+      heat,
       landingCount,
     });
 
@@ -210,6 +212,7 @@ function simulateSequence(level, shots, options) {
     startTime = result.finalTime;
     anchorPlanetIndex = result.anchorPlanetIndex;
     anchorNormal = result.anchorNormal;
+    heat = result.heat ?? 0;
     landingCount = result.landingCount;
   }
 

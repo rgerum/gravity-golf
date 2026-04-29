@@ -252,6 +252,13 @@ h1 {
   display: none;
 }
 
+.status-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
 .time-control {
   display: none;
   margin-top: 12px;
@@ -326,6 +333,13 @@ h1 {
   background: rgba(255, 187, 124, 0.12);
   color: #fff2de;
   box-shadow: 0 0 18px rgba(255, 187, 124, 0.12);
+}
+
+.status-pill.is-danger {
+  border-color: rgba(255, 109, 58, 0.54);
+  background: rgba(255, 109, 58, 0.16);
+  color: #fff0df;
+  box-shadow: 0 0 22px rgba(255, 109, 58, 0.18);
 }
 
 .action-row {
@@ -494,6 +508,66 @@ h1 {
   line-height: 1.22;
 }
 
+.tutorial-card.is-monolith .tutorial-gesture {
+  background:
+    radial-gradient(circle at 24% 52%, rgba(255, 198, 108, 0.16), transparent 18%),
+    radial-gradient(circle at 78% 50%, rgba(138, 98, 255, 0.12), transparent 20%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0.012));
+}
+
+.tutorial-card.is-monolith .tutorial-gesture-ball {
+  left: 26px;
+  bottom: 14px;
+  width: 18px;
+  height: 18px;
+  background:
+    radial-gradient(circle at 35% 35%, rgba(255, 247, 205, 0.98), rgba(255, 210, 122, 0.94) 58%, rgba(219, 141, 58, 0.82) 100%);
+  box-shadow:
+    0 0 22px rgba(255, 192, 97, 0.34),
+    0 0 0 1px rgba(255, 222, 154, 0.26);
+}
+
+.tutorial-card.is-monolith .tutorial-gesture-start {
+  left: 18px;
+  bottom: 6px;
+  width: 34px;
+  height: 34px;
+  border-color: rgba(255, 203, 120, 0.42);
+  animation: tutorial-monolith-touch 2.6s linear infinite;
+}
+
+.tutorial-card.is-monolith .tutorial-gesture-guide {
+  left: 45px;
+  bottom: 22px;
+  width: 86px;
+  height: 2px;
+  background:
+    linear-gradient(90deg, rgba(255, 198, 108, 0.96), rgba(172, 150, 255, 0.68) 70%, rgba(116, 93, 255, 0));
+  transform: rotate(0deg);
+  animation: tutorial-monolith-link 2.6s linear infinite;
+  box-shadow: 0 0 18px rgba(255, 185, 98, 0.18);
+}
+
+.tutorial-card.is-monolith .tutorial-gesture-handle {
+  display: none;
+}
+
+.tutorial-card.is-monolith .tutorial-gesture-release {
+  left: 134px;
+  bottom: 6px;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  opacity: 1;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(5, 1, 10, 0.98) 0 38%, rgba(5, 1, 10, 0) 42%),
+    radial-gradient(circle at 50% 50%, rgba(140, 104, 255, 0.92) 0 62%, rgba(140, 104, 255, 0) 68%);
+  box-shadow:
+    0 0 0 1px rgba(153, 126, 255, 0.3),
+    0 0 18px rgba(132, 101, 255, 0.22);
+  animation: tutorial-monolith-hole 2.6s linear infinite;
+}
+
 @keyframes tutorial-drag-line {
   0%, 12% {
     opacity: 0;
@@ -589,6 +663,67 @@ h1 {
   30%, 100% {
     opacity: 0;
     transform: scale(0.58);
+  }
+}
+
+@keyframes tutorial-monolith-touch {
+  0%, 12% {
+    opacity: 0;
+    transform: scale(1.34);
+  }
+
+  18%, 34% {
+    opacity: 0.9;
+    transform: scale(0.82);
+  }
+
+  42%, 100% {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+}
+
+@keyframes tutorial-monolith-link {
+  0%, 26% {
+    opacity: 0;
+    transform: rotate(0deg) scaleX(0.04);
+  }
+
+  38% {
+    opacity: 0.9;
+    transform: rotate(0deg) scaleX(0.22);
+  }
+
+  58%, 74% {
+    opacity: 0.96;
+    transform: rotate(0deg) scaleX(1);
+  }
+
+  82%, 100% {
+    opacity: 0;
+    transform: rotate(0deg) scaleX(1);
+  }
+}
+
+@keyframes tutorial-monolith-hole {
+  0%, 34% {
+    opacity: 0;
+    transform: scale(0.18);
+  }
+
+  48% {
+    opacity: 0.94;
+    transform: scale(1.36);
+  }
+
+  62%, 76% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  86%, 100% {
+    opacity: 0;
+    transform: scale(1);
   }
 }
 
