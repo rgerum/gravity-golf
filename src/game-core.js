@@ -53,6 +53,9 @@ const DEFAULT_PULSAR_JET_INNER_RADIUS = 0.5;
 const PULSAR_SEGMENT_COLLISION_SAMPLES = 8;
 const DEFAULT_TURRET_RANGE = 5.6;
 const DEFAULT_TURRET_LINE_WIDTH = 0.13;
+const DEFAULT_DUST_CLOUD_RADIUS = 1.15;
+const DEFAULT_DUST_CLOUD_DRAG = 0.9;
+const DUST_CLOUD_DRAG_MULTIPLIER = 3.2;
 
 function polar(radius, angleDeg) {
   return { radius, angleDeg };
@@ -74,6 +77,7 @@ export const WORLD_DEFINITIONS = [
   { id: 'pulsars', name: 'Pulsars' },
   { id: 'dying-systems', name: 'Dying Systems' },
   { id: 'hostile-planets', name: 'Hostile Planets' },
+  { id: 'dust-clouds', name: 'Dust Clouds' },
 ];
 
 const CORE_LEVEL_DEFINITIONS = [
@@ -1248,6 +1252,10 @@ function clonePlanets(planets) {
   }));
 }
 
+function cloneDustClouds(dustClouds) {
+  return (dustClouds ?? []).map((cloud) => ({ ...cloud }));
+}
+
 function cloneLevel(baseId, overrides = {}) {
   const base = coreLevelById.get(baseId);
   if (!base) {
@@ -1259,6 +1267,7 @@ function cloneLevel(baseId, overrides = {}) {
     ...overrides,
     launchPresets: cloneLaunchPresets(overrides.launchPresets ?? base.launchPresets),
     planets: clonePlanets(overrides.planets ?? base.planets),
+    dustClouds: cloneDustClouds(overrides.dustClouds ?? base.dustClouds),
   };
 
   if ('tutorial' in overrides) {
@@ -1594,6 +1603,29 @@ function makeHostileVariant(spec) {
   return level;
 }
 
+function normalizeDustCloud(cloud = {}, cloudIndex = 0) {
+  return {
+    id: cloud.id ?? `dust-cloud-${cloudIndex + 1}`,
+    position: cloud.position,
+    radius: cloud.radius ?? DEFAULT_DUST_CLOUD_RADIUS,
+    drag: cloud.drag ?? DEFAULT_DUST_CLOUD_DRAG,
+    orbitAngularSpeed: cloud.orbitAngularSpeed ?? 0,
+    orbitEccentricity: cloud.orbitEccentricity ?? 0.03,
+    orbitRotationDeg: cloud.orbitRotationDeg,
+    opacity: cloud.opacity ?? 1,
+  };
+}
+
+function makeDustVariant(spec) {
+  const level = variantLevel('ancient', {
+    ...spec,
+    summary: spec.summary ?? 'Interstellar dust drifts through the system. Crossing it bleeds speed from every shot.',
+  });
+  level.tutorial = spec.tutorial ?? null;
+  level.dustClouds = (spec.dustClouds ?? []).map((cloud, cloudIndex) => normalizeDustCloud(cloud, cloudIndex));
+  return level;
+}
+
 function makeSplitVariant(spec) {
   const level = variantLevel('prism', spec);
   const splitPlanets = spec.splitPlanets ?? {};
@@ -1778,6 +1810,124 @@ const HOSTILE_WORLD_SPECS = [
   { baseId: 'final-circuit', id: 'hostile-circuit', name: 'Hostile Circuit', summary: 'The final relay circuit becomes a hostile run through overlapping planet sight lines.', turrets: { 1: { type: 'tank', angleDeg: 312, range: 4.8 }, 2: { type: 'missile', angleDeg: 88, range: 5.2 }, 3: { type: 'tank', angleDeg: 210, range: 4.6 } } },
 ];
 
+const DUST_WORLD_SPECS = [
+  {
+    baseId: 'first-arc',
+    id: 'dust-drift',
+    name: 'Dust Drift',
+    summary: 'The first cloud is soft enough to use as a brake, but crossing its center kills the clean arc.',
+    tutorial: { type: 'dust', copy: 'Dust clouds slow the ball while it flies through them.' },
+    launchAngleDelta: 1.5,
+    powerScale: 1.03,
+    dustClouds: [
+      { position: polar(4.3, -44), radius: 1.08, drag: 0.56, orbitAngularSpeed: 0.05 },
+    ],
+  },
+  {
+    baseId: 'fast-window',
+    id: 'silt-window',
+    name: 'Silt Window',
+    summary: 'A braking cloud slides across the fast lane, turning the timing window into a speed window too.',
+    launchAngleDelta: -2,
+    powerScale: 1.05,
+    dustClouds: [
+      { position: polar(4.9, -18), radius: 1.0, drag: 0.66, orbitAngularSpeed: -0.08 },
+    ],
+  },
+  {
+    baseId: 'first-arc',
+    id: 'veil-relay',
+    name: 'Veil Arc',
+    summary: 'A thin veil crosses the simple solar bend, trimming speed if the shot cuts too deep.',
+    launchAngleDelta: 2,
+    powerScale: 1.05,
+    dustClouds: [
+      { position: polar(3.9, -44), radius: 0.94, drag: 0.48, orbitAngularSpeed: 0.05 },
+      { position: polar(6.2, 8), radius: 0.82, drag: 0.34, orbitAngularSpeed: -0.04 },
+    ],
+  },
+  {
+    baseId: 'forked-harbor',
+    id: 'powder-harbor',
+    name: 'Powder Harbor',
+    summary: 'The fork is still readable, but one harbor lane spends too long inside the powder band.',
+    launchAngleDelta: 1,
+    dustClouds: [
+      { position: polar(4.4, 24), radius: 1.05, drag: 0.72, orbitAngularSpeed: -0.05 },
+      { position: polar(7.2, -16), radius: 1.2, drag: 0.5, orbitAngularSpeed: 0.04 },
+    ],
+  },
+  {
+    baseId: 'inner-step',
+    id: 'brownout-step',
+    name: 'Brownout Step',
+    summary: 'The inner launch has to step outward before the broad cloud strips away too much momentum.',
+    powerScale: 1.06,
+    dustClouds: [
+      { position: polar(3.7, -66), radius: 1.35, drag: 0.6, orbitAngularSpeed: 0.04 },
+      { position: polar(6.6, 30), radius: 0.95, drag: 0.5, orbitAngularSpeed: -0.06 },
+    ],
+  },
+  {
+    baseId: 'moon-switch',
+    id: 'dust-switch',
+    name: 'Dust Switch',
+    summary: 'The moon route survives, but the cloud before the switch changes how much speed reaches the rim.',
+    launchAngleDelta: -1.5,
+    dustClouds: [
+      { position: polar(4.6, 112), radius: 1.12, drag: 0.68, orbitAngularSpeed: 0.08 },
+      { position: polar(7.4, -10), radius: 1.0, drag: 0.48, orbitAngularSpeed: -0.03 },
+    ],
+  },
+  {
+    baseId: 'long-transfer',
+    id: 'nebula-transfer',
+    name: 'Nebula Transfer',
+    summary: 'A long transfer now needs a stronger launch because the nebula sands speed off the outbound leg.',
+    powerScale: 1.08,
+    dustClouds: [
+      { position: polar(5.4, -38), radius: 1.42, drag: 0.58, orbitAngularSpeed: 0.03 },
+      { position: polar(8.1, 20), radius: 1.05, drag: 0.44, orbitAngularSpeed: -0.05 },
+    ],
+  },
+  {
+    baseId: 'halo-run',
+    id: 'cloud-halo',
+    name: 'Cloud Halo',
+    summary: 'The outer halo has enough room, but the dust pockets decide which relays keep usable speed.',
+    powerScale: 1.07,
+    dustClouds: [
+      { position: polar(4.2, 138), radius: 1.0, drag: 0.62, orbitAngularSpeed: -0.04 },
+      { position: polar(6.7, -24), radius: 1.25, drag: 0.55, orbitAngularSpeed: 0.03 },
+      { position: polar(8.7, 44), radius: 0.95, drag: 0.42, orbitAngularSpeed: -0.06 },
+    ],
+  },
+  {
+    baseId: 'crown-window',
+    id: 'crown-haze',
+    name: 'Crown Haze',
+    summary: 'The crown route opens cleanly only if the haze trims speed without trapping the shot.',
+    launchAngleDelta: 1.5,
+    powerScale: 1.05,
+    dustClouds: [
+      { position: polar(5.2, 62), radius: 1.18, drag: 0.64, orbitAngularSpeed: 0.05 },
+      { position: polar(7.8, 2), radius: 1.12, drag: 0.52, orbitAngularSpeed: -0.04 },
+    ],
+  },
+  {
+    baseId: 'final-circuit',
+    id: 'dust-circuit',
+    name: 'Dust Circuit',
+    summary: 'The final circuit crosses several dusty pockets; conserve just enough speed for the last burn.',
+    powerScale: 1.08,
+    dustClouds: [
+      { position: polar(3.8, -122), radius: 1.0, drag: 0.66, orbitAngularSpeed: 0.05 },
+      { position: polar(6.2, 36), radius: 1.22, drag: 0.56, orbitAngularSpeed: -0.05 },
+      { position: polar(8.6, 10), radius: 1.05, drag: 0.46, orbitAngularSpeed: 0.04 },
+    ],
+  },
+];
+
 const DYING_WORLD_SPECS = [
   { baseId: 'first-arc', id: 'decay-arc', name: 'Decay Arc', summary: 'The launch world is already falling inward, so the clean bend changes every second.', goalOpenSecondsDelta: -1 },
   { baseId: 'fast-window', id: 'sinking-window', name: 'Sinking Window', summary: 'The fast lane is no longer stable; wait too long and the planet has dropped into a tighter spiral.', decayScale: 1.08, goalOpenSecondsDelta: -1 },
@@ -1801,6 +1951,7 @@ const EXPANSION_LEVEL_DEFINITIONS = [
   ...PULSAR_WORLD_SPECS.map((spec) => makePulsarVariant(spec)),
   ...DYING_WORLD_SPECS.map((spec, index) => makeDyingVariant(spec, index)),
   ...HOSTILE_WORLD_SPECS.map((spec) => makeHostileVariant(spec)),
+  ...DUST_WORLD_SPECS.map((spec) => makeDustVariant(spec)),
 ];
 
 const LEVEL_DEFINITIONS = [...CORE_LEVEL_DEFINITIONS, ...EXPANSION_LEVEL_DEFINITIONS];
@@ -1936,6 +2087,16 @@ const CAMPAIGN_LEVEL_ORDER = [
   'sentry-switch',
   'flak-gate',
   'hostile-circuit',
+  'dust-drift',
+  'silt-window',
+  'veil-relay',
+  'powder-harbor',
+  'brownout-step',
+  'dust-switch',
+  'nebula-transfer',
+  'cloud-halo',
+  'crown-haze',
+  'dust-circuit',
 ];
 
 const campaignOrderIndex = new Map(
@@ -2548,6 +2709,9 @@ export function setLevelTime(level, time) {
   level.portals?.forEach((portal) => {
     setOrbitalBodyTime(portal, time, systemCenter);
   });
+  level.dustClouds?.forEach((cloud) => {
+    setOrbitalBodyTime(cloud, time, systemCenter);
+  });
   return level;
 }
 
@@ -3055,6 +3219,14 @@ export function createLevelRuntime(index) {
       cooldownSeconds: portal.cooldownSeconds ?? PORTAL_COOLDOWN_SECONDS,
     }))
     : [];
+  const dustClouds = Array.isArray(source.dustClouds)
+    ? source.dustClouds.map((cloud, cloudIndex) => ({
+      ...createOrbitalBodyRuntime(normalizeDustCloud(cloud, cloudIndex), systemCenter, cloudIndex),
+      radius: cloud.radius ?? DEFAULT_DUST_CLOUD_RADIUS,
+      drag: cloud.drag ?? DEFAULT_DUST_CLOUD_DRAG,
+      opacity: cloud.opacity ?? 1,
+    }))
+    : [];
   const startPlanetIndex = inferStartPlanetIndex(source, planets);
   const startPlanet = planets[startPlanetIndex];
   const startAngleDeg = source.startAngleDeg
@@ -3093,6 +3265,7 @@ export function createLevelRuntime(index) {
     planets,
     extraSuns,
     portals,
+    dustClouds,
   };
 
   if (!level.planets[level.startPlanetIndex].landable) {
@@ -3424,8 +3597,26 @@ function sampleBallAcceleration(level, point) {
   return acceleration;
 }
 
-function getBallFriction(delta) {
-  return Math.pow(BALL_FRICTION_BASE, delta * 60);
+function getDustDragFactorAtPoint(level, point, delta) {
+  let dragFactor = 1;
+
+  for (const cloud of level.dustClouds ?? []) {
+    const radius = Math.max(0.001, cloud.radius ?? DEFAULT_DUST_CLOUD_RADIUS);
+    const distance = distanceBetween(point, cloud.position);
+    if (distance >= radius + COURSE.ballRadius) {
+      continue;
+    }
+
+    const depth = clamp(1 - distance / radius, 0, 1);
+    const drag = Math.max(0, cloud.drag ?? DEFAULT_DUST_CLOUD_DRAG) * DUST_CLOUD_DRAG_MULTIPLIER;
+    dragFactor *= Math.exp(-drag * (0.34 + depth * 0.66) * delta);
+  }
+
+  return dragFactor;
+}
+
+function getBallFriction(level, point, delta) {
+  return Math.pow(BALL_FRICTION_BASE, delta * 60) * getDustDragFactorAtPoint(level, point, delta);
 }
 
 export function stepBall(level, ball, delta) {
@@ -3514,7 +3705,7 @@ export function stepBall(level, ball, delta) {
     return contactResult;
   }
 
-  const friction = getBallFriction(delta);
+  const friction = getBallFriction(level, ball.position, delta);
   ball.velocity.x *= friction;
   ball.velocity.y *= friction;
 
@@ -3540,7 +3731,7 @@ export function stepBall(level, ball, delta) {
 
 export function reverseStepBall(level, ball, delta, options = {}) {
   const currentTime = ball.time ?? level.time ?? 0;
-  const friction = getBallFriction(delta);
+  const friction = getBallFriction(level, ball.position, delta);
   const velocityBeforeFriction = vec(
     ball.velocity.x / friction,
     ball.velocity.y / friction,
