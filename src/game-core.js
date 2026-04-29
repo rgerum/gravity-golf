@@ -40,6 +40,9 @@ const SYSTEM_LAYOUT_SCALE = 1;
 export const FIXED_SOLAR_GRAVITY_STRENGTH = 20;
 const DEFAULT_EXTRA_SUN_GRAVITY_STRENGTH = 16;
 const DEFAULT_EXTRA_SUN_COLLISION_RADIUS = 0.38;
+const DEFAULT_RED_GIANT_START_RADIUS = SUN_COLLISION_RADIUS;
+const DEFAULT_RED_GIANT_END_RADIUS = 2.35;
+const DEFAULT_RED_GIANT_GROW_SECONDS = 12;
 const PORTAL_COOLDOWN_SECONDS = 0.22;
 const BINARY_PRIMARY_RADIUS = 0.44;
 const BINARY_PRIMARY_GRAVITY_STRENGTH = FIXED_SOLAR_GRAVITY_STRENGTH;
@@ -74,6 +77,7 @@ export const WORLD_DEFINITIONS = [
   { id: 'pulsars', name: 'Pulsars' },
   { id: 'dying-systems', name: 'Dying Systems' },
   { id: 'hostile-planets', name: 'Hostile Planets' },
+  { id: 'supernova', name: 'Supernova' },
 ];
 
 const CORE_LEVEL_DEFINITIONS = [
@@ -1656,6 +1660,30 @@ function makeDyingVariant(spec, specIndex) {
   return level;
 }
 
+function makeSupernovaVariant(spec, specIndex) {
+  const level = variantLevel('collapse', {
+    ...spec,
+    summary: spec.summary ?? 'The sun is swelling into a red giant. Launch before the inner worlds are swallowed.',
+  });
+  const growSeconds = spec.growSeconds ?? Math.max(8.5, DEFAULT_RED_GIANT_GROW_SECONDS - specIndex * 0.28);
+  const endRadius = spec.endRadius ?? (1.64 + specIndex * 0.12);
+  level.redGiant = {
+    startRadius: spec.startRadius ?? DEFAULT_RED_GIANT_START_RADIUS,
+    endRadius,
+    growSeconds,
+    startTimeSeconds: spec.redGiantStartTimeSeconds ?? level.startTimeSeconds ?? 0,
+  };
+  level.goalOpenSeconds = spec.goalOpenSeconds
+    ?? Math.max(6, Math.min(level.goalOpenSeconds ?? DEFAULT_GOAL_OPEN_SECONDS, growSeconds + 1.6));
+  level.planets = level.planets.map((planet, index) => ({
+    ...planet,
+    redGiantVulnerable: spec.safePlanetIndices?.includes(index) ? false : true,
+    sunFadeStartRadius: endRadius + (planet.radius ?? 0.5) * 2.25 + 0.35,
+    sunPlungeDuration: spec.sunPlungeDuration ?? 0.72,
+  }));
+  return level;
+}
+
 const ICY_WORLD_SPECS = [
   { baseId: 'first-relay', id: 'polar-relay', name: 'Polar Relay', summary: 'Land on a frozen relay, then let the ball drift around the ice before you launch again.', defaultSlideAngularSpeed: 0.8, slideAngularSpeeds: { 0: 0.72, 1: -0.82 } },
   { baseId: 'mirror-harbor', id: 'frost-gate', name: 'Frost Gate', summary: 'The two-gate relay only works if you let the icy harbor drift into the correct launch face.', defaultSlideAngularSpeed: 0.82 },
@@ -1791,6 +1819,30 @@ const DYING_WORLD_SPECS = [
   { baseId: 'final-circuit', id: 'terminal-circuit', name: 'Terminal Circuit', summary: 'The final dying system is all pressure: the circuit falls inward from the first touch to the last burn.', decayScale: 1.3, goalOpenSecondsDelta: -1 },
 ];
 
+const SUPERNOVA_WORLD_SPECS = [
+  {
+    baseId: 'first-relay',
+    id: 'red-giant-arc',
+    name: 'Red Giant Relay',
+    summary: 'The inner launch world is quickly swallowed, but the outer relay stays safe long enough for a clean escape.',
+    growSeconds: 10.8,
+    endRadius: 1.56,
+    tutorial: {
+      type: 'red-giant',
+      copy: 'The sun grows over time. Close planets are consumed.',
+    },
+  },
+  { baseId: 'shielded-arc', id: 'swelling-window', name: 'Swelling Shield', summary: 'The shield planet blocks the easy lane while the red giant steadily erases the inside shortcut.', growSeconds: 10.0, endRadius: 1.72 },
+  { baseId: 'forked-harbor', id: 'engulfed-relay', name: 'Engulfed Harbor', summary: 'Several harbor worlds survive at different ranges, but the nearest one disappears if the route stalls.', growSeconds: 9.8, endRadius: 1.86 },
+  { baseId: 'periapsis-moon', id: 'giant-swell', name: 'Moon Swell', summary: 'A moon relay keeps orbiting while the swollen star turns the periapsis touch into a short-lived option.', growSeconds: 9.4, endRadius: 1.9 },
+  { baseId: 'inner-step', id: 'burnout-step', name: 'Burnout Step', summary: 'Step outward before the red giant reaches the start planet, then leave the relay cleanly.', growSeconds: 9.2, endRadius: 1.94 },
+  { baseId: 'moon-switch', id: 'red-switch', name: 'Red Switch', summary: 'The switch route is playable only if the first touch happens before the inner system is engulfed.', growSeconds: 9.0, endRadius: 2.02 },
+  { baseId: 'false-periapsis', id: 'perihelion-flare', name: 'Perihelion Flare', summary: 'The tempting close relay is disappearing under the swelling star, so timing matters from launch.', growSeconds: 8.8, endRadius: 2.08 },
+  { baseId: 'crown-window', id: 'crown-inferno', name: 'Crown Inferno', summary: 'The crown worlds keep their rhythm while the red giant eats the inner recovery path.', growSeconds: 8.6, endRadius: 2.16 },
+  { baseId: 'counterspin-gate', id: 'counterflare-gate', name: 'Counterflare Gate', summary: 'Counterspin can still save the exit, but the star expands into the middle of the gate.', growSeconds: 8.4, endRadius: 2.22 },
+  { baseId: 'final-circuit', id: 'supernova-circuit', name: 'Supernova Circuit', summary: 'The last route is a full relay circuit raced against a red giant swallowing the close worlds.', growSeconds: 8.2, endRadius: 2.32 },
+];
+
 const EXPANSION_LEVEL_DEFINITIONS = [
   ...ICY_WORLD_SPECS.map((spec) => makeIcyVariant(spec)),
   ...PORTAL_WORLD_SPECS.map((spec) => makePortalVariant(spec)),
@@ -1801,6 +1853,7 @@ const EXPANSION_LEVEL_DEFINITIONS = [
   ...PULSAR_WORLD_SPECS.map((spec) => makePulsarVariant(spec)),
   ...DYING_WORLD_SPECS.map((spec, index) => makeDyingVariant(spec, index)),
   ...HOSTILE_WORLD_SPECS.map((spec) => makeHostileVariant(spec)),
+  ...SUPERNOVA_WORLD_SPECS.map((spec, index) => makeSupernovaVariant(spec, index)),
 ];
 
 const LEVEL_DEFINITIONS = [...CORE_LEVEL_DEFINITIONS, ...EXPANSION_LEVEL_DEFINITIONS];
@@ -1936,6 +1989,16 @@ const CAMPAIGN_LEVEL_ORDER = [
   'sentry-switch',
   'flak-gate',
   'hostile-circuit',
+  'red-giant-arc',
+  'swelling-window',
+  'engulfed-relay',
+  'giant-swell',
+  'burnout-step',
+  'red-switch',
+  'perihelion-flare',
+  'crown-inferno',
+  'counterflare-gate',
+  'supernova-circuit',
 ];
 
 const campaignOrderIndex = new Map(
@@ -2427,8 +2490,45 @@ function getOrbitState(level, planetIndex, time, cache = new Map()) {
   return state;
 }
 
+export function getRedGiantProgress(level, time = level?.time ?? 0) {
+  if (!level?.redGiant) {
+    return 0;
+  }
+
+  const startTime = level.redGiant.startTimeSeconds ?? level.startTimeSeconds ?? 0;
+  const growSeconds = Math.max(0.001, level.redGiant.growSeconds ?? DEFAULT_RED_GIANT_GROW_SECONDS);
+  return clamp((time - startTime) / growSeconds, 0, 1);
+}
+
+export function getPrimarySunCollisionRadius(level, time = level?.time ?? 0) {
+  const baseRadius = level?.primarySunBody?.collisionRadius ?? SUN_COLLISION_RADIUS;
+  if (!level?.redGiant) {
+    return baseRadius;
+  }
+
+  const startRadius = level.redGiant.startRadius ?? baseRadius;
+  const endRadius = level.redGiant.endRadius ?? DEFAULT_RED_GIANT_END_RADIUS;
+  const progress = getRedGiantProgress(level, time);
+  const ease = progress * progress * (3 - 2 * progress);
+  return startRadius + (endRadius - startRadius) * ease;
+}
+
+export function getPrimarySunVisualRadius(level, time = level?.time ?? 0) {
+  const collisionRadius = getPrimarySunCollisionRadius(level, time);
+  return Math.max(collisionRadius, level?.primarySunBody?.radius ?? SUN_COLLISION_RADIUS);
+}
+
+function getPlanetSunEngulfRadius(level, planet) {
+  if (!level?.redGiant || planet?.redGiantVulnerable === false) {
+    return planet?.fallIntoSunRadius;
+  }
+
+  return getPrimarySunCollisionRadius(level) + (planet.radius ?? 0.4) * 0.72;
+}
+
 function updatePlanetCollapseState(level, planet) {
-  if (!planet.fallIntoSunRadius) {
+  const dynamicEngulfRadius = getPlanetSunEngulfRadius(level, planet);
+  if (!dynamicEngulfRadius) {
     planet.active = true;
     planet.infallFade = 1;
     planet.collapseState = 'stable';
@@ -2437,7 +2537,7 @@ function updatePlanetCollapseState(level, planet) {
 
   const currentTime = level.time ?? 0;
   const sunDistance = distanceBetween(planet.position, level.sun);
-  const fallRadius = Math.max(0.001, planet.fallIntoSunRadius);
+  const fallRadius = Math.max(0.001, dynamicEngulfRadius);
   const fadeStartRadius = Math.max(fallRadius + 0.001, planet.sunFadeStartRadius ?? fallRadius + planet.radius * 2.2 + 0.45);
   const plungeDuration = planet.sunPlungeDuration ?? 0.82;
 
@@ -3277,7 +3377,7 @@ function resolveSunContact(level, ball, previousPosition = null) {
     return { type: 'crash', reason: 'pulsar', eventState, displayEventState: cloneBallRuntimeState(eventState) };
   }
 
-  const touchRadius = (level.primarySunBody?.collisionRadius ?? SUN_COLLISION_RADIUS) + COURSE.ballRadius * PLANET_COLLISION_PADDING;
+  const touchRadius = getPrimarySunCollisionRadius(level, ball.time ?? level.time ?? 0) + COURSE.ballRadius * PLANET_COLLISION_PADDING;
   if (distanceBetween(ball.position, level.sun) <= touchRadius) {
     const eventState = cloneBallRuntimeState(ball);
     ball.velocity.x = 0;

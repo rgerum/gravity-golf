@@ -22,6 +22,8 @@ import {
   getGoalRemainingFraction,
   getGoalRemainingTime,
   getLavaOverheatRemaining,
+  getPrimarySunVisualRadius,
+  getRedGiantProgress,
   getPlanetSplitAxis,
   getPulsarJetState,
   getPlanetSlideAngularSpeed,
@@ -1250,12 +1252,30 @@ function updateLaunchMarker() {
 
 function updateSunVisual() {
   sunGroup.position.set(state.level.sun.x, 0, state.level.sun.y);
+  const visualRadius = getPrimarySunVisualRadius(state.level, state.level.time ?? 0);
+  const redGiantProgress = getRedGiantProgress(state.level, state.level.time ?? 0);
+  const sunScale = state.level.redGiant ? visualRadius / 0.42 : 1;
+  const coreScale = sunScale;
+  sunCore.scale.setScalar(coreScale);
+  sunCore.position.y = state.level.redGiant ? visualRadius : 0.42;
+  sunGlow.scale.setScalar(state.level.redGiant ? sunScale * (1 + redGiantProgress * 0.18) : 1);
+  sunCorona.scale.setScalar(state.level.redGiant ? sunScale * (1.05 + redGiantProgress * 0.12) : 1);
+
   if (state.level.pulsarJets) {
     sunGlow.material.color.setHex(0x67dfff);
     sunCorona.material.color.setHex(0xd8f7ff);
     sunCore.material.color.setHex(0xf4fbff);
     sunCore.material.emissive.setHex(0x83dfff);
     sunCore.material.emissiveIntensity = 1.7;
+    return;
+  }
+
+  if (state.level.redGiant) {
+    sunGlow.material.color.setHex(0xff5c32);
+    sunCorona.material.color.setHex(0xff2f1f);
+    sunCore.material.color.setHex(0xff8a4a);
+    sunCore.material.emissive.setHex(0xff321c);
+    sunCore.material.emissiveIntensity = 1.45 + redGiantProgress * 0.75;
     return;
   }
 
@@ -3278,6 +3298,11 @@ function getPlanetTexture(planet) {
 state.controlShots = createControlShots(state.level);
 
 function getWindowStatusText() {
+  if (state.level.redGiant) {
+    const progress = getRedGiantProgress(state.level, state.ball.time ?? state.level.time ?? 0);
+    return `Red giant ${Math.round(progress * 100)}%`;
+  }
+
   if (isGoalLocked(state.level)) {
     return 'Goal locked';
   }
@@ -3295,6 +3320,10 @@ function getRunStatusText() {
 
   if (state.ball.crashed) {
     return 'Retry armed';
+  }
+
+  if (state.level.redGiant) {
+    return `Shot ${Math.min(getActiveStageIndex() + 1, state.controlShots.length)} · Sun expanding`;
   }
 
   const lavaPlanet = getAnchoredLavaPlanet();
@@ -3364,10 +3393,16 @@ function describeFailureHint(reason) {
   }
 
   if (reason === 'sun') {
+    if (state.level.redGiant) {
+      return `Retry ${state.level.name}. The red giant expands through the inner lane.`;
+    }
     return `Retry ${state.level.name}. Skim the well, don't drop into it.`;
   }
 
   if (reason === 'planet-consumed') {
+    if (state.level.redGiant) {
+      return `Retry ${state.level.name}. Launch before the red giant reaches the planet.`;
+    }
     return `Retry ${state.level.name}. Launch before the planet is consumed.`;
   }
 
@@ -3599,6 +3634,9 @@ function hideGameOverModal() {
 
 function getFailureTitle(reason) {
   if (reason === 'sun') {
+    if (state.level.redGiant) {
+      return 'Caught by the red giant.';
+    }
     return 'Burned in the sun.';
   }
 
@@ -5614,10 +5652,14 @@ function updateDecor(time) {
   updateLaunchMarker();
   startPad.scale.setScalar(1 + Math.sin(time * 2.7) * 0.06);
   startCore.material.opacity = 0.58 + Math.sin(time * 3.8) * 0.12;
-  sunGlow.scale.setScalar(1 + Math.sin(time * 1.2) * 0.08);
-  sunGlow.material.opacity = 0.16 + Math.sin(time * 1.6) * 0.03;
+  const sunVisualRadius = getPrimarySunVisualRadius(state.level, worldTime);
+  const redGiantProgress = getRedGiantProgress(state.level, worldTime);
+  const redGiantSunScale = state.level.redGiant ? sunVisualRadius / 0.42 : 1;
+  sunGlow.scale.setScalar(redGiantSunScale * (state.level.redGiant ? 1 + redGiantProgress * 0.18 : 1) * (1 + Math.sin(time * 1.2) * 0.08));
+  sunGlow.material.opacity = (0.16 + Math.sin(time * 1.6) * 0.03) * (state.level.redGiant ? 1.18 : 1);
   sunCorona.rotation.z = time * 0.28;
-  sunCorona.material.opacity = 0.3 + Math.sin(time * 2.1) * 0.04;
+  sunCorona.scale.setScalar(redGiantSunScale * (state.level.redGiant ? 1.05 + redGiantProgress * 0.12 : 1));
+  sunCorona.material.opacity = (0.3 + Math.sin(time * 2.1) * 0.04) * (state.level.redGiant ? 1.12 : 1);
   sunCore.rotation.y = time * 0.22;
   extraSunVisuals.forEach((visual, index) => {
     visual.group.position.set(visual.solarBody.position.x, 0, visual.solarBody.position.y);
