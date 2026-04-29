@@ -299,6 +299,9 @@ world.add(extraSunsRoot);
 const portalsRoot = new THREE.Group();
 world.add(portalsRoot);
 
+const asteroidsRoot = new THREE.Group();
+world.add(asteroidsRoot);
+
 const startPad = new THREE.Mesh(
   new THREE.RingGeometry(0.62, 0.98, 48),
   new THREE.MeshBasicMaterial({
@@ -674,6 +677,7 @@ const state = {
 let planetVisuals = [];
 let extraSunVisuals = [];
 let portalVisuals = [];
+let asteroidVisuals = [];
 let gravityFieldVisuals = null;
 let gravityFieldSamples = [];
 let physicsAccumulator = 0;
@@ -2583,6 +2587,10 @@ function describeFailureHint(reason) {
     return `Retry ${state.level.name}. Skim the well, don't drop into it.`;
   }
 
+  if (reason === 'asteroid') {
+    return `Retry ${state.level.name}. Wait for the belt gap or aim through the open lane.`;
+  }
+
   const closestLandingMiss = describeClosestLandingMiss();
   if (closestLandingMiss) {
     return `Retry ${state.level.name}. ${closestLandingMiss}`;
@@ -2811,6 +2819,10 @@ function getFailureTitle(reason) {
     return 'Drowned in a gas giant.';
   }
 
+  if (reason === 'asteroid') {
+    return 'Shattered on the belt.';
+  }
+
   return 'Lost in space.';
 }
 
@@ -3011,7 +3023,7 @@ function createGravityFieldSample(baseX, baseY, halfWidth, halfHeight, target) {
   const solarBodies = [
     {
       position: state.level.sun,
-      gravityStrength: state.level.primarySunBody?.gravityStrength ?? FIXED_SOLAR_GRAVITY_STRENGTH,
+      gravityStrength: state.level.primarySunBody?.gravityStrength ?? state.level.sunGravityStrength ?? FIXED_SOLAR_GRAVITY_STRENGTH,
     },
     ...((state.level.extraSuns ?? []).map((solarBody) => ({
       position: solarBody.position,
@@ -3284,6 +3296,52 @@ function rebuildPortals() {
     portalsRoot.add(group);
 
     return { group, aura, ring, core, portal, accentColor, ringColor };
+  });
+}
+
+function rebuildAsteroids() {
+  clearGroup(asteroidsRoot);
+  asteroidVisuals = (state.level.asteroids ?? []).map((asteroid, index) => {
+    const group = new THREE.Group();
+    const color = new THREE.Color(asteroid.color ?? 0x8f949c);
+    const glowColor = mixColors(color, new THREE.Color(0xd7e3ff), 0.22);
+    const radius = asteroid.radius ?? 0.22;
+
+    const halo = new THREE.Mesh(
+      new THREE.CircleGeometry(radius * 1.9, 18),
+      new THREE.MeshBasicMaterial({
+        color: glowColor,
+        transparent: true,
+        opacity: 0.12,
+        depthWrite: false,
+      }),
+    );
+    halo.rotation.x = -Math.PI / 2;
+    halo.position.y = 0.035;
+    group.add(halo);
+
+    const body = new THREE.Mesh(
+      new THREE.DodecahedronGeometry(radius, 0),
+      new THREE.MeshStandardMaterial({
+        color,
+        emissive: mixColors(color, new THREE.Color(0x31445a), 0.5),
+        emissiveIntensity: 0.08,
+        roughness: 0.96,
+        metalness: 0.04,
+      }),
+    );
+    body.position.y = radius * 0.72;
+    body.scale.set(
+      1 + ((index * 13) % 7) * 0.035,
+      0.72 + ((index * 11) % 5) * 0.045,
+      0.86 + ((index * 17) % 6) * 0.04,
+    );
+    body.rotation.set(index * 0.71, index * 1.13, index * 0.43);
+    group.add(body);
+
+    group.position.set(asteroid.position.x, 0, asteroid.position.y);
+    asteroidsRoot.add(group);
+    return { group, body, halo, asteroid };
   });
 }
 
@@ -3627,6 +3685,7 @@ function applyLevel(index) {
   lastGravityFieldRefreshTime = state.level.time ?? 0;
   rebuildExtraSuns();
   rebuildPortals();
+  rebuildAsteroids();
   rebuildPlanets();
 }
 
@@ -4260,7 +4319,7 @@ function updatePhysics(delta) {
 
       if (t >= 1) {
         ballGroup.visible = false;
-        showGameOverModal(state.ball.crashKind === 'sun' ? 'sun' : 'planet', state.hint, { countReset: true });
+        showGameOverModal(state.ball.crashKind === 'sun' ? 'sun' : state.ball.crashReason, state.hint, { countReset: true });
       }
       return;
     }
@@ -4272,7 +4331,7 @@ function updatePhysics(delta) {
 
     if (state.ball.transition >= 1) {
       ballGroup.visible = false;
-      showGameOverModal(state.ball.crashKind === 'planet' ? 'planet' : 'bounds', state.hint, { countReset: true });
+      showGameOverModal(state.ball.crashKind === 'planet' ? 'planet' : state.ball.crashReason, state.hint, { countReset: true });
     }
     return;
   }
@@ -4339,7 +4398,9 @@ function updatePhysics(delta) {
           ? 'Burned in the sun.'
           : result.reason === 'planet'
             ? 'Planet impact.'
-            : 'Lost in open space.';
+            : result.reason === 'asteroid'
+              ? 'Asteroid impact.'
+              : 'Lost in open space.';
     const hint = describeFailureHint(result.reason);
     beginCrash(
       message,
@@ -4348,6 +4409,8 @@ function updatePhysics(delta) {
         ? 'sun'
         : result.reason === 'planet'
           ? 'planet'
+          : result.reason === 'asteroid'
+            ? 'asteroid'
           : 'bounds',
       result.eventState ?? null,
       result.displayEventState ?? null,
@@ -4401,6 +4464,12 @@ function updateDecor(time) {
     visual.aura.scale.setScalar(1 + Math.sin(time * (2.6 + index * 0.2) + index) * 0.08);
     visual.aura.material.opacity = 0.09 + Math.sin(time * 2.2 + index) * 0.03;
     visual.ring.material.opacity = 0.72 + Math.sin(time * 3 + index) * 0.08;
+  });
+  asteroidVisuals.forEach((visual, index) => {
+    visual.group.position.set(visual.asteroid.position.x, 0, visual.asteroid.position.y);
+    visual.body.rotation.y += (visual.asteroid.spinSpeed ?? 0.24) * 0.012;
+    visual.body.rotation.x += (visual.asteroid.spinSpeed ?? 0.24) * 0.004;
+    visual.halo.material.opacity = 0.1 + Math.sin(time * 2.1 + index) * 0.025;
   });
 
   const gravityFieldRefreshDue =

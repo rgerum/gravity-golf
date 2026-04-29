@@ -134,6 +134,7 @@ function clamp(value, min, max) {
 function createMisses() {
   return {
     planet: 0,
+    asteroid: 0,
     goalClosed: 0,
     bounds: 0,
     settled: 0,
