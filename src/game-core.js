@@ -41,6 +41,12 @@ const BINARY_PRIMARY_RADIUS = 0.44;
 const BINARY_PRIMARY_GRAVITY_STRENGTH = FIXED_SOLAR_GRAVITY_STRENGTH;
 const BINARY_SECONDARY_RADIUS = 0.36;
 const BINARY_SECONDARY_GRAVITY_STRENGTH = 16;
+const DEFAULT_PULSAR_JET_PERIOD = 3.2;
+const DEFAULT_PULSAR_JET_ACTIVE_SECONDS = 0.72;
+const DEFAULT_PULSAR_JET_LENGTH = 12.2;
+const DEFAULT_PULSAR_JET_WIDTH = 0.34;
+const DEFAULT_PULSAR_JET_INNER_RADIUS = 0.5;
+const PULSAR_SEGMENT_COLLISION_SAMPLES = 8;
 
 function polar(radius, angleDeg) {
   return { radius, angleDeg };
@@ -57,6 +63,7 @@ export const WORLD_DEFINITIONS = [
   { id: 'aperture-reach', name: 'Aperture Reach' },
   { id: 'binary-crown', name: 'Binary Crown' },
   { id: 'ancient-worlds', name: 'Ancient Worlds' },
+  { id: 'pulsars', name: 'Pulsars' },
 ];
 
 const CORE_LEVEL_DEFINITIONS = [
@@ -1161,6 +1168,21 @@ const WORLD_THEMES = {
       { core: 0xf1ead6, glow: 0xffffff },
     ],
   },
+  pulsar: {
+    landable: [
+      { core: 0x6fdcff, glow: 0xbef4ff },
+      { core: 0xffc45f, glow: 0xffeda8 },
+      { core: 0xa591ff, glow: 0xdcd2ff },
+    ],
+    hazards: [
+      { core: 0xff6b93, glow: 0xffbfd0 },
+      { core: 0xff8d64, glow: 0xffd0a8 },
+      { core: 0x62b8ff, glow: 0xb7e4ff },
+    ],
+    moons: [
+      { core: 0xeaf8ff, glow: 0xffffff },
+    ],
+  },
 };
 
 function cloneLaunchPresets(launchPresets) {
@@ -1408,6 +1430,26 @@ function makeAncientVariant(spec) {
   return level;
 }
 
+function normalizePulsarJets(spec) {
+  return {
+    periodSeconds: spec.periodSeconds ?? DEFAULT_PULSAR_JET_PERIOD,
+    activeSeconds: spec.activeSeconds ?? DEFAULT_PULSAR_JET_ACTIVE_SECONDS,
+    phaseSeconds: spec.phaseSeconds ?? 0,
+    angleDeg: spec.angleDeg ?? 0,
+    angularSpeedDeg: spec.angularSpeedDeg ?? 0,
+    length: spec.length ?? DEFAULT_PULSAR_JET_LENGTH,
+    width: spec.width ?? DEFAULT_PULSAR_JET_WIDTH,
+    innerRadius: spec.innerRadius ?? DEFAULT_PULSAR_JET_INNER_RADIUS,
+  };
+}
+
+function makePulsarVariant(spec) {
+  const level = variantLevel('pulsar', spec);
+  level.summary = spec.summary;
+  level.pulsarJets = normalizePulsarJets(spec.pulsarJets ?? spec);
+  return level;
+}
+
 const ICY_WORLD_SPECS = [
   { baseId: 'first-relay', id: 'polar-relay', name: 'Polar Relay', summary: 'Land on a frozen relay, then let the ball drift around the ice before you launch again.', defaultSlideAngularSpeed: 0.8, slideAngularSpeeds: { 0: 0.72, 1: -0.82 } },
   { baseId: 'mirror-harbor', id: 'frost-gate', name: 'Frost Gate', summary: 'The two-gate relay only works if you let the icy harbor drift into the correct launch face.', defaultSlideAngularSpeed: 0.82 },
@@ -1460,11 +1502,25 @@ const ANCIENT_WORLD_SPECS = [
   { baseId: 'final-moon-circuit', id: 'unlock-circuit', name: 'Unlock Circuit', summary: 'The last circuit of the campaign first asks for a monolith landing, then a clean relay escape.', unlockPlanetIndex: 2, goalOpenSeconds: 7 },
 ];
 
+const PULSAR_WORLD_SPECS = [
+  { baseId: 'false-periapsis', id: 'pulse-arc', name: 'Pulse Relay', summary: 'The first safe answer is a relay. Use the periapsis world to wait out the paired jet before the finish.', angleDeg: -50, phaseSeconds: 0.35, periodSeconds: 3.4, activeSeconds: 0.56, width: 0.22 },
+  { baseId: 'inner-step', id: 'strobe-window', name: 'Strobe Step', summary: 'The inside launch is safe, but the finish is easier after stepping out to a relay between pulses.', angleDeg: -40, angularSpeedDeg: 2, phaseSeconds: 0.55, periodSeconds: 3.4, activeSeconds: 0.62, width: 0.28 },
+  { baseId: 'mirror-harbor', id: 'beacon-relay', name: 'Beacon Relay', summary: 'The harbor route gives you a place to wait while the beacon cuts through the direct center lane.', angleDeg: -30, phaseSeconds: 0.55, periodSeconds: 3.6, activeSeconds: 0.56, width: 0.22 },
+  { baseId: 'forked-harbor', id: 'eclipse-pulse', name: 'Forked Pulse', summary: 'Both harbors offer timing options, but the wrong exit crosses the pulsar cone as it fires.', angleDeg: 32, angularSpeedDeg: -2, phaseSeconds: 0.45, periodSeconds: 3.5, activeSeconds: 0.62, width: 0.28 },
+  { baseId: 'long-transfer', id: 'lighthouse-transfer', name: 'Lighthouse Transfer', summary: 'Use the outer station as shelter, then time the long transfer around the lighthouse beam from the sun.', angleDeg: 20, phaseSeconds: 0.85, periodSeconds: 3.8, activeSeconds: 0.6, width: 0.24 },
+  { baseId: 'moon-switch', id: 'pulse-switch', name: 'Pulse Switch', summary: 'The moon remains the switch, while the paired jets punish a lazy straight exit toward the goal.', angleDeg: 44, angularSpeedDeg: 3, phaseSeconds: 0.45, periodSeconds: 3.5, activeSeconds: 0.64, width: 0.28 },
+  { baseId: 'halo-run', id: 'crown-beacon', name: 'Beacon Halo', summary: 'The wide relay chain gives several waits; leave the halo only after the beacon burst passes.', angleDeg: -54, phaseSeconds: 0.75, periodSeconds: 3.7, activeSeconds: 0.66, width: 0.3 },
+  { baseId: 'rim-switch', id: 'guarded-pulsar', name: 'Guarded Pulsar', summary: 'The switch world is the safe staging point while the pulsar punishes the straight shortcut.', angleDeg: 30, angularSpeedDeg: -2, phaseSeconds: 0.45, periodSeconds: 3.5, activeSeconds: 0.64, width: 0.28 },
+  { baseId: 'counterspin-gate', id: 'counterpulse-gate', name: 'Counterpulse Gate', summary: 'Stabilize on the relay, then cross the counterspinning gate after the pulsar beat passes.', angleDeg: 42, phaseSeconds: 0.65, periodSeconds: 3.6, activeSeconds: 0.64, width: 0.28 },
+  { baseId: 'final-circuit', id: 'pulsar-circuit', name: 'Pulsar Circuit', summary: 'The final circuit becomes a timing run through repeated twin jets before the clean relay escape.', angleDeg: -40, angularSpeedDeg: 2, phaseSeconds: 0.65, periodSeconds: 3.5, activeSeconds: 0.58, width: 0.24 },
+];
+
 const EXPANSION_LEVEL_DEFINITIONS = [
   ...ICY_WORLD_SPECS.map((spec) => makeIcyVariant(spec)),
   ...PORTAL_WORLD_SPECS.map((spec) => makePortalVariant(spec)),
   ...BINARY_WORLD_SPECS.map((spec) => makeBinaryVariant(spec)),
   ...ANCIENT_WORLD_SPECS.map((spec) => makeAncientVariant(spec)),
+  ...PULSAR_WORLD_SPECS.map((spec) => makePulsarVariant(spec)),
 ];
 
 const LEVEL_DEFINITIONS = [...CORE_LEVEL_DEFINITIONS, ...EXPANSION_LEVEL_DEFINITIONS];
@@ -1550,6 +1606,16 @@ const CAMPAIGN_LEVEL_ORDER = [
   'sealed-lattice',
   'shepherd-shrine',
   'unlock-circuit',
+  'pulse-arc',
+  'strobe-window',
+  'beacon-relay',
+  'eclipse-pulse',
+  'lighthouse-transfer',
+  'pulse-switch',
+  'crown-beacon',
+  'guarded-pulsar',
+  'counterpulse-gate',
+  'pulsar-circuit',
 ];
 
 const campaignOrderIndex = new Map(
@@ -2137,6 +2203,80 @@ export function getPlanetSurfaceVelocity(level, planetIndex, anchorNormal, ball 
   return vec(tangent.x * speed, tangent.y * speed);
 }
 
+export function getPulsarJetState(level, time = level.time ?? 0) {
+  const jets = level?.pulsarJets;
+  if (!jets) {
+    return null;
+  }
+
+  const periodSeconds = Math.max(0.2, jets.periodSeconds ?? DEFAULT_PULSAR_JET_PERIOD);
+  const activeSeconds = clamp(jets.activeSeconds ?? DEFAULT_PULSAR_JET_ACTIVE_SECONDS, 0, periodSeconds);
+  const phaseTime = ((time - (jets.phaseSeconds ?? 0)) % periodSeconds + periodSeconds) % periodSeconds;
+  const active = phaseTime <= activeSeconds;
+  const activity = activeSeconds > 0
+    ? clamp(1 - Math.abs((phaseTime / activeSeconds) * 2 - 1), 0, 1)
+    : 0;
+  const angleRad = ((jets.angleDeg ?? 0) + (jets.angularSpeedDeg ?? 0) * time) * Math.PI / 180;
+  const direction = vec(Math.cos(angleRad), Math.sin(angleRad));
+
+  return {
+    active,
+    activity,
+    phaseTime,
+    periodSeconds,
+    activeSeconds,
+    direction,
+    length: jets.length ?? DEFAULT_PULSAR_JET_LENGTH,
+    width: jets.width ?? DEFAULT_PULSAR_JET_WIDTH,
+    innerRadius: jets.innerRadius ?? DEFAULT_PULSAR_JET_INNER_RADIUS,
+  };
+}
+
+export function isPointInPulsarJets(level, point, time = level.time ?? 0) {
+  const state = getPulsarJetState(level, time);
+  if (!state?.active) {
+    return false;
+  }
+
+  const fromSun = vec(point.x - level.sun.x, point.y - level.sun.y);
+  const alongAxis = fromSun.x * state.direction.x + fromSun.y * state.direction.y;
+  const radialDistance = Math.abs(alongAxis);
+  if (radialDistance < state.innerRadius || radialDistance > state.length) {
+    return false;
+  }
+
+  const perpendicularDistance = Math.abs(fromSun.x * -state.direction.y + fromSun.y * state.direction.x);
+  const coneProgress = clamp((radialDistance - state.innerRadius) / Math.max(0.001, state.length - state.innerRadius), 0, 1);
+  const coneHalfWidth = state.width * (0.45 + coneProgress * 1.2);
+  return perpendicularDistance <= coneHalfWidth + COURSE.ballRadius * 0.78;
+}
+
+function isSegmentInPulsarJets(level, fromPoint, toPoint, time = level.time ?? 0) {
+  if (!fromPoint) {
+    return isPointInPulsarJets(level, toPoint, time);
+  }
+
+  const distance = distanceBetween(fromPoint, toPoint);
+  const samples = Math.max(
+    2,
+    Math.ceil(distance / Math.max(0.08, COURSE.ballRadius * 0.42)),
+    PULSAR_SEGMENT_COLLISION_SAMPLES,
+  );
+
+  for (let sampleIndex = 0; sampleIndex <= samples; sampleIndex += 1) {
+    const t = sampleIndex / samples;
+    const samplePoint = vec(
+      fromPoint.x + (toPoint.x - fromPoint.x) * t,
+      fromPoint.y + (toPoint.y - fromPoint.y) * t,
+    );
+    if (isPointInPulsarJets(level, samplePoint, time)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function cloneBallRuntimeState(ball) {
   return {
     position: cloneVec(ball.position),
@@ -2437,7 +2577,14 @@ function resolvePlanetContact(level, ball) {
   return null;
 }
 
-function resolveSunContact(level, ball) {
+function resolveSunContact(level, ball, previousPosition = null) {
+  if (isSegmentInPulsarJets(level, previousPosition, ball.position, ball.time ?? level.time ?? 0)) {
+    const eventState = cloneBallRuntimeState(ball);
+    ball.velocity.x = 0;
+    ball.velocity.y = 0;
+    return { type: 'crash', reason: 'pulsar', eventState, displayEventState: cloneBallRuntimeState(eventState) };
+  }
+
   const touchRadius = (level.primarySunBody?.collisionRadius ?? SUN_COLLISION_RADIUS) + COURSE.ballRadius * PLANET_COLLISION_PADDING;
   if (distanceBetween(ball.position, level.sun) <= touchRadius) {
     const eventState = cloneBallRuntimeState(ball);
@@ -2606,6 +2753,7 @@ export function stepBall(level, ball, delta) {
     return { type: 'goal', eventState, displayEventState: cloneBallRuntimeState(eventState) };
   }
 
+  const previousPosition = cloneVec(ball.position);
   addScaledVec(ball.position, ball.velocity, delta);
 
   const portalEvent = resolvePortalContact(level, ball);
@@ -2618,7 +2766,7 @@ export function stepBall(level, ball, delta) {
     return { type: 'goal', eventState, displayEventState: cloneBallRuntimeState(eventState), portalEvent };
   }
 
-  const sunContactResult = resolveSunContact(level, ball);
+  const sunContactResult = resolveSunContact(level, ball, portalEvent ? null : previousPosition);
   if (sunContactResult) {
     sunContactResult.portalEvent = portalEvent;
     return sunContactResult;

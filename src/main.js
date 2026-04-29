@@ -18,9 +18,11 @@ import {
   getBallSurfaceRadius,
   getGoalRemainingFraction,
   getGoalRemainingTime,
+  getPulsarJetState,
   getPlanetSlideAngularSpeed,
   getPlanetVelocity,
   getPlanetSurfaceVelocity,
+  isPointInPulsarJets,
   isGoalLocked,
   isGoalOpen,
   length,
@@ -255,6 +257,9 @@ world.add(gravityFieldRoot);
 const sunGroup = new THREE.Group();
 world.add(sunGroup);
 
+const pulsarJetsRoot = new THREE.Group();
+world.add(pulsarJetsRoot);
+
 const sunGlow = new THREE.Mesh(
   new THREE.CircleGeometry(1.35, 56),
   new THREE.MeshBasicMaterial({
@@ -292,6 +297,88 @@ const sunCore = new THREE.Mesh(
 );
 sunCore.position.y = 0.42;
 sunGroup.add(sunCore);
+
+function createPulsarCone(widthScale, opacity, color) {
+  const cone = new THREE.Mesh(
+    new THREE.ShapeGeometry(new THREE.Shape()),
+    new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    }),
+  );
+  cone.rotation.x = -Math.PI / 2;
+  cone.position.y = 0.13;
+  cone.renderOrder = 9;
+  cone.userData.widthScale = widthScale;
+  cone.userData.baseOpacity = opacity;
+  return cone;
+}
+
+const pulsarConePreviewA = createPulsarCone(2.1, 0.16, 0x54cfff);
+const pulsarConePreviewB = createPulsarCone(2.1, 0.16, 0x54cfff);
+const pulsarConeGlowA = createPulsarCone(3.2, 0.18, 0x67dfff);
+const pulsarConeGlowB = createPulsarCone(3.2, 0.18, 0x67dfff);
+const pulsarConeCoreA = createPulsarCone(0.86, 0.78, 0xf3fbff);
+const pulsarConeCoreB = createPulsarCone(0.86, 0.78, 0xf3fbff);
+pulsarJetsRoot.add(
+  pulsarConePreviewA,
+  pulsarConePreviewB,
+  pulsarConeGlowA,
+  pulsarConeGlowB,
+  pulsarConeCoreA,
+  pulsarConeCoreB,
+);
+
+const pulsarTimerTrack = new THREE.Mesh(
+  new THREE.RingGeometry(1.24, 1.38, 96),
+  new THREE.MeshBasicMaterial({
+    color: 0x1d5168,
+    transparent: true,
+    opacity: 0.42,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  }),
+);
+pulsarTimerTrack.rotation.x = -Math.PI / 2;
+pulsarTimerTrack.position.y = 0.12;
+pulsarTimerTrack.renderOrder = 8;
+pulsarJetsRoot.add(pulsarTimerTrack);
+
+const pulsarTimerArc = new THREE.Mesh(
+  new THREE.RingGeometry(1.24, 1.38, 96, 1, Math.PI / 2, 0.0001),
+  new THREE.MeshBasicMaterial({
+    color: 0xaaf8ff,
+    transparent: true,
+    opacity: 0.94,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  }),
+);
+pulsarTimerArc.rotation.x = -Math.PI / 2;
+pulsarTimerArc.position.y = 0.135;
+pulsarTimerArc.renderOrder = 9;
+pulsarJetsRoot.add(pulsarTimerArc);
+
+const pulsarWarningRing = new THREE.Mesh(
+  new THREE.RingGeometry(0.82, 1.12, 72),
+  new THREE.MeshBasicMaterial({
+    color: 0x77e6ff,
+    transparent: true,
+    opacity: 0,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  }),
+);
+pulsarWarningRing.rotation.x = -Math.PI / 2;
+pulsarWarningRing.position.y = 0.115;
+pulsarWarningRing.renderOrder = 8;
+pulsarJetsRoot.add(pulsarWarningRing);
 
 const extraSunsRoot = new THREE.Group();
 world.add(extraSunsRoot);
@@ -837,6 +924,87 @@ function updateLaunchMarker() {
 
 function updateSunVisual() {
   sunGroup.position.set(state.level.sun.x, 0, state.level.sun.y);
+  if (state.level.pulsarJets) {
+    sunGlow.material.color.setHex(0x67dfff);
+    sunCorona.material.color.setHex(0xd8f7ff);
+    sunCore.material.color.setHex(0xf4fbff);
+    sunCore.material.emissive.setHex(0x83dfff);
+    sunCore.material.emissiveIntensity = 1.7;
+    return;
+  }
+
+  sunGlow.material.color.setHex(0xffcf70);
+  sunCorona.material.color.setHex(0xffa54f);
+  sunCore.material.color.setHex(0xffdd8f);
+  sunCore.material.emissive.setHex(0xffb347);
+  sunCore.material.emissiveIntensity = 1.2;
+}
+
+function createPulsarConeGeometry(sign, jetState, widthScale = 1) {
+  const length = Math.max(jetState.innerRadius + 0.1, jetState.length);
+  const innerHalfWidth = jetState.width * 0.45 * widthScale;
+  const outerHalfWidth = jetState.width * 1.65 * widthScale;
+  const shape = new THREE.Shape();
+  shape.moveTo(sign * jetState.innerRadius, -innerHalfWidth);
+  shape.lineTo(sign * length, -outerHalfWidth);
+  shape.lineTo(sign * length, outerHalfWidth);
+  shape.lineTo(sign * jetState.innerRadius, innerHalfWidth);
+  shape.closePath();
+  return new THREE.ShapeGeometry(shape);
+}
+
+function layoutPulsarCone(cone, sign, jetState) {
+  replaceMeshGeometry(cone, createPulsarConeGeometry(sign, jetState, cone.userData.widthScale));
+}
+
+function updatePulsarJets(time) {
+  const jetState = getPulsarJetState(state.level, state.level.time ?? 0);
+  pulsarJetsRoot.visible = Boolean(jetState);
+  if (!jetState) {
+    return;
+  }
+
+  const angle = Math.atan2(jetState.direction.y, jetState.direction.x);
+  const pulse = jetState.active ? (0.42 + jetState.activity * 0.58) : 0;
+  const timerProgress = jetState.active
+    ? 1
+    : clamp(
+      (jetState.phaseTime - jetState.activeSeconds) / Math.max(0.001, jetState.periodSeconds - jetState.activeSeconds),
+      0,
+      1,
+    );
+  const warning = jetState.active ? 1 : timerProgress;
+
+  pulsarJetsRoot.position.set(state.level.sun.x, 0, state.level.sun.y);
+  pulsarJetsRoot.rotation.y = -angle;
+  layoutPulsarCone(pulsarConePreviewA, 1, jetState);
+  layoutPulsarCone(pulsarConePreviewB, -1, jetState);
+  layoutPulsarCone(pulsarConeGlowA, 1, jetState);
+  layoutPulsarCone(pulsarConeGlowB, -1, jetState);
+  layoutPulsarCone(pulsarConeCoreA, 1, jetState);
+  layoutPulsarCone(pulsarConeCoreB, -1, jetState);
+
+  for (const cone of [pulsarConePreviewA, pulsarConePreviewB]) {
+    cone.visible = true;
+    cone.material.opacity = cone.userData.baseOpacity * (0.55 + warning * 0.45);
+  }
+
+  for (const cone of [pulsarConeGlowA, pulsarConeGlowB, pulsarConeCoreA, pulsarConeCoreB]) {
+    cone.visible = jetState.active;
+    cone.material.opacity = cone.userData.baseOpacity * pulse;
+  }
+
+  replaceMeshGeometry(
+    pulsarTimerArc,
+    new THREE.RingGeometry(1.24, 1.38, 96, 1, Math.PI / 2, Math.max(0.0001, Math.PI * 2 * timerProgress)),
+  );
+  pulsarTimerArc.visible = timerProgress > 0.001;
+  pulsarTimerArc.material.color.setHex(jetState.active ? 0xffffff : 0xaaf8ff);
+  pulsarTimerArc.material.opacity = jetState.active ? 1 : 0.72 + timerProgress * 0.24;
+  pulsarTimerTrack.material.opacity = 0.28 + warning * 0.24;
+  pulsarWarningRing.material.opacity = 0.1 + warning * 0.38;
+  pulsarWarningRing.scale.setScalar(0.94 + warning * 0.18 + Math.sin(time * 6.4) * 0.025);
+  pulsarWarningRing.rotation.z = time * 1.8;
 }
 
 function formatDistance(value) {
@@ -2579,6 +2747,10 @@ function describeFailureHint(reason) {
     return `Retry ${state.level.name}. Late by ${lateBy.toFixed(1)}s with ${formatDistance(goalClearance)} to spare.`;
   }
 
+  if (reason === 'pulsar') {
+    return `Retry ${state.level.name}. Time the crossing between the paired jets.`;
+  }
+
   if (reason === 'sun') {
     return `Retry ${state.level.name}. Skim the well, don't drop into it.`;
   }
@@ -2803,6 +2975,10 @@ function getFailureTitle(reason) {
     return 'Burned in the sun.';
   }
 
+  if (reason === 'pulsar') {
+    return 'Caught in the pulsar jet.';
+  }
+
   if (reason === 'goal-closed') {
     return 'Black hole closed.';
   }
@@ -2812,6 +2988,17 @@ function getFailureTitle(reason) {
   }
 
   return 'Lost in space.';
+}
+
+function beginPulsarCrash() {
+  beginCrash(
+    'Caught in the pulsar jet.',
+    describeFailureHint('pulsar'),
+    'pulsar',
+    null,
+    null,
+    null,
+  );
 }
 
 function showGameOverModal(reason, hint, options = {}) {
@@ -3778,7 +3965,7 @@ function beginCrash(
   ) ? state.level.planets[crashPlanetIndex] : null;
   setVec(
     state.ball.crashTargetPosition,
-    state.ball.crashKind === 'sun'
+    state.ball.crashKind === 'sun' || state.ball.crashKind === 'pulsar'
       ? state.level.sun
       : crashPlanet
         ? crashPlanet.position
@@ -4225,8 +4412,9 @@ function updatePhysics(delta) {
   }
 
   if (state.ball.crashed) {
-    if (state.ball.crashKind === 'sun' || state.ball.crashKind === 'planet') {
-      state.ball.transition += delta * (state.ball.crashKind === 'sun' ? 4.8 : 4.3);
+    if (state.ball.crashKind === 'sun' || state.ball.crashKind === 'pulsar' || state.ball.crashKind === 'planet') {
+      const solarCrash = state.ball.crashKind === 'sun' || state.ball.crashKind === 'pulsar';
+      state.ball.transition += delta * (solarCrash ? 4.8 : 4.3);
       const t = Math.min(1, state.ball.transition);
       state.ball.position.x = THREE.MathUtils.lerp(
         state.ball.crashStartPosition.x,
@@ -4241,14 +4429,14 @@ function updatePhysics(delta) {
       updateBallTransforms();
       ballMesh.position.y = THREE.MathUtils.lerp(
         ballRestY,
-        state.ball.crashKind === 'sun' ? -0.18 : -0.12,
+        solarCrash ? -0.18 : -0.12,
         t,
       );
       ballGroup.scale.setScalar(
-        Math.max(0.04, 1 - t * (state.ball.crashKind === 'sun' ? 0.94 : 0.88)),
+        Math.max(0.04, 1 - t * (solarCrash ? 0.94 : 0.88)),
       );
       ballShadow.material.opacity = 0.28 * (1 - t);
-      if (state.ball.crashKind === 'sun') {
+      if (solarCrash) {
         ballMesh.material.color.copy(palette.ball).lerp(palette.band, Math.min(1, t * 1.1));
         ballMesh.material.emissive.copy(palette.band);
         ballMesh.material.emissiveIntensity = THREE.MathUtils.lerp(0, 2.4, t);
@@ -4260,7 +4448,7 @@ function updatePhysics(delta) {
 
       if (t >= 1) {
         ballGroup.visible = false;
-        showGameOverModal(state.ball.crashKind === 'sun' ? 'sun' : 'planet', state.hint, { countReset: true });
+        showGameOverModal(solarCrash ? state.ball.crashKind : 'planet', state.hint, { countReset: true });
       }
       return;
     }
@@ -4293,6 +4481,10 @@ function updatePhysics(delta) {
         setLevelTime(state.level, nextTime);
         state.ball.time = nextTime;
         advanceBallAnchor(state.level, state.ball, appliedDelta);
+      }
+      if (isPointInPulsarJets(state.level, state.ball.position, state.ball.time ?? state.level.time ?? 0)) {
+        beginPulsarCrash();
+        return;
       }
       if (maybeLaunchAdminReplayShot()) {
         return;
@@ -4337,6 +4529,8 @@ function updatePhysics(delta) {
         ? 'Event horizon collapsed.'
         : result.reason === 'sun'
           ? 'Burned in the sun.'
+          : result.reason === 'pulsar'
+            ? 'Caught in the pulsar jet.'
           : result.reason === 'planet'
             ? 'Planet impact.'
             : 'Lost in open space.';
@@ -4344,8 +4538,8 @@ function updatePhysics(delta) {
     beginCrash(
       message,
       hint,
-      result.reason === 'sun'
-        ? 'sun'
+      result.reason === 'sun' || result.reason === 'pulsar'
+        ? result.reason
         : result.reason === 'planet'
           ? 'planet'
           : 'bounds',
@@ -4379,6 +4573,7 @@ function updateDecor(time) {
   windowStatusPill.textContent = getWindowStatusText();
   windowStatusPill.classList.toggle('is-hot', goalTimeLeft < 2.5);
   updateSunVisual();
+  updatePulsarJets(time);
   updateLaunchMarker();
   startPad.scale.setScalar(1 + Math.sin(time * 2.7) * 0.06);
   startCore.material.opacity = 0.58 + Math.sin(time * 3.8) * 0.12;
