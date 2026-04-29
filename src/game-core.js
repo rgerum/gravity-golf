@@ -1395,6 +1395,55 @@ function makeBinaryVariant(spec) {
     }
     return { ...planet, orbitAnchor: 'system-center' };
   });
+
+  const primarySunPoint = pointFromPolar(level.binarySystem.primarySun.position);
+  const secondarySunPoint = pointFromPolar(level.binarySystem.secondarySun.position);
+  const outerSunReach = Math.max(
+    level.binarySystem.primarySun.position.radius + (level.binarySystem.primarySun.collisionRadius ?? BINARY_PRIMARY_RADIUS),
+    level.binarySystem.secondarySun.position.radius + (level.binarySystem.secondarySun.collisionRadius ?? BINARY_SECONDARY_RADIUS),
+  );
+  const clearancePadding = 0.48;
+  let previousRadius = 0;
+
+  level.planets = level.planets.map((planet) => {
+    const nextPlanet = { ...planet };
+    let point = pointFromPolar(nextPlanet.position);
+    const radiusPadding = nextPlanet.radius + clearancePadding;
+
+    if (nextPlanet.orbitAnchor === 'system-center') {
+      const minRadius = outerSunReach + radiusPadding;
+      const pointRadius = length(point);
+      if (pointRadius < minRadius) {
+        const direction = pointRadius > 0.000001 ? normalize(point) : vec(1, 0);
+        point = vec(direction.x * minRadius, direction.y * minRadius);
+      }
+    } else {
+      const anchorPoint = nextPlanet.orbitAnchor === 'primary-sun' ? primarySunPoint : secondarySunPoint;
+      const anchorRadius = nextPlanet.orbitAnchor === 'primary-sun'
+        ? (level.binarySystem.primarySun.collisionRadius ?? BINARY_PRIMARY_RADIUS)
+        : (level.binarySystem.secondarySun.collisionRadius ?? BINARY_SECONDARY_RADIUS);
+      let relative = vec(point.x - anchorPoint.x, point.y - anchorPoint.y);
+      const relativeLength = length(relative);
+      const minRelativeLength = anchorRadius + radiusPadding;
+      if (relativeLength < minRelativeLength) {
+        const direction = relativeLength > 0.000001 ? normalize(relative) : normalize(vec(point.x, point.y));
+        relative = vec(direction.x * minRelativeLength, direction.y * minRelativeLength);
+        point = vec(anchorPoint.x + relative.x, anchorPoint.y + relative.y);
+      }
+    }
+
+    const pointRadius = length(point);
+    if (pointRadius < previousRadius + 0.02) {
+      const direction = pointRadius > 0.000001 ? normalize(point) : vec(1, 0);
+      const pushedRadius = previousRadius + 0.02;
+      point = vec(direction.x * pushedRadius, direction.y * pushedRadius);
+    }
+
+    previousRadius = length(point);
+    nextPlanet.position = polarFromPoint(point);
+    return nextPlanet;
+  });
+
   return level;
 }
 
@@ -1402,6 +1451,7 @@ function makeAncientVariant(spec) {
   const level = variantLevel('ancient', spec);
   level.goalUnlockRequired = true;
   level.goalOpenSeconds = spec.goalOpenSeconds ?? level.goalOpenSeconds;
+  level.tutorial = spec.tutorial ?? null;
   level.planets = level.planets.map((planet, index) => ({
     ...planet,
     goalUnlock: index === spec.unlockPlanetIndex,
@@ -1471,7 +1521,18 @@ const BINARY_WORLD_SPECS = [
 ];
 
 const ANCIENT_WORLD_SPECS = [
-  { baseId: 'twin-shepherds', id: 'monolith-wardens', name: 'Monolith Wardens', summary: 'Touch the ancient monolith first. Only then will the black hole awaken between the wardens.', unlockPlanetIndex: 1, goalOpenSeconds: 9 },
+  {
+    baseId: 'first-relay',
+    id: 'monolith-wardens',
+    name: 'First Monolith',
+    summary: 'Land on the golden monolith world first. That awakens the black hole for your second shot.',
+    unlockPlanetIndex: 1,
+    goalOpenSeconds: 9,
+    tutorial: {
+      type: 'monolith',
+      copy: 'Touch the golden planet to open the black hole.',
+    },
+  },
   { baseId: 'periapsis-brood', id: 'altar-brood', name: 'Altar Brood', summary: 'The brood guards the altar world; land there to open the finish before the timer begins.', unlockPlanetIndex: 1, goalOpenSeconds: 8 },
   { baseId: 'far-side-switch', id: 'far-altar-switch', name: 'Far Altar Switch', summary: 'The far-side opening only matters after the monolith world has lit the goal.', unlockPlanetIndex: 2, goalOpenSeconds: 8 },
   { baseId: 'halo-shepherds', id: 'halo-monolith', name: 'Halo Monolith', summary: 'The halo route starts locked. Reach the monolith planet, then sprint the outer seam.', unlockPlanetIndex: 1, goalOpenSeconds: 8 },
@@ -1682,6 +1743,13 @@ function scalePointFromSun(point, sun, scale = SYSTEM_LAYOUT_SCALE) {
 function pointFromPolar(position) {
   const direction = directionFromAngleDeg(position.angleDeg ?? 0);
   return vec(direction.x * position.radius, direction.y * position.radius);
+}
+
+function polarFromPoint(point) {
+  return {
+    radius: length(point),
+    angleDeg: Math.atan2(point.y, point.x) * 180 / Math.PI,
+  };
 }
 
 function angleDegBetween(from, to) {
@@ -2080,50 +2148,53 @@ export function setLevelTime(level, time) {
 }
 
 export function getGoalCloseTime(level) {
-  if (GOAL_ALWAYS_OPEN) {
-    return Number.POSITIVE_INFINITY;
-  }
   if (level.goalUnlockRequired) {
     if (!level.goalUnlocked || !Number.isFinite(level.goalUnlockTime)) {
       return Number.POSITIVE_INFINITY;
     }
+    if (GOAL_ALWAYS_OPEN) {
+      return Number.POSITIVE_INFINITY;
+    }
     return level.goalUnlockTime + (level.goalOpenSeconds ?? DEFAULT_GOAL_OPEN_SECONDS);
+  }
+  if (GOAL_ALWAYS_OPEN) {
+    return Number.POSITIVE_INFINITY;
   }
   return (level.startTimeSeconds ?? 0) + (level.goalOpenSeconds ?? DEFAULT_GOAL_OPEN_SECONDS);
 }
 
 export function getGoalRemainingTime(level, time = level.time ?? 0) {
-  if (GOAL_ALWAYS_OPEN) {
-    return Number.POSITIVE_INFINITY;
-  }
   if (level.goalUnlockRequired && !level.goalUnlocked) {
     return level.goalOpenSeconds ?? DEFAULT_GOAL_OPEN_SECONDS;
+  }
+  if (GOAL_ALWAYS_OPEN) {
+    return Number.POSITIVE_INFINITY;
   }
   return Math.max(0, getGoalCloseTime(level) - time);
 }
 
 export function getGoalRemainingFraction(level, time = level.time ?? 0) {
+  if (level.goalUnlockRequired && !level.goalUnlocked) {
+    return 0;
+  }
   if (GOAL_ALWAYS_OPEN) {
-    return 1;
+    return Number.POSITIVE_INFINITY;
   }
   const duration = Math.max(0.001, level.goalOpenSeconds ?? DEFAULT_GOAL_OPEN_SECONDS);
   return clamp(getGoalRemainingTime(level, time) / duration, 0, 1);
 }
 
 export function isGoalOpen(level, time = level.time ?? 0) {
-  if (GOAL_ALWAYS_OPEN) {
-    return true;
-  }
   if (level.goalUnlockRequired && !level.goalUnlocked) {
     return false;
+  }
+  if (GOAL_ALWAYS_OPEN) {
+    return true;
   }
   return getGoalRemainingTime(level, time) > 0.000001;
 }
 
 export function isGoalLocked(level) {
-  if (GOAL_ALWAYS_OPEN) {
-    return false;
-  }
   return Boolean(level.goalUnlockRequired && !level.goalUnlocked);
 }
 
@@ -2519,7 +2590,13 @@ function resolveSunContact(level, ball) {
     const eventState = cloneBallRuntimeState(ball);
     ball.velocity.x = 0;
     ball.velocity.y = 0;
-    return { type: 'crash', reason: 'sun', eventState, displayEventState: cloneBallRuntimeState(eventState) };
+    return {
+      type: 'crash',
+      reason: 'sun',
+      eventState,
+      displayEventState: cloneBallRuntimeState(eventState),
+      crashTargetPosition: cloneVec(level.sun),
+    };
   }
 
   for (const solarBody of level.extraSuns ?? []) {
@@ -2528,7 +2605,13 @@ function resolveSunContact(level, ball) {
       const eventState = cloneBallRuntimeState(ball);
       ball.velocity.x = 0;
       ball.velocity.y = 0;
-      return { type: 'crash', reason: 'sun', eventState, displayEventState: cloneBallRuntimeState(eventState) };
+      return {
+        type: 'crash',
+        reason: 'sun',
+        eventState,
+        displayEventState: cloneBallRuntimeState(eventState),
+        crashTargetPosition: cloneVec(solarBody.position),
+      };
     }
   }
 
