@@ -19,6 +19,10 @@ const GOAL_CAPTURE_RATIO = 0.95;
 const PLANET_COLLISION_PADDING = 0.92;
 const PLANET_LANDING_PADDING = 0.03;
 const ICE_PLANET_LANDING_PADDING = -0.01;
+const LAVA_DEFAULT_SAFE_SECONDS = 2.6;
+const BALL_HEAT_MAX = 1;
+const BALL_HEAT_COOL_RATE_FLIGHT = 0.72;
+const BALL_HEAT_COOL_RATE_ANCHORED = 0.38;
 const PLANET_RADIUS_SCALE = 0.5;
 const SUN_COLLISION_RADIUS = 0.42;
 export const SOLAR_GRAVITY_MULTIPLIER = 5;
@@ -41,6 +45,12 @@ const BINARY_PRIMARY_RADIUS = 0.44;
 const BINARY_PRIMARY_GRAVITY_STRENGTH = FIXED_SOLAR_GRAVITY_STRENGTH;
 const BINARY_SECONDARY_RADIUS = 0.36;
 const BINARY_SECONDARY_GRAVITY_STRENGTH = 16;
+const DEFAULT_PULSAR_JET_PERIOD = 3.2;
+const DEFAULT_PULSAR_JET_ACTIVE_SECONDS = 0.72;
+const DEFAULT_PULSAR_JET_LENGTH = 12.2;
+const DEFAULT_PULSAR_JET_WIDTH = 0.34;
+const DEFAULT_PULSAR_JET_INNER_RADIUS = 0.5;
+const PULSAR_SEGMENT_COLLISION_SAMPLES = 8;
 
 function polar(radius, angleDeg) {
   return { radius, angleDeg };
@@ -57,6 +67,9 @@ export const WORLD_DEFINITIONS = [
   { id: 'aperture-reach', name: 'Aperture Reach' },
   { id: 'binary-crown', name: 'Binary Crown' },
   { id: 'ancient-worlds', name: 'Ancient Worlds' },
+  { id: 'split-worlds', name: 'Split Worlds' },
+  { id: 'lava-reach', name: 'Lava Reach' },
+  { id: 'pulsars', name: 'Pulsars' },
 ];
 
 const CORE_LEVEL_DEFINITIONS = [
@@ -1161,6 +1174,21 @@ const WORLD_THEMES = {
       { core: 0xf1ead6, glow: 0xffffff },
     ],
   },
+  pulsar: {
+    landable: [
+      { core: 0x6fdcff, glow: 0xbef4ff },
+      { core: 0xffc45f, glow: 0xffeda8 },
+      { core: 0xa591ff, glow: 0xdcd2ff },
+    ],
+    hazards: [
+      { core: 0xff6b93, glow: 0xffbfd0 },
+      { core: 0xff8d64, glow: 0xffd0a8 },
+      { core: 0x62b8ff, glow: 0xb7e4ff },
+    ],
+    moons: [
+      { core: 0xeaf8ff, glow: 0xffffff },
+    ],
+  },
 };
 
 function cloneLaunchPresets(launchPresets) {
@@ -1317,6 +1345,26 @@ function makeIcyVariant(spec) {
   return level;
 }
 
+function makeLavaVariant(spec) {
+  const level = variantLevel('ember', spec);
+  level.planets = level.planets.map((planet, index) => {
+    if (!planet.landable) {
+      return planet;
+    }
+
+    const lavaSafeSeconds = typeof spec.lavaSafeSeconds === 'number'
+      ? spec.lavaSafeSeconds
+      : spec.lavaSafeSeconds?.[index];
+
+    return {
+      ...planet,
+      surfaceType: 'lava',
+      lavaSafeSeconds: lavaSafeSeconds ?? LAVA_DEFAULT_SAFE_SECONDS,
+    };
+  });
+  return level;
+}
+
 function makePortalVariant(spec) {
   const level = variantLevel('prism', spec);
   const pairSeed = spec.id;
@@ -1394,6 +1442,55 @@ function makeBinaryVariant(spec) {
     }
     return { ...planet, orbitAnchor: 'system-center' };
   });
+
+  const primarySunPoint = pointFromPolar(level.binarySystem.primarySun.position);
+  const secondarySunPoint = pointFromPolar(level.binarySystem.secondarySun.position);
+  const outerSunReach = Math.max(
+    level.binarySystem.primarySun.position.radius + (level.binarySystem.primarySun.collisionRadius ?? BINARY_PRIMARY_RADIUS),
+    level.binarySystem.secondarySun.position.radius + (level.binarySystem.secondarySun.collisionRadius ?? BINARY_SECONDARY_RADIUS),
+  );
+  const clearancePadding = 0.48;
+  let previousRadius = 0;
+
+  level.planets = level.planets.map((planet) => {
+    const nextPlanet = { ...planet };
+    let point = pointFromPolar(nextPlanet.position);
+    const radiusPadding = nextPlanet.radius + clearancePadding;
+
+    if (nextPlanet.orbitAnchor === 'system-center') {
+      const minRadius = outerSunReach + radiusPadding;
+      const pointRadius = length(point);
+      if (pointRadius < minRadius) {
+        const direction = pointRadius > 0.000001 ? normalize(point) : vec(1, 0);
+        point = vec(direction.x * minRadius, direction.y * minRadius);
+      }
+    } else {
+      const anchorPoint = nextPlanet.orbitAnchor === 'primary-sun' ? primarySunPoint : secondarySunPoint;
+      const anchorRadius = nextPlanet.orbitAnchor === 'primary-sun'
+        ? (level.binarySystem.primarySun.collisionRadius ?? BINARY_PRIMARY_RADIUS)
+        : (level.binarySystem.secondarySun.collisionRadius ?? BINARY_SECONDARY_RADIUS);
+      let relative = vec(point.x - anchorPoint.x, point.y - anchorPoint.y);
+      const relativeLength = length(relative);
+      const minRelativeLength = anchorRadius + radiusPadding;
+      if (relativeLength < minRelativeLength) {
+        const direction = relativeLength > 0.000001 ? normalize(relative) : normalize(vec(point.x, point.y));
+        relative = vec(direction.x * minRelativeLength, direction.y * minRelativeLength);
+        point = vec(anchorPoint.x + relative.x, anchorPoint.y + relative.y);
+      }
+    }
+
+    const pointRadius = length(point);
+    if (pointRadius < previousRadius + 0.02) {
+      const direction = pointRadius > 0.000001 ? normalize(point) : vec(1, 0);
+      const pushedRadius = previousRadius + 0.02;
+      point = vec(direction.x * pushedRadius, direction.y * pushedRadius);
+    }
+
+    previousRadius = length(point);
+    nextPlanet.position = polarFromPoint(point);
+    return nextPlanet;
+  });
+
   return level;
 }
 
@@ -1401,10 +1498,53 @@ function makeAncientVariant(spec) {
   const level = variantLevel('ancient', spec);
   level.goalUnlockRequired = true;
   level.goalOpenSeconds = spec.goalOpenSeconds ?? level.goalOpenSeconds;
+  level.tutorial = spec.tutorial ?? null;
   level.planets = level.planets.map((planet, index) => ({
     ...planet,
     goalUnlock: index === spec.unlockPlanetIndex,
   }));
+  return level;
+}
+
+function normalizePulsarJets(spec) {
+  return {
+    periodSeconds: spec.periodSeconds ?? DEFAULT_PULSAR_JET_PERIOD,
+    activeSeconds: spec.activeSeconds ?? DEFAULT_PULSAR_JET_ACTIVE_SECONDS,
+    phaseSeconds: spec.phaseSeconds ?? 0,
+    angleDeg: spec.angleDeg ?? 0,
+    angularSpeedDeg: spec.angularSpeedDeg ?? 0,
+    length: spec.length ?? DEFAULT_PULSAR_JET_LENGTH,
+    width: spec.width ?? DEFAULT_PULSAR_JET_WIDTH,
+    innerRadius: spec.innerRadius ?? DEFAULT_PULSAR_JET_INNER_RADIUS,
+  };
+}
+
+function makePulsarVariant(spec) {
+  const level = variantLevel('pulsar', spec);
+  level.summary = spec.summary;
+  level.pulsarJets = normalizePulsarJets(spec.pulsarJets ?? spec);
+  return level;
+}
+
+function makeSplitVariant(spec) {
+  const level = variantLevel('prism', spec);
+  const splitPlanets = spec.splitPlanets ?? {};
+  level.planets = level.planets.map((planet, index) => {
+    const split = splitPlanets[index];
+    if (!split) {
+      return planet;
+    }
+
+    return {
+      ...planet,
+      landable: true,
+      splitSurface: {
+        landableAngleDeg: split.landableAngleDeg ?? 0,
+        threshold: split.threshold ?? 0,
+      },
+      landingRadius: split.landingRadius ?? planet.landingRadius ?? planet.radius + 0.72,
+    };
+  });
   return level;
 }
 
@@ -1448,7 +1588,18 @@ const BINARY_WORLD_SPECS = [
 ];
 
 const ANCIENT_WORLD_SPECS = [
-  { baseId: 'twin-shepherds', id: 'monolith-wardens', name: 'Monolith Wardens', summary: 'Touch the ancient monolith first. Only then will the black hole awaken between the wardens.', unlockPlanetIndex: 1, goalOpenSeconds: 9 },
+  {
+    baseId: 'first-relay',
+    id: 'monolith-wardens',
+    name: 'First Monolith',
+    summary: 'Land on the golden monolith world first. That awakens the black hole for your second shot.',
+    unlockPlanetIndex: 1,
+    goalOpenSeconds: 9,
+    tutorial: {
+      type: 'monolith',
+      copy: 'Touch the golden planet to open the black hole.',
+    },
+  },
   { baseId: 'periapsis-brood', id: 'altar-brood', name: 'Altar Brood', summary: 'The brood guards the altar world; land there to open the finish before the timer begins.', unlockPlanetIndex: 1, goalOpenSeconds: 8 },
   { baseId: 'far-side-switch', id: 'far-altar-switch', name: 'Far Altar Switch', summary: 'The far-side opening only matters after the monolith world has lit the goal.', unlockPlanetIndex: 2, goalOpenSeconds: 8 },
   { baseId: 'halo-shepherds', id: 'halo-monolith', name: 'Halo Monolith', summary: 'The halo route starts locked. Reach the monolith planet, then sprint the outer seam.', unlockPlanetIndex: 1, goalOpenSeconds: 8 },
@@ -1460,11 +1611,53 @@ const ANCIENT_WORLD_SPECS = [
   { baseId: 'final-moon-circuit', id: 'unlock-circuit', name: 'Unlock Circuit', summary: 'The last circuit of the campaign first asks for a monolith landing, then a clean relay escape.', unlockPlanetIndex: 2, goalOpenSeconds: 7 },
 ];
 
+const LAVA_WORLD_SPECS = [
+  { baseId: 'fast-window', id: 'ember-window', name: 'Ember Window', summary: 'The lane still opens and closes on timing, but now the launch world itself is heating the ball while you wait.', lavaSafeSeconds: { 0: 2.8 } },
+  { baseId: 'forked-harbor', id: 'melt-harbor', name: 'Melt Harbor', summary: 'Both harbors burn. The choice is not just where to land, but where you can leave before the heat runs out.', lavaSafeSeconds: { 0: 3.3, 1: 2.2, 2: 2.5, 3: 2.2 } },
+  { baseId: 'inner-step', id: 'cinder-step', name: 'Cinder Step', summary: 'The outer relay is now a cinder world, so the clean handoff becomes a race against the heat.', lavaSafeSeconds: { 0: 3.2, 1: 2.4, 2: 2.15 } },
+  { baseId: 'moon-switch', id: 'basalt-switch', name: 'Basalt Switch', summary: 'The switch route still opens the finish, but the molten worlds force a much faster second shot.', lavaSafeSeconds: { 0: 3.1, 1: 2.35, 2: 2.45 } },
+  { baseId: 'false-periapsis', id: 'scorch-periapsis', name: 'Scorch Periapsis', summary: 'The close touch is safe only briefly. Ride the hot world too long and the ball burns before the rim transfer.', lavaSafeSeconds: { 0: 3.2, 1: 2.25, 2: 2.4 } },
+  { baseId: 'halo-run', id: 'magma-halo', name: 'Magma Halo', summary: 'The halo route remains long, but every relay in it is now hot enough to punish hesitation.', lavaSafeSeconds: { 0: 3.2, 1: 2.3, 3: 2.35, 4: 2.25 } },
+  { baseId: 'split-sentinel', id: 'firebreak', name: 'Firebreak', summary: 'The mirrored stops both work on paper. In practice only one lava landing gives you time to escape.', lavaSafeSeconds: { 0: 3.15, 1: 2.3, 2: 2.3, 3: 2.1 } },
+  { baseId: 'moon-catch', id: 'pyre-moon', name: 'Pyre Moon', summary: 'Catch the moon, then leave the molten relay before the ball crosses from glowing to gone.', lavaSafeSeconds: { 0: 3.2, 1: 2.25, 2: 2.25, 3: 2.05 } },
+  { baseId: 'crown-window', id: 'lava-window', name: 'Lava Window', summary: 'The crown still opens on a timer, but every lava stop turns the whole route into a precise sprint.', lavaSafeSeconds: { 0: 3.15, 1: 2.3, 2: 2.2, 3: 2.2 } },
+  { baseId: 'final-circuit', id: 'eruption-circuit', name: 'Eruption Circuit', summary: 'The final relay circuit survives in molten form: one clean route, no idle seconds anywhere.', lavaSafeSeconds: { 0: 3.2, 1: 2.35, 2: 2.2, 3: 2.15 } },
+];
+
+const SPLIT_WORLD_SPECS = [
+  { baseId: 'inner-step', id: 'split-step', name: 'Split Step', summary: 'The launch world is split, but the route still starts with a clean handoff to the outer relay.', splitPlanets: { 0: { landableAngleDeg: -170 } } },
+  { baseId: 'forked-harbor', id: 'split-harbor', name: 'Split Harbor', summary: 'Both harbor routes are readable because every split world shows exactly which side can catch you.', splitPlanets: { 0: { landableAngleDeg: 143 }, 1: { landableAngleDeg: 300 }, 2: { landableAngleDeg: 15 } } },
+  { baseId: 'counterspin-gate', id: 'split-counterspin', name: 'Split Counterspin', summary: 'The split launch face throws you off-angle, so stabilize on a relay before the outward burn.', splitPlanets: { 0: { landableAngleDeg: 128 } } },
+  { baseId: 'false-periapsis', id: 'split-periapsis', name: 'Split Periapsis', summary: 'The tempting close pass still starts the route, but a split relay face punishes sloppy contact.', splitPlanets: { 0: { landableAngleDeg: -144 }, 1: { landableAngleDeg: 225 } } },
+  { baseId: 'long-transfer', id: 'split-transfer', name: 'Split Transfer', summary: 'A long transfer is safer when you read the relay face before committing to the burn.', splitPlanets: { 0: { landableAngleDeg: 120 }, 2: { landableAngleDeg: 150 } } },
+  { baseId: 'tidal-gate', id: 'split-tide', name: 'Split Tide', summary: 'The rotating safe hemisphere turns the setup touch into a timing problem.', splitPlanets: { 0: { landableAngleDeg: 12 }, 1: { landableAngleDeg: 170 } } },
+  { baseId: 'moon-switch', id: 'split-switch', name: 'Split Switch', summary: 'The moon lane stays useful, but the split switch world decides whether the next touch is safe.', splitPlanets: { 0: { landableAngleDeg: -123 }, 2: { landableAngleDeg: 145 } } },
+  { baseId: 'moon-catch', id: 'split-moon', name: 'Split Moon', summary: 'Catch the moving moon, then leave through a split relay face instead of clipping the red side.', splitPlanets: { 0: { landableAngleDeg: 127 }, 2: { landableAngleDeg: 215 } } },
+  { baseId: 'halo-run', id: 'split-halo', name: 'Split Halo', summary: 'The halo lane wraps around split bodies whose teal sides are the only solid ground.', splitPlanets: { 0: { landableAngleDeg: -131 }, 3: { landableAngleDeg: 250 }, 4: { landableAngleDeg: 190 } } },
+  { baseId: 'final-circuit', id: 'split-circuit', name: 'Split Circuit', summary: 'The final split circuit asks for clean relay handoffs without clipping the red halves.', splitPlanets: { 0: { landableAngleDeg: -130 }, 1: { landableAngleDeg: 335 }, 2: { landableAngleDeg: 160 } } },
+];
+
+const PULSAR_WORLD_SPECS = [
+  { baseId: 'false-periapsis', id: 'pulse-arc', name: 'Pulse Relay', summary: 'The first safe answer is a relay. Use the periapsis world to wait out the paired jet before the finish.', angleDeg: -50, phaseSeconds: 0.35, periodSeconds: 3.4, activeSeconds: 0.56, width: 0.22 },
+  { baseId: 'inner-step', id: 'strobe-window', name: 'Strobe Step', summary: 'The inside launch is safe, but the finish is easier after stepping out to a relay between pulses.', angleDeg: -40, angularSpeedDeg: 2, phaseSeconds: 0.55, periodSeconds: 3.4, activeSeconds: 0.62, width: 0.28 },
+  { baseId: 'mirror-harbor', id: 'beacon-relay', name: 'Beacon Relay', summary: 'The harbor route gives you a place to wait while the beacon cuts through the direct center lane.', angleDeg: -30, phaseSeconds: 0.55, periodSeconds: 3.6, activeSeconds: 0.56, width: 0.22 },
+  { baseId: 'forked-harbor', id: 'eclipse-pulse', name: 'Forked Pulse', summary: 'Both harbors offer timing options, but the wrong exit crosses the pulsar cone as it fires.', angleDeg: 32, angularSpeedDeg: -2, phaseSeconds: 0.45, periodSeconds: 3.5, activeSeconds: 0.62, width: 0.28 },
+  { baseId: 'long-transfer', id: 'lighthouse-transfer', name: 'Lighthouse Transfer', summary: 'Use the outer station as shelter, then time the long transfer around the lighthouse beam from the sun.', angleDeg: 20, phaseSeconds: 0.85, periodSeconds: 3.8, activeSeconds: 0.6, width: 0.24 },
+  { baseId: 'moon-switch', id: 'pulse-switch', name: 'Pulse Switch', summary: 'The moon remains the switch, while the paired jets punish a lazy straight exit toward the goal.', angleDeg: 44, angularSpeedDeg: 3, phaseSeconds: 0.45, periodSeconds: 3.5, activeSeconds: 0.64, width: 0.28 },
+  { baseId: 'halo-run', id: 'crown-beacon', name: 'Beacon Halo', summary: 'The wide relay chain gives several waits; leave the halo only after the beacon burst passes.', angleDeg: -54, phaseSeconds: 0.75, periodSeconds: 3.7, activeSeconds: 0.66, width: 0.3 },
+  { baseId: 'rim-switch', id: 'guarded-pulsar', name: 'Guarded Pulsar', summary: 'The switch world is the safe staging point while the pulsar punishes the straight shortcut.', angleDeg: 30, angularSpeedDeg: -2, phaseSeconds: 0.45, periodSeconds: 3.5, activeSeconds: 0.64, width: 0.28 },
+  { baseId: 'counterspin-gate', id: 'counterpulse-gate', name: 'Counterpulse Gate', summary: 'Stabilize on the relay, then cross the counterspinning gate after the pulsar beat passes.', angleDeg: 42, phaseSeconds: 0.65, periodSeconds: 3.6, activeSeconds: 0.64, width: 0.28 },
+  { baseId: 'final-circuit', id: 'pulsar-circuit', name: 'Pulsar Circuit', summary: 'The final circuit becomes a timing run through repeated twin jets before the clean relay escape.', angleDeg: -40, angularSpeedDeg: 2, phaseSeconds: 0.65, periodSeconds: 3.5, activeSeconds: 0.58, width: 0.24 },
+];
+
 const EXPANSION_LEVEL_DEFINITIONS = [
   ...ICY_WORLD_SPECS.map((spec) => makeIcyVariant(spec)),
   ...PORTAL_WORLD_SPECS.map((spec) => makePortalVariant(spec)),
   ...BINARY_WORLD_SPECS.map((spec) => makeBinaryVariant(spec)),
   ...ANCIENT_WORLD_SPECS.map((spec) => makeAncientVariant(spec)),
+  ...SPLIT_WORLD_SPECS.map((spec) => makeSplitVariant(spec)),
+  ...LAVA_WORLD_SPECS.map((spec) => makeLavaVariant(spec)),
+  ...PULSAR_WORLD_SPECS.map((spec) => makePulsarVariant(spec)),
 ];
 
 const LEVEL_DEFINITIONS = [...CORE_LEVEL_DEFINITIONS, ...EXPANSION_LEVEL_DEFINITIONS];
@@ -1550,6 +1743,36 @@ const CAMPAIGN_LEVEL_ORDER = [
   'sealed-lattice',
   'shepherd-shrine',
   'unlock-circuit',
+  'split-step',
+  'split-harbor',
+  'split-counterspin',
+  'split-periapsis',
+  'split-transfer',
+  'split-tide',
+  'split-switch',
+  'split-moon',
+  'split-halo',
+  'split-circuit',
+  'ember-window',
+  'melt-harbor',
+  'cinder-step',
+  'basalt-switch',
+  'scorch-periapsis',
+  'magma-halo',
+  'firebreak',
+  'pyre-moon',
+  'lava-window',
+  'eruption-circuit',
+  'pulse-arc',
+  'strobe-window',
+  'beacon-relay',
+  'eclipse-pulse',
+  'lighthouse-transfer',
+  'pulse-switch',
+  'crown-beacon',
+  'guarded-pulsar',
+  'counterpulse-gate',
+  'pulsar-circuit',
 ];
 
 const campaignOrderIndex = new Map(
@@ -1610,6 +1833,21 @@ export function directionFromAngleDeg(angleDeg) {
   return vec(Math.cos(angleRad), Math.sin(angleRad));
 }
 
+export function getPlanetSplitAxis(planet, time = 0) {
+  const baseAngle = (planet?.splitSurface?.landableAngleDeg ?? 0) * Math.PI / 180;
+  return directionFromAngleDeg((baseAngle + (planet?.spinSpeed ?? 0) * time) * 180 / Math.PI);
+}
+
+export function isPlanetLandingSide(planet, landingDirection, time = 0) {
+  if (!planet?.splitSurface) {
+    return Boolean(planet?.landable);
+  }
+
+  const axis = getPlanetSplitAxis(planet, time);
+  const normal = normalize(landingDirection ?? vec(1, 0));
+  return axis.x * normal.x + axis.y * normal.y >= (planet.splitSurface.threshold ?? 0);
+}
+
 function scalePointFromSun(point, sun, scale = SYSTEM_LAYOUT_SCALE) {
   return vec(
     sun.x + (point.x - sun.x) * scale,
@@ -1620,6 +1858,13 @@ function scalePointFromSun(point, sun, scale = SYSTEM_LAYOUT_SCALE) {
 function pointFromPolar(position) {
   const direction = directionFromAngleDeg(position.angleDeg ?? 0);
   return vec(direction.x * position.radius, direction.y * position.radius);
+}
+
+function polarFromPoint(point) {
+  return {
+    radius: length(point),
+    angleDeg: Math.atan2(point.y, point.x) * 180 / Math.PI,
+  };
 }
 
 function angleDegBetween(from, to) {
@@ -2018,56 +2263,121 @@ export function setLevelTime(level, time) {
 }
 
 export function getGoalCloseTime(level) {
-  if (GOAL_ALWAYS_OPEN) {
-    return Number.POSITIVE_INFINITY;
-  }
   if (level.goalUnlockRequired) {
     if (!level.goalUnlocked || !Number.isFinite(level.goalUnlockTime)) {
       return Number.POSITIVE_INFINITY;
     }
+    if (GOAL_ALWAYS_OPEN) {
+      return Number.POSITIVE_INFINITY;
+    }
     return level.goalUnlockTime + (level.goalOpenSeconds ?? DEFAULT_GOAL_OPEN_SECONDS);
+  }
+  if (GOAL_ALWAYS_OPEN) {
+    return Number.POSITIVE_INFINITY;
   }
   return (level.startTimeSeconds ?? 0) + (level.goalOpenSeconds ?? DEFAULT_GOAL_OPEN_SECONDS);
 }
 
 export function getGoalRemainingTime(level, time = level.time ?? 0) {
-  if (GOAL_ALWAYS_OPEN) {
-    return Number.POSITIVE_INFINITY;
-  }
   if (level.goalUnlockRequired && !level.goalUnlocked) {
     return level.goalOpenSeconds ?? DEFAULT_GOAL_OPEN_SECONDS;
+  }
+  if (GOAL_ALWAYS_OPEN) {
+    return Number.POSITIVE_INFINITY;
   }
   return Math.max(0, getGoalCloseTime(level) - time);
 }
 
 export function getGoalRemainingFraction(level, time = level.time ?? 0) {
+  if (level.goalUnlockRequired && !level.goalUnlocked) {
+    return 0;
+  }
   if (GOAL_ALWAYS_OPEN) {
-    return 1;
+    return Number.POSITIVE_INFINITY;
   }
   const duration = Math.max(0.001, level.goalOpenSeconds ?? DEFAULT_GOAL_OPEN_SECONDS);
   return clamp(getGoalRemainingTime(level, time) / duration, 0, 1);
 }
 
 export function isGoalOpen(level, time = level.time ?? 0) {
-  if (GOAL_ALWAYS_OPEN) {
-    return true;
-  }
   if (level.goalUnlockRequired && !level.goalUnlocked) {
     return false;
+  }
+  if (GOAL_ALWAYS_OPEN) {
+    return true;
   }
   return getGoalRemainingTime(level, time) > 0.000001;
 }
 
 export function isGoalLocked(level) {
-  if (GOAL_ALWAYS_OPEN) {
-    return false;
-  }
   return Boolean(level.goalUnlockRequired && !level.goalUnlocked);
 }
 
 export function getBallSurfaceRadius(planet) {
   return planet.radius + COURSE.ballRadius + PLANET_LANDING_PADDING
     + (planet?.surfaceType === 'ice' ? ICE_PLANET_LANDING_PADDING : 0);
+}
+
+function getBallHeatValue(ball) {
+  return clamp(ball?.heat ?? 0, 0, BALL_HEAT_MAX);
+}
+
+export function getBallHeatRatio(ball) {
+  return getBallHeatValue(ball) / BALL_HEAT_MAX;
+}
+
+function getPlanetLavaHeatRate(planet) {
+  if (!planet || planet.surfaceType !== 'lava') {
+    return 0;
+  }
+
+  const safeSeconds = Math.max(0.5, planet.lavaSafeSeconds ?? LAVA_DEFAULT_SAFE_SECONDS);
+  return BALL_HEAT_MAX / safeSeconds;
+}
+
+export function getLavaOverheatRemaining(planet, ball) {
+  const heatRate = getPlanetLavaHeatRate(planet);
+  if (!(heatRate > 0)) {
+    return Number.POSITIVE_INFINITY;
+  }
+  return Math.max(0, (BALL_HEAT_MAX - getBallHeatValue(ball)) / heatRate);
+}
+
+function updateBallHeat(level, ball, delta) {
+  const anchorPlanet = (
+    ball.anchorPlanetIndex !== null
+    && ball.anchorPlanetIndex !== undefined
+  ) ? level.planets[ball.anchorPlanetIndex] : null;
+
+  let nextHeat = getBallHeatValue(ball);
+  if (anchorPlanet?.surfaceType === 'lava') {
+    nextHeat += getPlanetLavaHeatRate(anchorPlanet) * delta;
+  } else {
+    const coolRate = anchorPlanet ? BALL_HEAT_COOL_RATE_ANCHORED : BALL_HEAT_COOL_RATE_FLIGHT;
+    nextHeat -= coolRate * delta;
+  }
+
+  ball.heat = clamp(nextHeat, 0, BALL_HEAT_MAX);
+
+  if (
+    delta > 0
+    && anchorPlanet?.surfaceType === 'lava'
+    && ball.heat >= BALL_HEAT_MAX - 0.000001
+  ) {
+    const eventState = cloneBallRuntimeState(ball);
+    ball.velocity.x = 0;
+    ball.velocity.y = 0;
+    return {
+      type: 'crash',
+      reason: 'lava',
+      planetIndex: ball.anchorPlanetIndex,
+      planetName: anchorPlanet.name ?? 'lava world',
+      eventState,
+      displayEventState: cloneBallRuntimeState(eventState),
+    };
+  }
+
+  return null;
 }
 
 export function getPlanetVelocity(level, planetIndex, time = level.time ?? 0) {
@@ -2081,7 +2391,7 @@ export function getPlanetVelocity(level, planetIndex, time = level.time ?? 0) {
 
 export function advanceBallAnchor(level, ball, delta) {
   if (ball.anchorPlanetIndex === null || ball.anchorPlanetIndex === undefined) {
-    return;
+    return null;
   }
 
   const planet = level.planets[ball.anchorPlanetIndex];
@@ -2099,6 +2409,7 @@ export function advanceBallAnchor(level, ball, delta) {
   }
 
   syncBallToAnchor(level, ball);
+  return updateBallHeat(level, ball, delta);
 }
 
 export function getPlanetSlideAngularSpeed(planet, ball) {
@@ -2137,6 +2448,80 @@ export function getPlanetSurfaceVelocity(level, planetIndex, anchorNormal, ball 
   return vec(tangent.x * speed, tangent.y * speed);
 }
 
+export function getPulsarJetState(level, time = level.time ?? 0) {
+  const jets = level?.pulsarJets;
+  if (!jets) {
+    return null;
+  }
+
+  const periodSeconds = Math.max(0.2, jets.periodSeconds ?? DEFAULT_PULSAR_JET_PERIOD);
+  const activeSeconds = clamp(jets.activeSeconds ?? DEFAULT_PULSAR_JET_ACTIVE_SECONDS, 0, periodSeconds);
+  const phaseTime = ((time - (jets.phaseSeconds ?? 0)) % periodSeconds + periodSeconds) % periodSeconds;
+  const active = phaseTime <= activeSeconds;
+  const activity = activeSeconds > 0
+    ? clamp(1 - Math.abs((phaseTime / activeSeconds) * 2 - 1), 0, 1)
+    : 0;
+  const angleRad = ((jets.angleDeg ?? 0) + (jets.angularSpeedDeg ?? 0) * time) * Math.PI / 180;
+  const direction = vec(Math.cos(angleRad), Math.sin(angleRad));
+
+  return {
+    active,
+    activity,
+    phaseTime,
+    periodSeconds,
+    activeSeconds,
+    direction,
+    length: jets.length ?? DEFAULT_PULSAR_JET_LENGTH,
+    width: jets.width ?? DEFAULT_PULSAR_JET_WIDTH,
+    innerRadius: jets.innerRadius ?? DEFAULT_PULSAR_JET_INNER_RADIUS,
+  };
+}
+
+export function isPointInPulsarJets(level, point, time = level.time ?? 0) {
+  const state = getPulsarJetState(level, time);
+  if (!state?.active) {
+    return false;
+  }
+
+  const fromSun = vec(point.x - level.sun.x, point.y - level.sun.y);
+  const alongAxis = fromSun.x * state.direction.x + fromSun.y * state.direction.y;
+  const radialDistance = Math.abs(alongAxis);
+  if (radialDistance < state.innerRadius || radialDistance > state.length) {
+    return false;
+  }
+
+  const perpendicularDistance = Math.abs(fromSun.x * -state.direction.y + fromSun.y * state.direction.x);
+  const coneProgress = clamp((radialDistance - state.innerRadius) / Math.max(0.001, state.length - state.innerRadius), 0, 1);
+  const coneHalfWidth = state.width * (0.45 + coneProgress * 1.2);
+  return perpendicularDistance <= coneHalfWidth + COURSE.ballRadius * 0.78;
+}
+
+function isSegmentInPulsarJets(level, fromPoint, toPoint, time = level.time ?? 0) {
+  if (!fromPoint) {
+    return isPointInPulsarJets(level, toPoint, time);
+  }
+
+  const distance = distanceBetween(fromPoint, toPoint);
+  const samples = Math.max(
+    2,
+    Math.ceil(distance / Math.max(0.08, COURSE.ballRadius * 0.42)),
+    PULSAR_SEGMENT_COLLISION_SAMPLES,
+  );
+
+  for (let sampleIndex = 0; sampleIndex <= samples; sampleIndex += 1) {
+    const t = sampleIndex / samples;
+    const samplePoint = vec(
+      fromPoint.x + (toPoint.x - fromPoint.x) * t,
+      fromPoint.y + (toPoint.y - fromPoint.y) * t,
+    );
+    if (isPointInPulsarJets(level, samplePoint, time)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function cloneBallRuntimeState(ball) {
   return {
     position: cloneVec(ball.position),
@@ -2148,6 +2533,7 @@ function cloneBallRuntimeState(ball) {
     anchorNormal: ball.anchorNormal ? cloneVec(ball.anchorNormal) : null,
     anchorSinceTime: ball.anchorSinceTime ?? 0,
     portalCooldown: ball.portalCooldown ?? 0,
+    heat: ball.heat ?? 0,
   };
 }
 
@@ -2310,6 +2696,7 @@ export function createBallState(level) {
     anchorNormal,
     anchorSinceTime: level.time ?? 0,
     portalCooldown: 0,
+    heat: 0,
   };
 }
 
@@ -2394,6 +2781,20 @@ function resolvePlanetContact(level, ball) {
 
     if (planet.landable && distance <= touchRadius) {
       const landingDirection = getLandingDirection(ball, planet);
+      const landsOnSafeSide = isPlanetLandingSide(planet, landingDirection, ball.time ?? level.time ?? 0);
+      if (!landsOnSafeSide) {
+        const eventState = cloneBallRuntimeState(ball);
+        ball.velocity.x = 0;
+        ball.velocity.y = 0;
+        return {
+          type: 'crash',
+          reason: 'split-side',
+          planetIndex: index,
+          planetName: planet.name ?? 'split planet',
+          eventState,
+          displayEventState: cloneBallRuntimeState(eventState),
+        };
+      }
       const surfaceRadius = getBallSurfaceRadius(planet);
       const eventState = cloneBallRuntimeState(ball);
       const displayEventState = cloneBallRuntimeState({
@@ -2437,13 +2838,26 @@ function resolvePlanetContact(level, ball) {
   return null;
 }
 
-function resolveSunContact(level, ball) {
+function resolveSunContact(level, ball, previousPosition = null) {
+  if (isSegmentInPulsarJets(level, previousPosition, ball.position, ball.time ?? level.time ?? 0)) {
+    const eventState = cloneBallRuntimeState(ball);
+    ball.velocity.x = 0;
+    ball.velocity.y = 0;
+    return { type: 'crash', reason: 'pulsar', eventState, displayEventState: cloneBallRuntimeState(eventState) };
+  }
+
   const touchRadius = (level.primarySunBody?.collisionRadius ?? SUN_COLLISION_RADIUS) + COURSE.ballRadius * PLANET_COLLISION_PADDING;
   if (distanceBetween(ball.position, level.sun) <= touchRadius) {
     const eventState = cloneBallRuntimeState(ball);
     ball.velocity.x = 0;
     ball.velocity.y = 0;
-    return { type: 'crash', reason: 'sun', eventState, displayEventState: cloneBallRuntimeState(eventState) };
+    return {
+      type: 'crash',
+      reason: 'sun',
+      eventState,
+      displayEventState: cloneBallRuntimeState(eventState),
+      crashTargetPosition: cloneVec(level.sun),
+    };
   }
 
   for (const solarBody of level.extraSuns ?? []) {
@@ -2452,7 +2866,13 @@ function resolveSunContact(level, ball) {
       const eventState = cloneBallRuntimeState(ball);
       ball.velocity.x = 0;
       ball.velocity.y = 0;
-      return { type: 'crash', reason: 'sun', eventState, displayEventState: cloneBallRuntimeState(eventState) };
+      return {
+        type: 'crash',
+        reason: 'sun',
+        eventState,
+        displayEventState: cloneBallRuntimeState(eventState),
+        crashTargetPosition: cloneVec(solarBody.position),
+      };
     }
   }
 
@@ -2584,6 +3004,7 @@ export function stepBall(level, ball, delta) {
   setLevelTime(level, nextTime);
   ball.time = nextTime;
   ball.portalCooldown = Math.max(0, (ball.portalCooldown ?? 0) - delta);
+  updateBallHeat(level, ball, delta);
 
   if ((!level.goalUnlockRequired || level.goalUnlocked) && !isGoalOpen(level, ball.time)) {
     const eventState = cloneBallRuntimeState(ball);
@@ -2606,6 +3027,7 @@ export function stepBall(level, ball, delta) {
     return { type: 'goal', eventState, displayEventState: cloneBallRuntimeState(eventState) };
   }
 
+  const previousPosition = cloneVec(ball.position);
   addScaledVec(ball.position, ball.velocity, delta);
 
   const portalEvent = resolvePortalContact(level, ball);
@@ -2618,7 +3040,7 @@ export function stepBall(level, ball, delta) {
     return { type: 'goal', eventState, displayEventState: cloneBallRuntimeState(eventState), portalEvent };
   }
 
-  const sunContactResult = resolveSunContact(level, ball);
+  const sunContactResult = resolveSunContact(level, ball, portalEvent ? null : previousPosition);
   if (sunContactResult) {
     sunContactResult.portalEvent = portalEvent;
     return sunContactResult;
@@ -2680,6 +3102,7 @@ export function reverseStepBall(level, ball, delta, options = {}) {
   ball.velocity.y = previousVelocity.y;
   ball.anchorPlanetIndex = null;
   ball.anchorNormal = ball.anchorNormal ? cloneVec(ball.anchorNormal) : null;
+  updateBallHeat(level, ball, -delta);
 
   const launchPlanetIndex = options.launchPlanetIndex ?? null;
   if (launchPlanetIndex !== null) {
@@ -2716,6 +3139,7 @@ export function simulateShot(level, shot, options = {}) {
     launchGracePlanetIndex: anchorPlanetIndex ?? findContainingLandingPlanetIndex(level, startPosition),
     anchorPlanetIndex,
     anchorNormal: cloneVec(anchorNormal),
+    heat: options.heat ?? 0,
   };
   const frames = captureFrames ? [] : null;
   let launchState = null;
@@ -2748,7 +3172,31 @@ export function simulateShot(level, shot, options = {}) {
         setLevelTime(level, launchTime);
         ball.time = launchTime;
         if (ball.anchorPlanetIndex !== null) {
-          advanceBallAnchor(level, ball, step);
+          const anchorResult = advanceBallAnchor(level, ball, step);
+          if (anchorResult?.type === 'crash') {
+            pushFrame();
+            return {
+              outcome: anchorResult.type,
+              reason: anchorResult.reason ?? '',
+              planetIndex: anchorResult.planetIndex ?? null,
+              planetName: anchorResult.planetName ?? '',
+              waitTime,
+              landingCount: ball.landingCount ?? 0,
+              time: 0,
+              steps: 0,
+              finalTime: ball.time ?? launchTime,
+              anchorPlanetIndex: ball.anchorPlanetIndex ?? null,
+              anchorNormal: ball.anchorNormal ? cloneVec(ball.anchorNormal) : null,
+              heat: ball.heat ?? 0,
+              minGoalDistance: distanceBetween(ball.position, level.goalCenter),
+              minPlanetClearance: Number.POSITIVE_INFINITY,
+              finalPosition: cloneVec(ball.position),
+              launchState,
+              eventState: anchorResult.eventState ? cloneBallRuntimeState(anchorResult.eventState) : null,
+              displayEventState: anchorResult.displayEventState ? cloneBallRuntimeState(anchorResult.displayEventState) : null,
+              frames,
+            };
+          }
         }
         pushFrame();
         remainingWait -= step;
@@ -2758,7 +3206,30 @@ export function simulateShot(level, shot, options = {}) {
       setLevelTime(level, launchTime);
       ball.time = launchTime;
       if (ball.anchorPlanetIndex !== null) {
-        advanceBallAnchor(level, ball, waitTime);
+        const anchorResult = advanceBallAnchor(level, ball, waitTime);
+        if (anchorResult?.type === 'crash') {
+          return {
+            outcome: anchorResult.type,
+            reason: anchorResult.reason ?? '',
+            planetIndex: anchorResult.planetIndex ?? null,
+            planetName: anchorResult.planetName ?? '',
+            waitTime,
+            landingCount: ball.landingCount ?? 0,
+            time: 0,
+            steps: 0,
+            finalTime: ball.time ?? launchTime,
+            anchorPlanetIndex: ball.anchorPlanetIndex ?? null,
+            anchorNormal: ball.anchorNormal ? cloneVec(ball.anchorNormal) : null,
+            heat: ball.heat ?? 0,
+            minGoalDistance: distanceBetween(ball.position, level.goalCenter),
+            minPlanetClearance: Number.POSITIVE_INFINITY,
+            finalPosition: cloneVec(ball.position),
+            launchState,
+            eventState: anchorResult.eventState ? cloneBallRuntimeState(anchorResult.eventState) : null,
+            displayEventState: anchorResult.displayEventState ? cloneBallRuntimeState(anchorResult.displayEventState) : null,
+            frames,
+          };
+        }
       }
     }
   }
@@ -2776,6 +3247,7 @@ export function simulateShot(level, shot, options = {}) {
       finalTime: ball.time ?? startTime + waitTime,
       anchorPlanetIndex: ball.anchorPlanetIndex ?? null,
       anchorNormal: ball.anchorNormal ? cloneVec(ball.anchorNormal) : null,
+      heat: ball.heat ?? 0,
       minGoalDistance: distanceBetween(ball.position, level.goalCenter),
       minPlanetClearance: Number.POSITIVE_INFINITY,
       finalPosition: cloneVec(ball.position),
@@ -2839,6 +3311,7 @@ export function simulateShot(level, shot, options = {}) {
         finalTime: ball.time ?? startTime + time,
         anchorPlanetIndex: ball.anchorPlanetIndex ?? null,
         anchorNormal: ball.anchorNormal ? cloneVec(ball.anchorNormal) : null,
+        heat: ball.heat ?? 0,
         minGoalDistance,
         minPlanetClearance,
         finalPosition: cloneVec(ball.position),
@@ -2862,6 +3335,7 @@ export function simulateShot(level, shot, options = {}) {
     finalTime: ball.time ?? startTime + time,
     anchorPlanetIndex: ball.anchorPlanetIndex ?? null,
     anchorNormal: ball.anchorNormal ? cloneVec(ball.anchorNormal) : null,
+    heat: ball.heat ?? 0,
     minGoalDistance,
     minPlanetClearance,
     finalPosition: cloneVec(ball.position),

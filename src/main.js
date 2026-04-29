@@ -17,12 +17,17 @@ import {
   createLevelRuntime,
   distanceBetween,
   advanceBallAnchor,
+  getBallHeatRatio,
   getBallSurfaceRadius,
   getGoalRemainingFraction,
   getGoalRemainingTime,
+  getLavaOverheatRemaining,
+  getPlanetSplitAxis,
+  getPulsarJetState,
   getPlanetSlideAngularSpeed,
   getPlanetVelocity,
   getPlanetSurfaceVelocity,
+  isPointInPulsarJets,
   isGoalLocked,
   isGoalOpen,
   length,
@@ -79,6 +84,9 @@ app.innerHTML = `
                 <span id="powerFill"></span>
               </div>
               <p id="statusHint">Drag from the ball, then release to launch.</p>
+              <div class="status-pills">
+                <span class="status-pill" id="heatStatusPill">Heat stable</span>
+              </div>
             </div>
             <div class="perf-panel" id="fpsPanel" hidden>
               <span class="perf-label">FPS</span>
@@ -149,6 +157,7 @@ const levelKicker = document.querySelector('#levelKicker');
 const statusLine = document.querySelector('#statusLine');
 const statusHint = document.querySelector('#statusHint');
 const statusCard = document.querySelector('.status-card');
+const heatStatusPill = document.querySelector('#heatStatusPill');
 const runStatusPill = document.querySelector('#runStatusPill');
 const windowStatusPill = document.querySelector('#windowStatusPill');
 const timeSpeedSlider = document.querySelector('#timeSpeedSlider');
@@ -232,6 +241,7 @@ const PHYSICS_STEP = 1 / 120;
 const UNDO_REWIND_SPEED = -8;
 const GOAL_CLOSE_ANIMATION_DURATION = 0.46;
 const GOAL_CLOSE_MODAL_DELAY = 0.12;
+const GOAL_UNLOCK_REVEAL_DURATION = 0.52;
 const MAX_PHYSICS_STEPS_PER_FRAME = 4;
 const ballRestY = COURSE.ballRadius - 0.01;
 const BALL_STRETCH_SPEED_THRESHOLD = 1.6;
@@ -289,6 +299,9 @@ world.add(gravityFieldRoot);
 const sunGroup = new THREE.Group();
 world.add(sunGroup);
 
+const pulsarJetsRoot = new THREE.Group();
+world.add(pulsarJetsRoot);
+
 const sunGlow = new THREE.Mesh(
   new THREE.CircleGeometry(1.35, 56),
   new THREE.MeshBasicMaterial({
@@ -326,6 +339,88 @@ const sunCore = new THREE.Mesh(
 );
 sunCore.position.y = 0.42;
 sunGroup.add(sunCore);
+
+function createPulsarCone(widthScale, opacity, color) {
+  const cone = new THREE.Mesh(
+    new THREE.ShapeGeometry(new THREE.Shape()),
+    new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    }),
+  );
+  cone.rotation.x = -Math.PI / 2;
+  cone.position.y = 0.13;
+  cone.renderOrder = 9;
+  cone.userData.widthScale = widthScale;
+  cone.userData.baseOpacity = opacity;
+  return cone;
+}
+
+const pulsarConePreviewA = createPulsarCone(2.1, 0.16, 0x54cfff);
+const pulsarConePreviewB = createPulsarCone(2.1, 0.16, 0x54cfff);
+const pulsarConeGlowA = createPulsarCone(3.2, 0.18, 0x67dfff);
+const pulsarConeGlowB = createPulsarCone(3.2, 0.18, 0x67dfff);
+const pulsarConeCoreA = createPulsarCone(0.86, 0.78, 0xf3fbff);
+const pulsarConeCoreB = createPulsarCone(0.86, 0.78, 0xf3fbff);
+pulsarJetsRoot.add(
+  pulsarConePreviewA,
+  pulsarConePreviewB,
+  pulsarConeGlowA,
+  pulsarConeGlowB,
+  pulsarConeCoreA,
+  pulsarConeCoreB,
+);
+
+const pulsarTimerTrack = new THREE.Mesh(
+  new THREE.RingGeometry(1.24, 1.38, 96),
+  new THREE.MeshBasicMaterial({
+    color: 0x1d5168,
+    transparent: true,
+    opacity: 0.42,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  }),
+);
+pulsarTimerTrack.rotation.x = -Math.PI / 2;
+pulsarTimerTrack.position.y = 0.12;
+pulsarTimerTrack.renderOrder = 8;
+pulsarJetsRoot.add(pulsarTimerTrack);
+
+const pulsarTimerArc = new THREE.Mesh(
+  new THREE.RingGeometry(1.24, 1.38, 96, 1, Math.PI / 2, 0.0001),
+  new THREE.MeshBasicMaterial({
+    color: 0xaaf8ff,
+    transparent: true,
+    opacity: 0.94,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  }),
+);
+pulsarTimerArc.rotation.x = -Math.PI / 2;
+pulsarTimerArc.position.y = 0.135;
+pulsarTimerArc.renderOrder = 9;
+pulsarJetsRoot.add(pulsarTimerArc);
+
+const pulsarWarningRing = new THREE.Mesh(
+  new THREE.RingGeometry(0.82, 1.12, 72),
+  new THREE.MeshBasicMaterial({
+    color: 0x77e6ff,
+    transparent: true,
+    opacity: 0,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  }),
+);
+pulsarWarningRing.rotation.x = -Math.PI / 2;
+pulsarWarningRing.position.y = 0.115;
+pulsarWarningRing.renderOrder = 8;
+pulsarJetsRoot.add(pulsarWarningRing);
 
 const extraSunsRoot = new THREE.Group();
 world.add(extraSunsRoot);
@@ -1096,6 +1191,87 @@ function updateLaunchMarker() {
 
 function updateSunVisual() {
   sunGroup.position.set(state.level.sun.x, 0, state.level.sun.y);
+  if (state.level.pulsarJets) {
+    sunGlow.material.color.setHex(0x67dfff);
+    sunCorona.material.color.setHex(0xd8f7ff);
+    sunCore.material.color.setHex(0xf4fbff);
+    sunCore.material.emissive.setHex(0x83dfff);
+    sunCore.material.emissiveIntensity = 1.7;
+    return;
+  }
+
+  sunGlow.material.color.setHex(0xffcf70);
+  sunCorona.material.color.setHex(0xffa54f);
+  sunCore.material.color.setHex(0xffdd8f);
+  sunCore.material.emissive.setHex(0xffb347);
+  sunCore.material.emissiveIntensity = 1.2;
+}
+
+function createPulsarConeGeometry(sign, jetState, widthScale = 1) {
+  const length = Math.max(jetState.innerRadius + 0.1, jetState.length);
+  const innerHalfWidth = jetState.width * 0.45 * widthScale;
+  const outerHalfWidth = jetState.width * 1.65 * widthScale;
+  const shape = new THREE.Shape();
+  shape.moveTo(sign * jetState.innerRadius, -innerHalfWidth);
+  shape.lineTo(sign * length, -outerHalfWidth);
+  shape.lineTo(sign * length, outerHalfWidth);
+  shape.lineTo(sign * jetState.innerRadius, innerHalfWidth);
+  shape.closePath();
+  return new THREE.ShapeGeometry(shape);
+}
+
+function layoutPulsarCone(cone, sign, jetState) {
+  replaceMeshGeometry(cone, createPulsarConeGeometry(sign, jetState, cone.userData.widthScale));
+}
+
+function updatePulsarJets(time) {
+  const jetState = getPulsarJetState(state.level, state.level.time ?? 0);
+  pulsarJetsRoot.visible = Boolean(jetState);
+  if (!jetState) {
+    return;
+  }
+
+  const angle = Math.atan2(jetState.direction.y, jetState.direction.x);
+  const pulse = jetState.active ? (0.42 + jetState.activity * 0.58) : 0;
+  const timerProgress = jetState.active
+    ? 1
+    : clamp(
+      (jetState.phaseTime - jetState.activeSeconds) / Math.max(0.001, jetState.periodSeconds - jetState.activeSeconds),
+      0,
+      1,
+    );
+  const warning = jetState.active ? 1 : timerProgress;
+
+  pulsarJetsRoot.position.set(state.level.sun.x, 0, state.level.sun.y);
+  pulsarJetsRoot.rotation.y = -angle;
+  layoutPulsarCone(pulsarConePreviewA, 1, jetState);
+  layoutPulsarCone(pulsarConePreviewB, -1, jetState);
+  layoutPulsarCone(pulsarConeGlowA, 1, jetState);
+  layoutPulsarCone(pulsarConeGlowB, -1, jetState);
+  layoutPulsarCone(pulsarConeCoreA, 1, jetState);
+  layoutPulsarCone(pulsarConeCoreB, -1, jetState);
+
+  for (const cone of [pulsarConePreviewA, pulsarConePreviewB]) {
+    cone.visible = true;
+    cone.material.opacity = cone.userData.baseOpacity * (0.55 + warning * 0.45);
+  }
+
+  for (const cone of [pulsarConeGlowA, pulsarConeGlowB, pulsarConeCoreA, pulsarConeCoreB]) {
+    cone.visible = jetState.active;
+    cone.material.opacity = cone.userData.baseOpacity * pulse;
+  }
+
+  replaceMeshGeometry(
+    pulsarTimerArc,
+    new THREE.RingGeometry(1.24, 1.38, 96, 1, Math.PI / 2, Math.max(0.0001, Math.PI * 2 * timerProgress)),
+  );
+  pulsarTimerArc.visible = timerProgress > 0.001;
+  pulsarTimerArc.material.color.setHex(jetState.active ? 0xffffff : 0xaaf8ff);
+  pulsarTimerArc.material.opacity = jetState.active ? 1 : 0.72 + timerProgress * 0.24;
+  pulsarTimerTrack.material.opacity = 0.28 + warning * 0.24;
+  pulsarWarningRing.material.opacity = 0.1 + warning * 0.38;
+  pulsarWarningRing.scale.setScalar(0.94 + warning * 0.18 + Math.sin(time * 6.4) * 0.025);
+  pulsarWarningRing.rotation.z = time * 1.8;
 }
 
 function formatDistance(value) {
@@ -1352,6 +1528,7 @@ function cloneCheckpoint(checkpoint) {
     controlShots: Array.isArray(checkpoint.controlShots)
       ? checkpoint.controlShots.map((shot) => ({ angleDeg: shot.angleDeg, power: shot.power }))
       : [],
+    heat: checkpoint.heat ?? 0,
   };
 }
 
@@ -1370,6 +1547,7 @@ function cloneBallPlaybackState(ball) {
     anchorNormal: ball.anchorNormal ? cloneVec(ball.anchorNormal) : null,
     anchorSinceTime: ball.anchorSinceTime ?? 0,
     portalCooldown: ball.portalCooldown ?? 0,
+    heat: ball.heat ?? 0,
   };
 }
 
@@ -1386,6 +1564,7 @@ function createCurrentCheckpoint() {
     anchorSinceTime: state.ball.anchorSinceTime ?? (state.level.time ?? state.ball.time ?? 0),
     goalUnlocked: state.level.goalUnlocked ?? false,
     goalUnlockTime: state.level.goalUnlockTime ?? null,
+    heat: state.ball.heat ?? 0,
     shots: state.shots,
     resets: state.resets,
     score: state.score,
@@ -1441,6 +1620,7 @@ function applyCheckpointState(checkpoint) {
   state.ball.anchorNormal = cloneVec(checkpoint.anchorNormal);
   state.ball.anchorSinceTime = checkpoint.anchorSinceTime ?? checkpoint.levelTime;
   state.ball.portalCooldown = 0;
+  state.ball.heat = checkpoint.heat ?? 0;
   state.ball.landedPlanetIndex = checkpoint.landedPlanetIndex;
   state.ball.landedPlanetName = checkpoint.landedPlanetName;
   syncBallToAnchor(state.level, state.ball);
@@ -1624,6 +1804,7 @@ function applyPlaybackBallState(ballState) {
   state.ball.launchGracePlanetIndex = ballState.launchGracePlanetIndex ?? null;
   state.ball.anchorSinceTime = ballState.anchorSinceTime ?? state.ball.time;
   state.ball.portalCooldown = ballState.portalCooldown ?? 0;
+  state.ball.heat = ballState.heat ?? 0;
   state.ball.landedPlanetIndex = null;
   state.ball.landedPlanetName = '';
   if (state.ball.anchorPlanetIndex !== null) {
@@ -2332,6 +2513,21 @@ function getIceSlideVisualSpeed(planet, ball = state.ball) {
   return getPlanetSlideAngularSpeed(planet, ball);
 }
 
+function getAnchoredLavaPlanet(ball = state.ball) {
+  if (ball.anchorPlanetIndex === null || ball.anchorPlanetIndex === undefined) {
+    return null;
+  }
+  const planet = state.level.planets[ball.anchorPlanetIndex];
+  if (!planet || planet.surfaceType !== 'lava') {
+    return null;
+  }
+  return planet;
+}
+
+function getLavaOverheatRemainingText(planet, ball = state.ball) {
+  return getLavaOverheatRemaining(planet, ball).toFixed(1);
+}
+
 function getIceSlideElapsed(planet, ball = state.ball) {
   if (!planet || planet.surfaceType !== 'ice' || !planet.slideAngularSpeed) {
     return 0;
@@ -2367,6 +2563,20 @@ function getAnchoredIcePlanet(ball = state.ball) {
 function isLaunchLockedByIce(ball = state.ball) {
   const planet = getAnchoredIcePlanet(ball);
   return Boolean(planet) && getIceLaunchLockRemaining(planet, ball) > 0.0001;
+}
+
+function getHeatStatusText() {
+  const lavaPlanet = getAnchoredLavaPlanet();
+  if (lavaPlanet) {
+    return `Lava ${getLavaOverheatRemainingText(lavaPlanet)}s`;
+  }
+
+  const heatRatio = getBallHeatRatio(state.ball);
+  if (heatRatio > 0.08) {
+    return `Heat ${Math.round(heatRatio * 100)}%`;
+  }
+
+  return 'Heat stable';
 }
 
 function createSeededRandom(seed) {
@@ -2415,6 +2625,9 @@ function getRockyBiome(planet) {
   if (planet.surfaceType === 'ice') {
     return 'ice';
   }
+  if (planet.surfaceType === 'lava') {
+    return 'lava';
+  }
   const hsl = {};
   new THREE.Color(planet.core).getHSL(hsl);
   if (hsl.h >= 0.48 && hsl.h <= 0.7) {
@@ -2441,6 +2654,11 @@ function createRockyPlanetTexture(planet) {
       midColor = new THREE.Color(0xb9ebff);
       accentColor = new THREE.Color(0xe5fbff);
       brightColor = new THREE.Color(0xf8ffff);
+    } else if (biome === 'lava') {
+      deepColor = new THREE.Color(0x2b0703);
+      midColor = new THREE.Color(0x7a1f10);
+      accentColor = new THREE.Color(0xff6a2f);
+      brightColor = new THREE.Color(0xffd48a);
     } else if (biome === 'oceanic') {
       deepColor = new THREE.Color(0x163b69);
       midColor = new THREE.Color(0x2d6da3);
@@ -2555,6 +2773,152 @@ function createRockyPlanetTexture(planet) {
           0.14 + random() * 0.16,
         );
       }
+    } else if (biome === 'lava') {
+      const crustColor = mixColors(deepColor, new THREE.Color(0x130807), 0.5);
+      const crustHighlight = mixColors(new THREE.Color(0x7a7070), crustColor, 0.38);
+      const seamCore = mixColors(accentColor, brightColor, 0.76);
+      const seamGlow = mixColors(accentColor, brightColor, 0.36);
+      const cols = 4;
+      const rows = 3;
+      const jitterX = width * 0.08;
+      const jitterY = height * 0.1;
+      const plates = [];
+
+      ctx.fillStyle = colorHex(mixColors(seamGlow, brightColor, 0.18));
+      ctx.fillRect(0, 0, width, height);
+
+      for (let row = 0; row < rows; row += 1) {
+        for (let col = 0; col < cols; col += 1) {
+          const left = (col / cols) * width + (random() - 0.5) * jitterX;
+          const right = ((col + 1) / cols) * width + (random() - 0.5) * jitterX;
+          const top = (row / rows) * height + (random() - 0.5) * jitterY;
+          const bottom = ((row + 1) / rows) * height + (random() - 0.5) * jitterY;
+          const centerX = (left + right) * 0.5;
+          const centerY = (top + bottom) * 0.5;
+          plates.push({
+            centerX,
+            centerY,
+            points: [
+              { x: left + (random() - 0.5) * width * 0.03, y: top + height * (0.05 + random() * 0.08) },
+              { x: left + width * (0.05 + random() * 0.06), y: top + (random() - 0.5) * height * 0.03 },
+              { x: right - width * (0.06 + random() * 0.08), y: top + (random() - 0.5) * height * 0.03 },
+              { x: right + (random() - 0.5) * width * 0.03, y: top + height * (0.08 + random() * 0.08) },
+              { x: right + (random() - 0.5) * width * 0.03, y: bottom - height * (0.08 + random() * 0.08) },
+              { x: right - width * (0.05 + random() * 0.08), y: bottom + (random() - 0.5) * height * 0.03 },
+              { x: left + width * (0.06 + random() * 0.08), y: bottom + (random() - 0.5) * height * 0.03 },
+              { x: left + (random() - 0.5) * width * 0.03, y: bottom - height * (0.05 + random() * 0.08) },
+            ],
+          });
+        }
+      }
+
+      plates.forEach((plate) => {
+        ctx.save();
+        ctx.beginPath();
+        plate.points.forEach((point, index) => {
+          if (index === 0) {
+            ctx.moveTo(point.x, point.y);
+          } else {
+            ctx.lineTo(point.x, point.y);
+          }
+        });
+        ctx.closePath();
+        ctx.fillStyle = colorHex(seamGlow);
+        ctx.globalAlpha = 0.72;
+        ctx.fill();
+        ctx.restore();
+      });
+
+      plates.forEach((plate) => {
+        ctx.save();
+        ctx.beginPath();
+        plate.points.forEach((point, index) => {
+          const insetX = plate.centerX + (point.x - plate.centerX) * 0.9;
+          const insetY = plate.centerY + (point.y - plate.centerY) * 0.9;
+          if (index === 0) {
+            ctx.moveTo(insetX, insetY);
+          } else {
+            ctx.lineTo(insetX, insetY);
+          }
+        });
+        ctx.closePath();
+        ctx.fillStyle = colorHex(crustColor);
+        ctx.globalAlpha = 0.98;
+        ctx.fill();
+        ctx.clip();
+
+        const plateShade = ctx.createLinearGradient(
+          plate.centerX - width * 0.08,
+          plate.centerY - height * 0.1,
+          plate.centerX + width * 0.1,
+          plate.centerY + height * 0.12,
+        );
+        plateShade.addColorStop(0, colorHex(crustHighlight));
+        plateShade.addColorStop(0.38, colorHex(mixColors(crustColor, new THREE.Color(0x332828), 0.12)));
+        plateShade.addColorStop(1, colorHex(mixColors(deepColor, new THREE.Color(0x0e0505), 0.56)));
+        ctx.globalAlpha = 0.9;
+        ctx.fillStyle = plateShade;
+        ctx.fillRect(0, 0, width, height);
+
+        for (let index = 0; index < 2; index += 1) {
+          ctx.strokeStyle = colorHex(mixColors(new THREE.Color(0x8b8383), crustColor, 0.54));
+          ctx.globalAlpha = 0.22;
+          ctx.lineWidth = 1.3 + random() * 1.6;
+          ctx.beginPath();
+          const startX = plate.centerX + (random() - 0.5) * width * 0.08;
+          const startY = plate.centerY + (random() - 0.5) * height * 0.08;
+          ctx.moveTo(startX, startY);
+          ctx.quadraticCurveTo(
+            startX + (random() - 0.5) * width * 0.07,
+            startY + (random() - 0.5) * height * 0.05,
+            startX + (random() - 0.5) * width * 0.11,
+            startY + (random() - 0.5) * height * 0.08,
+          );
+          ctx.stroke();
+        }
+        ctx.restore();
+      });
+
+      plates.forEach((plate) => {
+        ctx.save();
+        ctx.beginPath();
+        plate.points.forEach((point, index) => {
+          const insetX = plate.centerX + (point.x - plate.centerX) * 0.92;
+          const insetY = plate.centerY + (point.y - plate.centerY) * 0.92;
+          if (index === 0) {
+            ctx.moveTo(insetX, insetY);
+          } else {
+            ctx.lineTo(insetX, insetY);
+          }
+        });
+        ctx.closePath();
+        ctx.strokeStyle = colorHex(mixColors(brightColor, new THREE.Color(0xffffff), 0.08));
+        ctx.globalAlpha = 0.1;
+        ctx.lineWidth = 2.2;
+        ctx.stroke();
+        ctx.restore();
+      });
+
+      for (let index = 0; index < 10; index += 1) {
+        const startX = random() * width;
+        const startY = random() * height;
+        const endX = startX + (random() - 0.5) * width * 0.16;
+        const endY = startY + (random() - 0.5) * height * 0.12;
+        ctx.save();
+        ctx.strokeStyle = colorHex(seamCore);
+        ctx.globalAlpha = 0.18 + random() * 0.12;
+        ctx.lineWidth = 3 + random() * 3;
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.quadraticCurveTo(
+          (startX + endX) * 0.5 + (random() - 0.5) * width * 0.03,
+          (startY + endY) * 0.5 + (random() - 0.5) * height * 0.03,
+          endX,
+          endY,
+        );
+        ctx.stroke();
+        ctx.restore();
+      }
     } else if (biome === 'oceanic') {
       for (let index = 0; index < 12; index += 1) {
         drawEllipse(
@@ -2652,6 +3016,15 @@ function createRockyPlanetTexture(planet) {
       iceBloom.addColorStop(1, 'rgba(228, 250, 255, 0)');
       ctx.save();
       ctx.fillStyle = iceBloom;
+      ctx.fillRect(0, 0, width, height);
+      ctx.restore();
+    } else if (biome === 'lava') {
+      const lavaBloom = ctx.createRadialGradient(width * 0.42, height * 0.34, width * 0.02, width * 0.5, height * 0.5, width * 0.54);
+      lavaBloom.addColorStop(0, 'rgba(255, 236, 184, 0.48)');
+      lavaBloom.addColorStop(0.42, 'rgba(255, 141, 66, 0.16)');
+      lavaBloom.addColorStop(1, 'rgba(255, 141, 66, 0)');
+      ctx.save();
+      ctx.fillStyle = lavaBloom;
       ctx.fillRect(0, 0, width, height);
       ctx.restore();
     }
@@ -2788,6 +3161,11 @@ function getRunStatusText() {
     return 'Retry armed';
   }
 
+  const lavaPlanet = getAnchoredLavaPlanet();
+  if (lavaPlanet) {
+    return `Shot ${Math.min(getActiveStageIndex() + 1, state.controlShots.length)} · Overheating ${getLavaOverheatRemainingText(lavaPlanet)}s`;
+  }
+
   if (isLaunchLockedByIce()) {
     return `Shot ${Math.min(getActiveStageIndex() + 1, state.controlShots.length)} · Sliding`;
   }
@@ -2838,8 +3216,23 @@ function describeFailureHint(reason) {
     return `Retry ${state.level.name}. Late by ${lateBy.toFixed(1)}s with ${formatDistance(goalClearance)} to spare.`;
   }
 
+  if (reason === 'pulsar') {
+    return `Retry ${state.level.name}. Time the crossing between the paired jets.`;
+  }
+
   if (reason === 'sun') {
     return `Retry ${state.level.name}. Skim the well, don't drop into it.`;
+  }
+
+  if (reason === 'lava') {
+    const lavaPlanet = state.ball.crashPlanetIndex !== null && state.ball.crashPlanetIndex !== undefined
+      ? state.level.planets[state.ball.crashPlanetIndex]
+      : null;
+    return `Retry ${state.level.name}. Leave ${lavaPlanet?.name ?? 'the lava world'} before the ball overheats.`;
+  }
+
+  if (reason === 'split-side') {
+    return `Retry ${state.level.name}. Touch down on the teal side of split planets.`;
   }
 
   const closestLandingMiss = describeClosestLandingMiss();
@@ -3062,15 +3455,38 @@ function getFailureTitle(reason) {
     return 'Burned in the sun.';
   }
 
+  if (reason === 'pulsar') {
+    return 'Caught in the pulsar jet.';
+  }
+
   if (reason === 'goal-closed') {
     return 'Black hole closed.';
+  }
+
+  if (reason === 'split-side') {
+    return 'Hit the dead side.';
   }
 
   if (reason === 'planet') {
     return 'Drowned in a gas giant.';
   }
 
+  if (reason === 'lava') {
+    return 'Burned on a lava world.';
+  }
+
   return 'Lost in space.';
+}
+
+function beginPulsarCrash() {
+  beginCrash(
+    'Caught in the pulsar jet.',
+    describeFailureHint('pulsar'),
+    'pulsar',
+    null,
+    null,
+    null,
+  );
 }
 
 function showGameOverModal(reason, hint, options = {}) {
@@ -3546,6 +3962,22 @@ function rebuildPortals() {
   });
 }
 
+function createSplitSurfaceDisc(radius, color, opacity, thetaStart) {
+  const disc = new THREE.Mesh(
+    new THREE.CircleGeometry(radius, 48, thetaStart, Math.PI),
+    new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    }),
+  );
+  disc.rotation.x = -Math.PI / 2;
+  disc.renderOrder = 7;
+  return disc;
+}
+
 function rebuildPlanets() {
   clearGroup(orbitPathsRoot);
   clearGroup(planetsRoot);
@@ -3555,10 +3987,14 @@ function rebuildPlanets() {
     const coreColor = new THREE.Color(planet.core);
     const glowColor = new THREE.Color(planet.glow);
     const surfaceTexture = getPlanetTexture(planet);
+    const isIcePlanet = planet.surfaceType === 'ice';
+    const isLavaPlanet = planet.surfaceType === 'lava';
     const orbitPathColor = planet.landable
       ? (
-        planet.surfaceType === 'ice'
+        isIcePlanet
           ? mixColors(glowColor, new THREE.Color(0xf5ffff), 0.52)
+          : isLavaPlanet
+            ? mixColors(glowColor, new THREE.Color(0xffb36d), 0.46)
           : mixColors(glowColor, new THREE.Color(0x9feedd), 0.35)
       )
       : mixColors(glowColor, new THREE.Color(0xffdfa9), 0.22);
@@ -3607,13 +4043,15 @@ function rebuildPlanets() {
       new THREE.MeshBasicMaterial({
         color: planet.landable
           ? (
-            planet.surfaceType === 'ice'
+            isIcePlanet
               ? mixColors(glowColor, new THREE.Color(0xffffff), 0.28)
+              : isLavaPlanet
+                ? mixColors(glowColor, new THREE.Color(0xffb25a), 0.42)
               : mixColors(glowColor, new THREE.Color(0x9ce9ff), 0.16)
           )
           : mixColors(new THREE.Color(0xff845d), new THREE.Color(0xffc28c), 0.28),
         transparent: true,
-        opacity: planet.landable ? (planet.surfaceType === 'ice' ? 0.24 : 0.16) : 0.18,
+        opacity: planet.landable ? (isIcePlanet ? 0.24 : isLavaPlanet ? 0.28 : 0.16) : 0.18,
       }),
     );
     glow.rotation.x = -Math.PI / 2;
@@ -3624,12 +4062,14 @@ function rebuildPlanets() {
       ? new THREE.MeshStandardMaterial({
         color: 0xffffff,
         map: surfaceTexture,
-        emissive: planet.surfaceType === 'ice'
+        emissive: isIcePlanet
           ? mixColors(coreColor, new THREE.Color(0xf1fdff), 0.42)
+          : isLavaPlanet
+            ? mixColors(coreColor, new THREE.Color(0xffa04e), 0.58)
           : mixColors(coreColor, glowColor, 0.14),
-        emissiveIntensity: planet.surfaceType === 'ice' ? 0.28 : 0.08,
-        roughness: planet.surfaceType === 'ice' ? 0.34 : 0.98,
-        metalness: planet.surfaceType === 'ice' ? 0.1 : 0.02,
+        emissiveIntensity: isIcePlanet ? 0.28 : isLavaPlanet ? 0.64 : 0.08,
+        roughness: isIcePlanet ? 0.34 : isLavaPlanet ? 0.66 : 0.98,
+        metalness: isIcePlanet ? 0.1 : isLavaPlanet ? 0.04 : 0.02,
       })
       : new THREE.MeshStandardMaterial({
         color: 0xffffff,
@@ -3654,19 +4094,26 @@ function rebuildPlanets() {
     let accentBand = null;
     let monolith = null;
     let monolithRing = null;
+    let monolithBeacon = null;
     let iceSkidArc = null;
     let iceHaloRing = null;
     let iceInnerRing = null;
+    let lavaHaloRing = null;
+    let lavaWarningRing = null;
+    let splitSafeDisc = null;
+    let splitHazardDisc = null;
 
     if (planet.landable) {
       atmosphereShell = new THREE.Mesh(
         new THREE.SphereGeometry(planet.radius * 1.045, 48, 48),
         new THREE.MeshPhongMaterial({
-          color: planet.surfaceType === 'ice'
+          color: isIcePlanet
             ? mixColors(glowColor, new THREE.Color(0xf0fbff), 0.56)
+            : isLavaPlanet
+              ? mixColors(glowColor, new THREE.Color(0xffb66e), 0.5)
             : mixColors(glowColor, new THREE.Color(0xc7fff7), 0.38),
           transparent: true,
-          opacity: planet.surfaceType === 'ice' ? 0.24 : 0.16,
+          opacity: isIcePlanet ? 0.24 : isLavaPlanet ? 0.22 : 0.16,
           blending: THREE.AdditiveBlending,
           side: THREE.DoubleSide,
           depthWrite: false,
@@ -3707,10 +4154,10 @@ function rebuildPlanets() {
       new THREE.TorusGeometry(planet.radius + 0.16, 0.035, 12, 72),
       new THREE.MeshBasicMaterial({
         color: planet.landable
-          ? (planet.surfaceType === 'ice' ? 0xf5ffff : 0x7df3d1)
+          ? (planet.goalUnlock ? 0xffd07a : (isIcePlanet ? 0xf5ffff : isLavaPlanet ? 0xffd36a : 0x7df3d1))
           : 0xffc08a,
         transparent: true,
-        opacity: planet.landable ? (planet.surfaceType === 'ice' ? 0.78 : 0.68) : 0.42,
+        opacity: planet.landable ? (isIcePlanet ? 0.78 : isLavaPlanet ? 0.8 : 0.68) : 0.42,
         depthWrite: false,
       }),
     );
@@ -3719,7 +4166,28 @@ function rebuildPlanets() {
     orbitRing.renderOrder = 4;
     group.add(orbitRing);
 
-    if (planet.surfaceType === 'ice') {
+    if (planet.splitSurface) {
+      splitSafeDisc = createSplitSurfaceDisc(
+        planet.radius * 1.075,
+        isIcePlanet ? 0xeaffff : isLavaPlanet ? 0xffdc94 : 0x62ffd7,
+        0.34,
+        -Math.PI / 2,
+      );
+      splitSafeDisc.position.y = planet.radius * 1.5;
+      group.add(splitSafeDisc);
+
+      splitHazardDisc = createSplitSurfaceDisc(
+        planet.radius * 1.08,
+        0xff604f,
+        0.46,
+        Math.PI / 2,
+      );
+      splitHazardDisc.position.y = planet.radius * 1.505;
+      group.add(splitHazardDisc);
+
+    }
+
+    if (isIcePlanet) {
       iceHaloRing = new THREE.Mesh(
         new THREE.RingGeometry(planet.radius + 0.28, planet.radius + 0.42, 72),
         new THREE.MeshBasicMaterial({
@@ -3751,14 +4219,46 @@ function rebuildPlanets() {
       group.add(iceInnerRing);
     }
 
+    if (isLavaPlanet) {
+      lavaHaloRing = new THREE.Mesh(
+        new THREE.RingGeometry(planet.radius + 0.3, planet.radius + 0.48, 72),
+        new THREE.MeshBasicMaterial({
+          color: 0xff7d39,
+          transparent: true,
+          opacity: 0.26,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+        }),
+      );
+      lavaHaloRing.rotation.x = -Math.PI / 2;
+      lavaHaloRing.position.y = 0.05;
+      lavaHaloRing.renderOrder = 2;
+      group.add(lavaHaloRing);
+
+      lavaWarningRing = new THREE.Mesh(
+        new THREE.RingGeometry(planet.radius + 0.08, planet.radius + 0.18, 72),
+        new THREE.MeshBasicMaterial({
+          color: 0xfff0ba,
+          transparent: true,
+          opacity: 0.12,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+        }),
+      );
+      lavaWarningRing.rotation.x = -Math.PI / 2;
+      lavaWarningRing.position.y = 0.09;
+      lavaWarningRing.renderOrder = 5;
+      group.add(lavaWarningRing);
+    }
+
     let landingRing = null;
     if (planet.landable) {
       landingRing = new THREE.Mesh(
         new THREE.RingGeometry(planet.radius + 0.2, planet.landingRadius ?? planet.radius + 0.48, 64),
         new THREE.MeshBasicMaterial({
-          color: planet.surfaceType === 'ice' ? 0xf7ffff : 0x75f3d9,
+          color: isIcePlanet ? 0xf7ffff : isLavaPlanet ? 0xffd579 : 0x75f3d9,
           transparent: true,
-          opacity: planet.surfaceType === 'ice' ? 0.34 : 0.18,
+          opacity: isIcePlanet ? 0.34 : isLavaPlanet ? 0.28 : 0.18,
           side: THREE.DoubleSide,
           depthWrite: false,
         }),
@@ -3769,7 +4269,7 @@ function rebuildPlanets() {
       group.add(landingRing);
     }
 
-    if (planet.surfaceType === 'ice') {
+    if (isIcePlanet) {
       iceSkidArc = new THREE.Mesh(
         new THREE.RingGeometry(planet.radius + 0.1, planet.radius + 0.19, 48, 1, -0.34, 0.68),
         new THREE.MeshBasicMaterial({
@@ -3789,31 +4289,45 @@ function rebuildPlanets() {
 
     if (planet.goalUnlock) {
       monolith = new THREE.Mesh(
-        new THREE.BoxGeometry(0.12, planet.radius * 1.15, 0.12),
+        new THREE.BoxGeometry(0.18, planet.radius * 1.45, 0.18),
         new THREE.MeshStandardMaterial({
-          color: 0xf4e7b6,
-          emissive: 0x8ad9ff,
-          emissiveIntensity: 0.4,
-          roughness: 0.3,
-          metalness: 0.55,
+          color: 0xffefc6,
+          emissive: 0xffc46b,
+          emissiveIntensity: 0.62,
+          roughness: 0.22,
+          metalness: 0.62,
         }),
       );
-      monolith.position.set(0, planet.radius * 1.35, 0);
+      monolith.position.set(0, planet.radius * 1.5, 0);
       monolith.rotation.z = 0.2;
       group.add(monolith);
 
       monolithRing = new THREE.Mesh(
-        new THREE.RingGeometry(planet.radius + 0.28, planet.radius + 0.45, 48),
+        new THREE.RingGeometry(planet.radius + 0.34, planet.radius + 0.56, 64),
         new THREE.MeshBasicMaterial({
           color: 0xffd68f,
           transparent: true,
-          opacity: 0.22,
+          opacity: 0.34,
           side: THREE.DoubleSide,
+          depthWrite: false,
         }),
       );
       monolithRing.rotation.x = -Math.PI / 2;
       monolithRing.position.y = 0.08;
       group.add(monolithRing);
+
+      monolithBeacon = new THREE.Mesh(
+        new THREE.CircleGeometry(planet.radius + 0.92, 64),
+        new THREE.MeshBasicMaterial({
+          color: 0xffc66c,
+          transparent: true,
+          opacity: 0.12,
+          depthWrite: false,
+        }),
+      );
+      monolithBeacon.rotation.x = -Math.PI / 2;
+      monolithBeacon.position.y = 0.035;
+      group.add(monolithBeacon);
     }
 
     group.position.set(planet.position.x, 0, planet.position.y);
@@ -3830,9 +4344,14 @@ function rebuildPlanets() {
       landingRing,
       monolith,
       monolithRing,
+      monolithBeacon,
       iceSkidArc,
       iceHaloRing,
       iceInnerRing,
+      lavaHaloRing,
+      lavaWarningRing,
+      splitSafeDisc,
+      splitHazardDisc,
       planet,
     };
   });
@@ -3896,13 +4415,19 @@ function syncHud() {
   statusCard.hidden = true;
   runStatusPill.textContent = getRunStatusText();
   windowStatusPill.textContent = getWindowStatusText();
-  runStatusPill.classList.toggle('is-hot', state.ball.anchorPlanetIndex !== null && state.ball.landingCount > 0);
+  runStatusPill.classList.toggle(
+    'is-hot',
+    (state.ball.anchorPlanetIndex !== null && state.ball.landingCount > 0) || Boolean(getAnchoredLavaPlanet()),
+  );
   windowStatusPill.classList.toggle(
     'is-hot',
     getGoalRemainingTime(state.level, state.ball.time ?? state.level.time ?? 0) < 2.5,
   );
   const shownPower = state.dragActive ? state.dragPower : getControlShot().power;
   powerFill.style.transform = `scaleX(${Math.max(0.04, shownPower / MAX_DRAG_DISTANCE)})`;
+  heatStatusPill.textContent = getHeatStatusText();
+  heatStatusPill.classList.toggle('is-hot', getBallHeatRatio(state.ball) > 0.18);
+  heatStatusPill.classList.toggle('is-danger', Boolean(getAnchoredLavaPlanet()));
   syncActionButtons();
   syncTimeControl();
   syncPerfOverlay();
@@ -3927,6 +4452,7 @@ function getActiveTutorial() {
 function syncTutorialOverlay() {
   const tutorial = getActiveTutorial();
   tutorialCard.hidden = !tutorial;
+  tutorialCard.classList.toggle('is-monolith', tutorial?.type === 'monolith');
   if (!tutorial) {
     return;
   }
@@ -3947,6 +4473,8 @@ function resetBall(message, hint, options = {}) {
 
   if (options.advanceLevel) {
     applyLevel((state.levelIndex + 1) % LEVELS.length);
+  } else {
+    applyLevel(state.levelIndex);
   }
 
   if (!options.keepAdminReplay) {
@@ -3975,6 +4503,7 @@ function resetBall(message, hint, options = {}) {
   state.ball.anchorNormal = cloneVec(freshBall.anchorNormal);
   state.ball.anchorSinceTime = freshBall.anchorSinceTime;
   state.ball.portalCooldown = freshBall.portalCooldown ?? 0;
+  state.ball.heat = freshBall.heat ?? 0;
   state.ball.landedPlanetIndex = freshBall.anchorPlanetIndex ?? null;
   state.ball.landedPlanetName = state.level.planets[freshBall.anchorPlanetIndex ?? 0]?.name ?? 'launch world';
   setVec(state.ball.crashStartPosition, freshBall.position);
@@ -4019,6 +4548,8 @@ function beginCrash(
   eventState = null,
   displayEventState = null,
   crashPlanetIndex = null,
+  failureReason = reason,
+  crashTargetPosition = null,
 ) {
   hideGameOverModal();
   hideGoalCloseAnimation();
@@ -4028,7 +4559,7 @@ function beginCrash(
   state.ball.crashed = true;
   state.ball.goaling = false;
   state.ball.transition = 0;
-  state.ball.crashReason = reason;
+  state.ball.crashReason = failureReason;
   state.ball.crashKind = crashKind;
   state.ball.crashPlanetIndex = crashPlanetIndex;
   setVec(state.ball.crashStartPosition, state.ball.position);
@@ -4039,8 +4570,8 @@ function beginCrash(
   ) ? state.level.planets[crashPlanetIndex] : null;
   setVec(
     state.ball.crashTargetPosition,
-    state.ball.crashKind === 'sun'
-      ? state.level.sun
+    state.ball.crashKind === 'sun' || state.ball.crashKind === 'pulsar'
+      ? (crashTargetPosition ?? state.level.sun)
       : crashPlanet
         ? crashPlanet.position
         : state.ball.position,
@@ -4078,9 +4609,13 @@ function beginLanding(result) {
     ? state.level.planets[result.planetIndex]
     : null;
   const iceLockRemaining = landedPlanet ? getIceLaunchLockRemaining(landedPlanet, state.ball) : 0;
+  const lavaPlanet = landedPlanet?.surfaceType === 'lava' ? landedPlanet : null;
   if (result.goalUnlocked) {
     state.message = 'Monolith awakened.';
     state.hint = `Black hole open for ${state.level.goalOpenSeconds.toFixed(1)}s.`;
+  } else if (lavaPlanet) {
+    state.message = `Heating on ${state.ball.landedPlanetName}.`;
+    state.hint = `Launch before ${getLavaOverheatRemainingText(lavaPlanet)}s or the ball burns through.`;
   } else if (iceLockRemaining > 0) {
     state.message = `Sliding on ${state.ball.landedPlanetName}.`;
     state.hint = `Ice drift settling. Next shot unlocks in ${iceLockRemaining.toFixed(1)}s.`;
@@ -4178,6 +4713,14 @@ function updateBallTransforms() {
   ballMesh.scale.x = THREE.MathUtils.lerp(ballMesh.scale.x, targetScaleX, BALL_STRETCH_EASE);
   ballMesh.scale.y = THREE.MathUtils.lerp(ballMesh.scale.y, targetScaleY, BALL_STRETCH_EASE);
   ballMesh.scale.z = THREE.MathUtils.lerp(ballMesh.scale.z, targetScaleZ, BALL_STRETCH_EASE);
+
+  const heatRatio = getBallHeatRatio(state.ball);
+  const heatColor = new THREE.Color(0xff7f45);
+  const hotCore = new THREE.Color(0xffe4b3);
+  ballMesh.material.color.copy(palette.ball).lerp(heatColor, heatRatio * 0.82);
+  ballMesh.material.emissive.copy(heatColor).lerp(hotCore, heatRatio * 0.38);
+  ballMesh.material.emissiveIntensity = heatRatio * 1.8;
+  ballShadow.material.opacity = 0.28 + heatRatio * 0.12;
 }
 
 function resetBallRenderState() {
@@ -4515,8 +5058,9 @@ function updatePhysics(delta) {
   }
 
   if (state.ball.crashed) {
-    if (state.ball.crashKind === 'sun' || state.ball.crashKind === 'planet') {
-      state.ball.transition += delta * (state.ball.crashKind === 'sun' ? 4.8 : 4.3);
+    if (state.ball.crashKind === 'sun' || state.ball.crashKind === 'pulsar' || state.ball.crashKind === 'planet' || state.ball.crashKind === 'lava') {
+      const solarCrash = state.ball.crashKind === 'sun' || state.ball.crashKind === 'pulsar';
+      state.ball.transition += delta * (solarCrash ? 4.8 : state.ball.crashKind === 'lava' ? 5 : 4.3);
       const t = Math.min(1, state.ball.transition);
       state.ball.position.x = THREE.MathUtils.lerp(
         state.ball.crashStartPosition.x,
@@ -4531,17 +5075,21 @@ function updatePhysics(delta) {
       updateBallTransforms();
       ballMesh.position.y = THREE.MathUtils.lerp(
         ballRestY,
-        state.ball.crashKind === 'sun' ? -0.18 : -0.12,
+        solarCrash ? -0.18 : -0.12,
         t,
       );
       ballGroup.scale.setScalar(
-        Math.max(0.04, 1 - t * (state.ball.crashKind === 'sun' ? 0.94 : 0.88)),
+        Math.max(0.04, 1 - t * (solarCrash ? 0.94 : 0.88)),
       );
       ballShadow.material.opacity = 0.28 * (1 - t);
-      if (state.ball.crashKind === 'sun') {
+      if (solarCrash) {
         ballMesh.material.color.copy(palette.ball).lerp(palette.band, Math.min(1, t * 1.1));
         ballMesh.material.emissive.copy(palette.band);
         ballMesh.material.emissiveIntensity = THREE.MathUtils.lerp(0, 2.4, t);
+      } else if (state.ball.crashKind === 'lava') {
+        ballMesh.material.color.copy(new THREE.Color(0xffb16f)).lerp(new THREE.Color(0xff5f24), Math.min(1, t * 1.15));
+        ballMesh.material.emissive.setHex(0xff692b);
+        ballMesh.material.emissiveIntensity = THREE.MathUtils.lerp(0.8, 2.8, t);
       } else {
         ballMesh.material.color.copy(palette.ball).lerp(new THREE.Color(0xd39c76), Math.min(1, t * 0.85));
         ballMesh.material.emissive.setHex(0x000000);
@@ -4550,7 +5098,15 @@ function updatePhysics(delta) {
 
       if (t >= 1) {
         ballGroup.visible = false;
-        showGameOverModal(state.ball.crashKind === 'sun' ? 'sun' : 'planet', state.hint, { countReset: true });
+        showGameOverModal(
+          solarCrash
+            ? state.ball.crashKind
+            : state.ball.crashKind === 'lava'
+              ? 'lava'
+              : state.ball.crashReason,
+          state.hint,
+          { countReset: true },
+        );
       }
       return;
     }
@@ -4562,7 +5118,7 @@ function updatePhysics(delta) {
 
     if (state.ball.transition >= 1) {
       ballGroup.visible = false;
-      showGameOverModal(state.ball.crashKind === 'planet' ? 'planet' : 'bounds', state.hint, { countReset: true });
+      showGameOverModal(state.ball.crashKind === 'planet' ? state.ball.crashReason : 'bounds', state.hint, { countReset: true });
     }
     return;
   }
@@ -4582,7 +5138,22 @@ function updatePhysics(delta) {
       if (Math.abs(appliedDelta) > 0.000001) {
         setLevelTime(state.level, nextTime);
         state.ball.time = nextTime;
-        advanceBallAnchor(state.level, state.ball, appliedDelta);
+        const anchorResult = advanceBallAnchor(state.level, state.ball, appliedDelta);
+        if (anchorResult?.type === 'crash') {
+          beginCrash(
+            'Burned on the lava world.',
+            describeFailureHint('lava'),
+            'lava',
+            anchorResult.eventState ?? null,
+            anchorResult.displayEventState ?? null,
+            anchorResult.planetIndex ?? null,
+          );
+          return;
+        }
+      }
+      if (isPointInPulsarJets(state.level, state.ball.position, state.ball.time ?? state.level.time ?? 0)) {
+        beginPulsarCrash();
+        return;
       }
       if (maybeLaunchAdminReplayShot()) {
         return;
@@ -4627,21 +5198,31 @@ function updatePhysics(delta) {
         ? 'Event horizon collapsed.'
         : result.reason === 'sun'
           ? 'Burned in the sun.'
-          : result.reason === 'planet'
-            ? 'Planet impact.'
-            : 'Lost in open space.';
+          : result.reason === 'pulsar'
+            ? 'Caught in the pulsar jet.'
+            : result.reason === 'split-side'
+              ? 'Wrong side.'
+              : result.reason === 'lava'
+                ? 'Burned on the lava world.'
+                : result.reason === 'planet'
+                  ? 'Planet impact.'
+                  : 'Lost in open space.';
     const hint = describeFailureHint(result.reason);
     beginCrash(
       message,
       hint,
-      result.reason === 'sun'
-        ? 'sun'
-        : result.reason === 'planet'
-          ? 'planet'
-          : 'bounds',
+      result.reason === 'sun' || result.reason === 'pulsar'
+        ? result.reason
+        : result.reason === 'lava'
+          ? 'lava'
+          : (result.reason === 'planet' || result.reason === 'split-side')
+            ? 'planet'
+            : 'bounds',
       result.eventState ?? null,
       result.displayEventState ?? null,
       result.planetIndex ?? null,
+      result.reason ?? message,
+      result.crashTargetPosition ?? null,
     );
     return;
   }
@@ -4654,10 +5235,20 @@ function updatePhysics(delta) {
 
 function updateDecor(time) {
   const worldTime = state.level.time ?? 0;
+  const goalLocked = isGoalLocked(state.level);
   const goalOpen = isGoalOpen(state.level, worldTime);
   const goalTimeLeft = getGoalRemainingTime(state.level, worldTime);
   const goalTimerFraction = getGoalRemainingFraction(state.level, worldTime);
   const showGoalTimer = Number.isFinite(goalTimeLeft) && Number.isFinite(goalTimerFraction);
+  const goalRevealProgress = state.level.goalUnlockRequired && state.level.goalUnlocked
+    ? clamp(
+      (worldTime - (state.level.goalUnlockTime ?? worldTime)) / GOAL_UNLOCK_REVEAL_DURATION,
+      0,
+      1,
+    )
+    : 1;
+  const goalRevealEase = THREE.MathUtils.smootherstep(goalRevealProgress, 0, 1);
+  const goalRevealFlash = 1 - goalRevealEase;
   const goalCloseAnimationProgress = state.goalCloseAnimation.active
     ? clamp(state.goalCloseAnimation.elapsed / GOAL_CLOSE_ANIMATION_DURATION, 0, 1)
     : 0;
@@ -4668,7 +5259,15 @@ function updateDecor(time) {
   runStatusPill.textContent = getRunStatusText();
   windowStatusPill.textContent = getWindowStatusText();
   windowStatusPill.classList.toggle('is-hot', goalTimeLeft < 2.5);
+  heatStatusPill.textContent = getHeatStatusText();
+  heatStatusPill.classList.toggle('is-hot', getBallHeatRatio(state.ball) > 0.18);
+  heatStatusPill.classList.toggle('is-danger', Boolean(getAnchoredLavaPlanet()));
+  const lavaPlanet = getAnchoredLavaPlanet();
+  if (lavaPlanet && !state.ball.crashed && !state.ball.goaling && !state.dragActive) {
+    statusHint.textContent = `Launch before ${getLavaOverheatRemainingText(lavaPlanet)}s or the ball burns through.`;
+  }
   updateSunVisual();
+  updatePulsarJets(time);
   updateLaunchMarker();
   startPad.scale.setScalar(1 + Math.sin(time * 2.7) * 0.06);
   startCore.material.opacity = 0.58 + Math.sin(time * 3.8) * 0.12;
@@ -4710,6 +5309,8 @@ function updateDecor(time) {
 
   if (keepGoalCollapsed) {
     const collapseEase = THREE.MathUtils.smootherstep(goalCloseProgress, 0, 1);
+    blackHoleDisc.visible = true;
+    blackHoleRing.visible = true;
     blackHoleDisc.material.color.setHex(0x202832);
     blackHoleDisc.scale.setScalar(1 - collapseEase * 0.92);
     blackHoleRing.rotation.z = time * 0.2 - collapseEase * 0.9;
@@ -4717,14 +5318,34 @@ function updateDecor(time) {
     blackHoleRing.material.opacity = Math.max(0, 0.48 - collapseEase * 0.44);
     goalTimerTrack.material.opacity = 0;
     goalTimerArc.material.opacity = 0;
+  } else if (goalLocked) {
+    blackHoleDisc.visible = false;
+    blackHoleRing.visible = false;
+    goalTimerTrack.material.opacity = 0;
+    goalTimerArc.material.opacity = 0;
   } else {
-    blackHoleDisc.material.color.setHex(goalOpen ? palette.blackHole.getHex() : 0x191f26);
-    blackHoleDisc.scale.setScalar(1);
-    blackHoleRing.rotation.z = time * (goalOpen ? 0.9 : 0.25);
-    blackHoleRing.scale.setScalar(goalOpen ? 1 + Math.sin(time * 4.2) * 0.08 : 0.92);
-    blackHoleRing.material.opacity = goalOpen
-      ? 0.46 + goalTimerFraction * 0.12 + Math.sin(time * 4.2) * 0.04
-      : 0.18;
+    blackHoleDisc.visible = true;
+    blackHoleRing.visible = true;
+    blackHoleDisc.material.color.copy(
+      goalOpen
+        ? mixColors(new THREE.Color(0x8d7aff), palette.blackHole, goalRevealEase)
+        : mixColors(new THREE.Color(0x5f6677), new THREE.Color(0x191f26), goalRevealEase),
+    );
+    blackHoleDisc.scale.setScalar(THREE.MathUtils.lerp(0.62, 1, goalRevealEase));
+    blackHoleRing.rotation.z = time * (goalOpen ? 0.9 : 0.25) + (1 - goalRevealEase) * 1.2;
+    blackHoleRing.scale.setScalar(
+      THREE.MathUtils.lerp(
+        2.15,
+        goalOpen ? 1 + Math.sin(time * 4.2) * 0.08 : 0.92,
+        goalRevealEase,
+      ),
+    );
+    blackHoleRing.material.opacity = Math.max(
+      0.22 * goalRevealFlash,
+      goalOpen
+        ? 0.46 + (showGoalTimer ? goalTimerFraction * 0.12 : 0) + Math.sin(time * 4.2) * 0.04
+        : 0.18
+    ) * Math.max(0.35, goalRevealEase);
     goalTimerTrack.material.opacity = showGoalTimer ? (goalOpen ? 0.22 : 0.08) : 0;
     goalTimerArc.material.opacity = showGoalTimer && goalOpen
       ? 0.56 + goalTimerFraction * 0.28 + Math.sin(time * 5.6) * 0.03
@@ -4743,9 +5364,10 @@ function updateDecor(time) {
       ? 0.13 + Math.sin(time * 2 + index) * 0.03 + relayPulse * 0.12
       : 0.16 + Math.sin(time * 1.7 + index) * 0.04;
     visual.orbitRing.rotation.z = time * (0.35 + index * 0.12);
-    visual.body.rotation.y = -worldTime * (visual.planet.spinSpeed ?? 0);
+    const textureRotationOffset = visual.planet.surfaceType === 'lava' ? Math.PI * 0.72 : 0;
+    visual.body.rotation.y = textureRotationOffset - worldTime * (visual.planet.spinSpeed ?? 0);
     if (visual.atmosphereShell) {
-      visual.atmosphereShell.rotation.y = -worldTime * (visual.planet.spinSpeed ?? 0) * 0.85;
+      visual.atmosphereShell.rotation.y = textureRotationOffset - worldTime * (visual.planet.spinSpeed ?? 0) * 0.85;
       visual.atmosphereShell.material.opacity = isLandable
         ? 0.13 + Math.sin(time * 2.8 + index) * 0.025
         : 0.11 + Math.sin(time * 1.9 + index) * 0.02;
@@ -4753,6 +5375,14 @@ function updateDecor(time) {
     if (visual.accentBand) {
       visual.accentBand.rotation.z = 0.34 + time * (0.24 + index * 0.03);
       visual.accentBand.material.opacity = 0.24 + Math.sin(time * 2.2 + index) * 0.04;
+    }
+    if (visual.splitSafeDisc && visual.splitHazardDisc) {
+      const splitAxis = getPlanetSplitAxis(visual.planet, worldTime);
+      const splitAngle = Math.atan2(splitAxis.y, splitAxis.x);
+      visual.splitSafeDisc.rotation.z = -splitAngle;
+      visual.splitHazardDisc.rotation.z = -splitAngle;
+      visual.splitSafeDisc.material.opacity = 0.31 + Math.sin(time * 2.6 + index) * 0.035;
+      visual.splitHazardDisc.material.opacity = 0.42 + Math.sin(time * 2.1 + index) * 0.04;
     }
     if (visual.landingRing) {
       const selected = state.ball.landedPlanetIndex === index;
@@ -4762,6 +5392,8 @@ function updateDecor(time) {
         : 0.16 + Math.sin(time * 3 + index) * 0.03;
       if (visual.planet.surfaceType === 'ice') {
         visual.landingRing.material.opacity += 0.08;
+      } else if (visual.planet.surfaceType === 'lava') {
+        visual.landingRing.material.opacity += 0.06;
       }
       visual.orbitRing.material.opacity = selected ? 0.9 : 0.62 + Math.sin(time * 2.5 + index) * 0.06;
       visual.orbitPath.material.opacity = selected ? 0.5 : 0.22 + Math.sin(time * 1.6 + index) * 0.025;
@@ -4788,11 +5420,27 @@ function updateDecor(time) {
       visual.iceInnerRing.material.opacity = 0.18 + Math.sin(time * 3.1 + index) * 0.04;
       visual.iceInnerRing.rotation.z = time * (0.16 + index * 0.01);
     }
+    if (visual.lavaHaloRing) {
+      const anchoredLava = state.ball.anchorPlanetIndex === index ? getBallHeatRatio(state.ball) : 0;
+      visual.lavaHaloRing.material.opacity = 0.22 + Math.sin(time * 3.1 + index) * 0.05 + anchoredLava * 0.24;
+      visual.lavaHaloRing.scale.setScalar(1 + Math.sin(time * 2.8 + index) * 0.035 + anchoredLava * 0.08);
+    }
+    if (visual.lavaWarningRing) {
+      const selected = state.ball.anchorPlanetIndex === index;
+      const heatRatio = selected ? getBallHeatRatio(state.ball) : 0;
+      visual.lavaWarningRing.material.opacity = 0.08 + heatRatio * 0.62;
+      visual.lavaWarningRing.rotation.z = time * (0.6 + index * 0.04);
+      visual.lavaWarningRing.scale.setScalar(1 + heatRatio * 0.12);
+    }
     if (visual.monolith) {
       const unlocked = state.level.goalUnlocked;
-      visual.monolith.material.emissiveIntensity = unlocked ? 1.15 : 0.42 + Math.sin(time * 2.4) * 0.08;
-      visual.monolithRing.material.opacity = unlocked ? 0.34 + Math.sin(time * 4.1) * 0.05 : 0.18 + Math.sin(time * 2.6) * 0.04;
-      visual.monolithRing.scale.setScalar(unlocked ? 1.08 + Math.sin(time * 3.4) * 0.04 : 1);
+      visual.monolith.material.emissiveIntensity = unlocked ? 1.15 : 0.78 + Math.sin(time * 2.4) * 0.12;
+      visual.monolithRing.material.opacity = unlocked ? 0.34 + Math.sin(time * 4.1) * 0.05 : 0.44 + Math.sin(time * 2.6) * 0.08;
+      visual.monolithRing.scale.setScalar(unlocked ? 1.08 + Math.sin(time * 3.4) * 0.04 : 1.08 + Math.sin(time * 2.8) * 0.08);
+      if (visual.monolithBeacon) {
+        visual.monolithBeacon.material.opacity = unlocked ? 0.08 : 0.16 + Math.sin(time * 2.2 + index) * 0.04;
+        visual.monolithBeacon.scale.setScalar(unlocked ? 1.02 : 1.06 + Math.sin(time * 2 + index) * 0.06);
+      }
     }
     visual.orbitPath.position.set(visual.planet.orbitCenter.x, 0, visual.planet.orbitCenter.y);
   });
