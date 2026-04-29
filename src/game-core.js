@@ -57,6 +57,7 @@ export const WORLD_DEFINITIONS = [
   { id: 'aperture-reach', name: 'Aperture Reach' },
   { id: 'binary-crown', name: 'Binary Crown' },
   { id: 'ancient-worlds', name: 'Ancient Worlds' },
+  { id: 'split-worlds', name: 'Split Worlds' },
 ];
 
 const CORE_LEVEL_DEFINITIONS = [
@@ -1408,6 +1409,28 @@ function makeAncientVariant(spec) {
   return level;
 }
 
+function makeSplitVariant(spec) {
+  const level = variantLevel('prism', spec);
+  const splitPlanets = spec.splitPlanets ?? {};
+  level.planets = level.planets.map((planet, index) => {
+    const split = splitPlanets[index];
+    if (!split) {
+      return planet;
+    }
+
+    return {
+      ...planet,
+      landable: true,
+      splitSurface: {
+        landableAngleDeg: split.landableAngleDeg ?? 0,
+        threshold: split.threshold ?? 0,
+      },
+      landingRadius: split.landingRadius ?? planet.landingRadius ?? planet.radius + 0.72,
+    };
+  });
+  return level;
+}
+
 const ICY_WORLD_SPECS = [
   { baseId: 'first-relay', id: 'polar-relay', name: 'Polar Relay', summary: 'Land on a frozen relay, then let the ball drift around the ice before you launch again.', defaultSlideAngularSpeed: 0.8, slideAngularSpeeds: { 0: 0.72, 1: -0.82 } },
   { baseId: 'mirror-harbor', id: 'frost-gate', name: 'Frost Gate', summary: 'The two-gate relay only works if you let the icy harbor drift into the correct launch face.', defaultSlideAngularSpeed: 0.82 },
@@ -1460,11 +1483,25 @@ const ANCIENT_WORLD_SPECS = [
   { baseId: 'final-moon-circuit', id: 'unlock-circuit', name: 'Unlock Circuit', summary: 'The last circuit of the campaign first asks for a monolith landing, then a clean relay escape.', unlockPlanetIndex: 2, goalOpenSeconds: 7 },
 ];
 
+const SPLIT_WORLD_SPECS = [
+  { baseId: 'inner-step', id: 'split-step', name: 'Split Step', summary: 'The launch world is split, but the route still starts with a clean handoff to the outer relay.', splitPlanets: { 0: { landableAngleDeg: -170 } } },
+  { baseId: 'forked-harbor', id: 'split-harbor', name: 'Split Harbor', summary: 'Both harbor routes are readable because every split world shows exactly which side can catch you.', splitPlanets: { 0: { landableAngleDeg: 143 }, 1: { landableAngleDeg: 300 }, 2: { landableAngleDeg: 15 } } },
+  { baseId: 'counterspin-gate', id: 'split-counterspin', name: 'Split Counterspin', summary: 'The split launch face throws you off-angle, so stabilize on a relay before the outward burn.', splitPlanets: { 0: { landableAngleDeg: 128 } } },
+  { baseId: 'false-periapsis', id: 'split-periapsis', name: 'Split Periapsis', summary: 'The tempting close pass still starts the route, but a split relay face punishes sloppy contact.', splitPlanets: { 0: { landableAngleDeg: -144 }, 1: { landableAngleDeg: 225 } } },
+  { baseId: 'long-transfer', id: 'split-transfer', name: 'Split Transfer', summary: 'A long transfer is safer when you read the relay face before committing to the burn.', splitPlanets: { 0: { landableAngleDeg: 120 }, 2: { landableAngleDeg: 150 } } },
+  { baseId: 'tidal-gate', id: 'split-tide', name: 'Split Tide', summary: 'The rotating safe hemisphere turns the setup touch into a timing problem.', splitPlanets: { 0: { landableAngleDeg: 12 }, 1: { landableAngleDeg: 170 } } },
+  { baseId: 'moon-switch', id: 'split-switch', name: 'Split Switch', summary: 'The moon lane stays useful, but the split switch world decides whether the next touch is safe.', splitPlanets: { 0: { landableAngleDeg: -123 }, 2: { landableAngleDeg: 145 } } },
+  { baseId: 'moon-catch', id: 'split-moon', name: 'Split Moon', summary: 'Catch the moving moon, then leave through a split relay face instead of clipping the red side.', splitPlanets: { 0: { landableAngleDeg: 127 }, 2: { landableAngleDeg: 215 } } },
+  { baseId: 'halo-run', id: 'split-halo', name: 'Split Halo', summary: 'The halo lane wraps around split bodies whose teal sides are the only solid ground.', splitPlanets: { 0: { landableAngleDeg: -131 }, 3: { landableAngleDeg: 250 }, 4: { landableAngleDeg: 190 } } },
+  { baseId: 'final-circuit', id: 'split-circuit', name: 'Split Circuit', summary: 'The final split circuit asks for clean relay handoffs without clipping the red halves.', splitPlanets: { 0: { landableAngleDeg: -130 }, 1: { landableAngleDeg: 335 }, 2: { landableAngleDeg: 160 } } },
+];
+
 const EXPANSION_LEVEL_DEFINITIONS = [
   ...ICY_WORLD_SPECS.map((spec) => makeIcyVariant(spec)),
   ...PORTAL_WORLD_SPECS.map((spec) => makePortalVariant(spec)),
   ...BINARY_WORLD_SPECS.map((spec) => makeBinaryVariant(spec)),
   ...ANCIENT_WORLD_SPECS.map((spec) => makeAncientVariant(spec)),
+  ...SPLIT_WORLD_SPECS.map((spec) => makeSplitVariant(spec)),
 ];
 
 const LEVEL_DEFINITIONS = [...CORE_LEVEL_DEFINITIONS, ...EXPANSION_LEVEL_DEFINITIONS];
@@ -1550,6 +1587,16 @@ const CAMPAIGN_LEVEL_ORDER = [
   'sealed-lattice',
   'shepherd-shrine',
   'unlock-circuit',
+  'split-step',
+  'split-harbor',
+  'split-counterspin',
+  'split-periapsis',
+  'split-transfer',
+  'split-tide',
+  'split-switch',
+  'split-moon',
+  'split-halo',
+  'split-circuit',
 ];
 
 const campaignOrderIndex = new Map(
@@ -1608,6 +1655,21 @@ export function normalize(vector) {
 export function directionFromAngleDeg(angleDeg) {
   const angleRad = angleDeg * Math.PI / 180;
   return vec(Math.cos(angleRad), Math.sin(angleRad));
+}
+
+export function getPlanetSplitAxis(planet, time = 0) {
+  const baseAngle = (planet?.splitSurface?.landableAngleDeg ?? 0) * Math.PI / 180;
+  return directionFromAngleDeg((baseAngle + (planet?.spinSpeed ?? 0) * time) * 180 / Math.PI);
+}
+
+export function isPlanetLandingSide(planet, landingDirection, time = 0) {
+  if (!planet?.splitSurface) {
+    return Boolean(planet?.landable);
+  }
+
+  const axis = getPlanetSplitAxis(planet, time);
+  const normal = normalize(landingDirection ?? vec(1, 0));
+  return axis.x * normal.x + axis.y * normal.y >= (planet.splitSurface.threshold ?? 0);
 }
 
 function scalePointFromSun(point, sun, scale = SYSTEM_LAYOUT_SCALE) {
@@ -2394,6 +2456,20 @@ function resolvePlanetContact(level, ball) {
 
     if (planet.landable && distance <= touchRadius) {
       const landingDirection = getLandingDirection(ball, planet);
+      const landsOnSafeSide = isPlanetLandingSide(planet, landingDirection, ball.time ?? level.time ?? 0);
+      if (!landsOnSafeSide) {
+        const eventState = cloneBallRuntimeState(ball);
+        ball.velocity.x = 0;
+        ball.velocity.y = 0;
+        return {
+          type: 'crash',
+          reason: 'split-side',
+          planetIndex: index,
+          planetName: planet.name ?? 'split planet',
+          eventState,
+          displayEventState: cloneBallRuntimeState(eventState),
+        };
+      }
       const surfaceRadius = getBallSurfaceRadius(planet);
       const eventState = cloneBallRuntimeState(ball);
       const displayEventState = cloneBallRuntimeState({

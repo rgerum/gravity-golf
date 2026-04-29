@@ -18,6 +18,7 @@ import {
   getBallSurfaceRadius,
   getGoalRemainingFraction,
   getGoalRemainingTime,
+  getPlanetSplitAxis,
   getPlanetSlideAngularSpeed,
   getPlanetVelocity,
   getPlanetSurfaceVelocity,
@@ -2583,6 +2584,10 @@ function describeFailureHint(reason) {
     return `Retry ${state.level.name}. Skim the well, don't drop into it.`;
   }
 
+  if (reason === 'split-side') {
+    return `Retry ${state.level.name}. Touch down on the teal side of split planets.`;
+  }
+
   const closestLandingMiss = describeClosestLandingMiss();
   if (closestLandingMiss) {
     return `Retry ${state.level.name}. ${closestLandingMiss}`;
@@ -2805,6 +2810,10 @@ function getFailureTitle(reason) {
 
   if (reason === 'goal-closed') {
     return 'Black hole closed.';
+  }
+
+  if (reason === 'split-side') {
+    return 'Hit the dead side.';
   }
 
   if (reason === 'planet') {
@@ -3287,6 +3296,22 @@ function rebuildPortals() {
   });
 }
 
+function createSplitSurfaceDisc(radius, color, opacity, thetaStart) {
+  const disc = new THREE.Mesh(
+    new THREE.CircleGeometry(radius, 48, thetaStart, Math.PI),
+    new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    }),
+  );
+  disc.rotation.x = -Math.PI / 2;
+  disc.renderOrder = 7;
+  return disc;
+}
+
 function rebuildPlanets() {
   clearGroup(orbitPathsRoot);
   clearGroup(planetsRoot);
@@ -3398,6 +3423,8 @@ function rebuildPlanets() {
     let iceSkidArc = null;
     let iceHaloRing = null;
     let iceInnerRing = null;
+    let splitSafeDisc = null;
+    let splitHazardDisc = null;
 
     if (planet.landable) {
       atmosphereShell = new THREE.Mesh(
@@ -3459,6 +3486,27 @@ function rebuildPlanets() {
     orbitRing.position.y = planet.radius * 0.84;
     orbitRing.renderOrder = 4;
     group.add(orbitRing);
+
+    if (planet.splitSurface) {
+      splitSafeDisc = createSplitSurfaceDisc(
+        planet.radius * 1.075,
+        planet.surfaceType === 'ice' ? 0xeaffff : 0x62ffd7,
+        0.34,
+        -Math.PI / 2,
+      );
+      splitSafeDisc.position.y = planet.radius * 1.5;
+      group.add(splitSafeDisc);
+
+      splitHazardDisc = createSplitSurfaceDisc(
+        planet.radius * 1.08,
+        0xff604f,
+        0.46,
+        Math.PI / 2,
+      );
+      splitHazardDisc.position.y = planet.radius * 1.505;
+      group.add(splitHazardDisc);
+
+    }
 
     if (planet.surfaceType === 'ice') {
       iceHaloRing = new THREE.Mesh(
@@ -3574,6 +3622,8 @@ function rebuildPlanets() {
       iceSkidArc,
       iceHaloRing,
       iceInnerRing,
+      splitSafeDisc,
+      splitHazardDisc,
       planet,
     };
   });
@@ -3758,6 +3808,7 @@ function beginCrash(
   eventState = null,
   displayEventState = null,
   crashPlanetIndex = null,
+  failureReason = reason,
 ) {
   hideGameOverModal();
   hideGoalCloseAnimation();
@@ -3767,7 +3818,7 @@ function beginCrash(
   state.ball.crashed = true;
   state.ball.goaling = false;
   state.ball.transition = 0;
-  state.ball.crashReason = reason;
+  state.ball.crashReason = failureReason;
   state.ball.crashKind = crashKind;
   state.ball.crashPlanetIndex = crashPlanetIndex;
   setVec(state.ball.crashStartPosition, state.ball.position);
@@ -4260,7 +4311,7 @@ function updatePhysics(delta) {
 
       if (t >= 1) {
         ballGroup.visible = false;
-        showGameOverModal(state.ball.crashKind === 'sun' ? 'sun' : 'planet', state.hint, { countReset: true });
+        showGameOverModal(state.ball.crashKind === 'sun' ? 'sun' : state.ball.crashReason, state.hint, { countReset: true });
       }
       return;
     }
@@ -4272,7 +4323,7 @@ function updatePhysics(delta) {
 
     if (state.ball.transition >= 1) {
       ballGroup.visible = false;
-      showGameOverModal(state.ball.crashKind === 'planet' ? 'planet' : 'bounds', state.hint, { countReset: true });
+      showGameOverModal(state.ball.crashKind === 'planet' ? state.ball.crashReason : 'bounds', state.hint, { countReset: true });
     }
     return;
   }
@@ -4337,7 +4388,9 @@ function updatePhysics(delta) {
         ? 'Event horizon collapsed.'
         : result.reason === 'sun'
           ? 'Burned in the sun.'
-          : result.reason === 'planet'
+          : result.reason === 'split-side'
+            ? 'Wrong side.'
+            : result.reason === 'planet'
             ? 'Planet impact.'
             : 'Lost in open space.';
     const hint = describeFailureHint(result.reason);
@@ -4346,12 +4399,13 @@ function updatePhysics(delta) {
       hint,
       result.reason === 'sun'
         ? 'sun'
-        : result.reason === 'planet'
+        : (result.reason === 'planet' || result.reason === 'split-side')
           ? 'planet'
           : 'bounds',
       result.eventState ?? null,
       result.displayEventState ?? null,
       result.planetIndex ?? null,
+      result.reason ?? message,
     );
     return;
   }
@@ -4463,6 +4517,14 @@ function updateDecor(time) {
     if (visual.accentBand) {
       visual.accentBand.rotation.z = 0.34 + time * (0.24 + index * 0.03);
       visual.accentBand.material.opacity = 0.24 + Math.sin(time * 2.2 + index) * 0.04;
+    }
+    if (visual.splitSafeDisc && visual.splitHazardDisc) {
+      const splitAxis = getPlanetSplitAxis(visual.planet, worldTime);
+      const splitAngle = Math.atan2(splitAxis.y, splitAxis.x);
+      visual.splitSafeDisc.rotation.z = -splitAngle;
+      visual.splitHazardDisc.rotation.z = -splitAngle;
+      visual.splitSafeDisc.material.opacity = 0.31 + Math.sin(time * 2.6 + index) * 0.035;
+      visual.splitHazardDisc.material.opacity = 0.42 + Math.sin(time * 2.1 + index) * 0.04;
     }
     if (visual.landingRing) {
       const selected = state.ball.landedPlanetIndex === index;
