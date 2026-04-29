@@ -4095,7 +4095,7 @@ function createGravityFieldSample(baseX, baseY, halfWidth, halfHeight, target) {
   let tintB = 0;
 
   for (const planet of state.level.planets) {
-    if (planet.active === false) {
+    if (planet.active === false || planet.hidden) {
       continue;
     }
 
@@ -4584,7 +4584,7 @@ function rebuildPlanets() {
   clearGroup(orbitPathsRoot);
   clearGroup(planetsRoot);
 
-  planetVisuals = state.level.planets.map((planet) => {
+  planetVisuals = state.level.planets.filter((planet) => !planet.hidden).map((planet) => {
     const group = new THREE.Group();
     const coreColor = new THREE.Color(planet.core);
     const glowColor = new THREE.Color(planet.glow);
@@ -6194,8 +6194,9 @@ function updateDecor(time) {
   goalTimerArc.visible = showGoalTimer && goalTimerArc.visible;
   goalTimerArc.material.color.setHex(goalTimeLeft < 2.5 ? 0xff9f6e : 0x8fffe3);
 
-  planetVisuals.forEach((visual, index) => {
-    const pulse = 1 + Math.sin(time * (1.5 + index * 0.35) + index) * 0.05;
+  planetVisuals.forEach((visual, visualIndex) => {
+    const index = visual.planet.index ?? visualIndex;
+    const pulse = 1 + Math.sin(time * (1.5 + visualIndex * 0.35) + visualIndex) * 0.05;
     const isLandable = Boolean(visual.planet.landable);
     const relayPulse = state.ball.landedPlanetIndex === index ? state.relayPulse : 0;
     const planetVisibility = visual.planet.infallFade ?? (visual.planet.active === false ? 0 : 1);
