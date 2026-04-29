@@ -3371,6 +3371,13 @@ function describeFailureHint(reason) {
     return `Retry ${state.level.name}. Launch before the planet is consumed.`;
   }
 
+  if (reason === 'planet-vanished') {
+    const flickerPlanet = state.ball.crashPlanetIndex !== null && state.ball.crashPlanetIndex !== undefined
+      ? state.level.planets[state.ball.crashPlanetIndex]
+      : null;
+    return `Retry ${state.level.name}. Leave ${flickerPlanet?.name ?? 'the flicker planet'} before its countdown empties.`;
+  }
+
   if (reason === 'lava') {
     const lavaPlanet = state.ball.crashPlanetIndex !== null && state.ball.crashPlanetIndex !== undefined
       ? state.level.planets[state.ball.crashPlanetIndex]
@@ -3612,6 +3619,10 @@ function getFailureTitle(reason) {
 
   if (reason === 'planet-consumed') {
     return 'Consumed by the sun.';
+  }
+
+  if (reason === 'planet-vanished') {
+    return 'Planet vanished.';
   }
 
   if (reason === 'goal-closed') {
@@ -4313,7 +4324,9 @@ function rebuildPlanets() {
       });
 
     const body = new THREE.Mesh(
-      new THREE.SphereGeometry(planet.radius, 48, 48),
+      planet.flicker
+        ? new THREE.SphereGeometry(planet.radius, 48, 24, 0, Math.PI * 2, 0, Math.PI / 2)
+        : new THREE.SphereGeometry(planet.radius, 48, 48),
       bodyMaterial,
     );
     body.position.y = planet.radius * 0.74;
@@ -4334,6 +4347,9 @@ function rebuildPlanets() {
     let lavaWarningRing = null;
     let splitSafeDisc = null;
     let splitHazardDisc = null;
+    let flickerTimerTrack = null;
+    let flickerTimerArc = null;
+    let flickerGhostRing = null;
     const turretVisuals = [];
 
     if (planet.landable) {
@@ -4482,6 +4498,55 @@ function rebuildPlanets() {
       lavaWarningRing.position.y = 0.09;
       lavaWarningRing.renderOrder = 5;
       group.add(lavaWarningRing);
+    }
+
+    if (planet.flicker) {
+      flickerGhostRing = new THREE.Mesh(
+        new THREE.RingGeometry(planet.radius + 0.34, planet.radius + 0.54, 72),
+        new THREE.MeshBasicMaterial({
+          color: 0x9ee9ff,
+          transparent: true,
+          opacity: 0.18,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+        }),
+      );
+      flickerGhostRing.rotation.x = -Math.PI / 2;
+      flickerGhostRing.position.y = 0.052;
+      flickerGhostRing.renderOrder = 2;
+      group.add(flickerGhostRing);
+
+      flickerTimerTrack = new THREE.Mesh(
+        new THREE.RingGeometry(planet.radius + 0.58, planet.radius + 0.68, 80),
+        new THREE.MeshBasicMaterial({
+          color: 0x34556f,
+          transparent: true,
+          opacity: 0.28,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+        }),
+      );
+      flickerTimerTrack.rotation.x = -Math.PI / 2;
+      flickerTimerTrack.position.y = 0.074;
+      flickerTimerTrack.renderOrder = 6;
+      group.add(flickerTimerTrack);
+
+      flickerTimerArc = new THREE.Mesh(
+        new THREE.RingGeometry(planet.radius + 0.58, planet.radius + 0.7, 80, 1, Math.PI / 2, Math.PI * 2),
+        new THREE.MeshBasicMaterial({
+          color: 0xffe38b,
+          transparent: true,
+          opacity: 0.82,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+        }),
+      );
+      flickerTimerArc.rotation.x = -Math.PI / 2;
+      flickerTimerArc.position.y = 0.09;
+      flickerTimerArc.renderOrder = 7;
+      group.add(flickerTimerArc);
     }
 
     let landingRing = null;
@@ -4652,6 +4717,9 @@ function rebuildPlanets() {
       iceInnerRing,
       lavaHaloRing,
       lavaWarningRing,
+      flickerTimerTrack,
+      flickerTimerArc,
+      flickerGhostRing,
       splitSafeDisc,
       splitHazardDisc,
       turretVisuals,
@@ -5471,11 +5539,21 @@ function updatePhysics(delta) {
         if (anchorResult?.type === 'crash') {
           const anchoredMessage = anchorResult.reason === 'turret'
             ? 'Shot down by a turret.'
-            : 'Burned on the lava world.';
+            : anchorResult.reason === 'planet-vanished'
+              ? 'Planet vanished.'
+              : anchorResult.reason === 'planet-consumed'
+                ? 'Consumed by the sun.'
+                : 'Burned on the lava world.';
           beginCrash(
             anchoredMessage,
             describeFailureHint(anchorResult.reason ?? 'lava'),
-            anchorResult.reason === 'turret' ? 'turret' : 'lava',
+            anchorResult.reason === 'turret'
+              ? 'turret'
+              : anchorResult.reason === 'planet-vanished'
+                ? 'planet'
+                : anchorResult.reason === 'planet-consumed'
+                  ? 'sun'
+                  : 'lava',
             anchorResult.eventState ?? null,
             anchorResult.displayEventState ?? null,
             anchorResult.planetIndex ?? null,
@@ -5533,6 +5611,8 @@ function updatePhysics(delta) {
         ? 'Event horizon collapsed.'
         : result.reason === 'planet-consumed'
           ? 'Consumed by the sun.'
+        : result.reason === 'planet-vanished'
+          ? 'Planet vanished.'
         : result.reason === 'sun'
           ? 'Burned in the sun.'
           : result.reason === 'pulsar'
@@ -5554,6 +5634,8 @@ function updatePhysics(delta) {
         ? result.reason
         : result.reason === 'planet-consumed'
           ? 'sun'
+        : result.reason === 'planet-vanished'
+          ? 'planet'
         : result.reason === 'lava'
           ? 'lava'
           : (result.reason === 'planet' || result.reason === 'split-side')
@@ -5703,19 +5785,28 @@ function updateDecor(time) {
     const isLandable = Boolean(visual.planet.landable);
     const relayPulse = state.ball.landedPlanetIndex === index ? state.relayPulse : 0;
     const planetVisibility = visual.planet.infallFade ?? (visual.planet.active === false ? 0 : 1);
+    const isFlickerPlanet = Boolean(visual.planet.flicker);
+    const darkSideExposure = isFlickerPlanet ? clamp(1 - planetVisibility, 0, 1) : 0;
     const collisionPulse = visual.planet.collisionPulse ?? 0;
     visual.group.position.set(visual.planet.position.x, 0, visual.planet.position.y);
-    visual.group.visible = planetVisibility > 0.02;
-    visual.orbitPath.visible = planetVisibility > 0.02;
-    visual.group.scale.setScalar((0.72 + planetVisibility * 0.28) * (1 + collisionPulse * 0.08));
+    visual.group.visible = planetVisibility > 0.02 || isFlickerPlanet;
+    visual.body.visible = planetVisibility > 0.02 || isFlickerPlanet;
+    visual.orbitPath.visible = planetVisibility > 0.02 || isFlickerPlanet;
+    visual.group.scale.setScalar((isFlickerPlanet ? 1 : 0.72 + planetVisibility * 0.28) * (1 + collisionPulse * 0.08));
     visual.glow.material.opacity = isLandable
       ? (0.13 + Math.sin(time * 2 + index) * 0.03 + relayPulse * 0.12) * planetVisibility
       : (0.16 + Math.sin(time * 1.7 + index) * 0.04) * planetVisibility;
     visual.orbitRing.rotation.z = time * (0.35 + index * 0.12);
     const textureRotationOffset = visual.planet.surfaceType === 'lava' ? Math.PI * 0.72 : 0;
+    const flickerFlip = isFlickerPlanet
+      ? THREE.MathUtils.smootherstep(darkSideExposure, 0, 1) * Math.PI
+      : 0;
+    visual.body.rotation.x = flickerFlip;
     visual.body.rotation.y = textureRotationOffset - worldTime * (visual.planet.spinSpeed ?? 0);
+    visual.body.material.color.setHex(0xffffff);
     visual.body.material.emissiveIntensity = ((visual.planet.emissive ?? 0.12) + relayPulse * 0.45 + collisionPulse * 0.45) * planetVisibility;
     if (visual.atmosphereShell) {
+      visual.atmosphereShell.rotation.x = flickerFlip;
       visual.atmosphereShell.rotation.y = textureRotationOffset - worldTime * (visual.planet.spinSpeed ?? 0) * 0.85;
       visual.atmosphereShell.material.opacity = isLandable
         ? (0.13 + Math.sin(time * 2.8 + index) * 0.025) * planetVisibility
@@ -5781,6 +5872,33 @@ function updateDecor(time) {
       visual.lavaWarningRing.rotation.z = time * (0.6 + index * 0.04);
       visual.lavaWarningRing.scale.setScalar(1 + heatRatio * 0.12);
     }
+    if (visual.flickerTimerTrack && visual.flickerTimerArc && visual.flickerGhostRing) {
+      const flickerProgress = clamp(visual.planet.flickerProgress ?? 1, 0, 1);
+      const countdownFraction = clamp(1 - flickerProgress, 0, 1);
+      const isHiddenPhase = visual.planet.flickerMode === 'hidden';
+      const warningPulse = isHiddenPhase ? 0 : Math.max(0, 1 - countdownFraction * 3.4);
+      visual.flickerTimerTrack.visible = true;
+      visual.flickerTimerArc.visible = countdownFraction > 0.004;
+      visual.flickerGhostRing.visible = true;
+      visual.flickerTimerTrack.material.opacity = 0.18 + (isHiddenPhase ? 0.22 : 0.12) + Math.sin(time * 3.4 + index) * 0.025;
+      visual.flickerGhostRing.material.opacity = isHiddenPhase
+        ? 0.26 + Math.sin(time * 4.2 + index) * 0.08
+        : (0.08 + warningPulse * 0.32) * (1 - planetVisibility * 0.45);
+      visual.flickerGhostRing.scale.setScalar(1 + (isHiddenPhase ? Math.sin(time * 3.2 + index) * 0.055 : warningPulse * 0.08));
+      visual.flickerTimerArc.material.color.setHex(isHiddenPhase ? 0x9ee9ff : (warningPulse > 0.15 ? 0xff8f66 : 0xffe38b));
+      visual.flickerTimerArc.material.opacity = (isHiddenPhase ? 0.72 : 0.82 + warningPulse * 0.16) * (0.88 + Math.sin(time * 5.1 + index) * 0.04);
+      visual.flickerTimerArc.rotation.z = 0;
+      visual.flickerTimerTrack.rotation.z = 0;
+      visual.flickerTimerArc.geometry.dispose();
+      visual.flickerTimerArc.geometry = new THREE.RingGeometry(
+        visual.planet.radius + 0.58,
+        visual.planet.radius + 0.7,
+        80,
+        1,
+        Math.PI / 2,
+        Math.max(0.0001, Math.PI * 2 * countdownFraction),
+      );
+    }
     if (visual.monolith) {
       const unlocked = state.level.goalUnlocked;
       visual.monolith.material.emissiveIntensity = unlocked ? 1.15 : 0.78 + Math.sin(time * 2.4) * 0.12;
@@ -5795,8 +5913,8 @@ function updateDecor(time) {
       const lineState = getTurretLineState(visual.planet, turretVisual.turret, worldTime);
       const angle = Math.atan2(lineState.direction.y, lineState.direction.x);
       turretVisual.group.rotation.y = -angle;
-      turretVisual.sightLine.material.opacity = 0.54 + Math.sin(time * 5.2 + index) * 0.12;
-      turretVisual.sightGlow.material.opacity = 0.08 + Math.sin(time * 4.6 + index) * 0.035;
+      turretVisual.sightLine.material.opacity = (0.54 + Math.sin(time * 5.2 + index) * 0.12) * planetVisibility;
+      turretVisual.sightGlow.material.opacity = (0.08 + Math.sin(time * 4.6 + index) * 0.035) * planetVisibility;
     }
     visual.orbitPath.position.set(visual.planet.orbitCenter.x, 0, visual.planet.orbitCenter.y);
   });

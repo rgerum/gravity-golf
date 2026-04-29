@@ -73,6 +73,7 @@ export const WORLD_DEFINITIONS = [
   { id: 'lava-reach', name: 'Lava Reach' },
   { id: 'pulsars', name: 'Pulsars' },
   { id: 'dying-systems', name: 'Dying Systems' },
+  { id: 'flicker-planets', name: 'Flicker Planets' },
   { id: 'hostile-planets', name: 'Hostile Planets' },
 ];
 
@@ -1223,6 +1224,21 @@ const WORLD_THEMES = {
       { core: 0xf4efe6, glow: 0xffffff },
     ],
   },
+  flicker: {
+    landable: [
+      { core: 0x64e6ff, glow: 0xb5f5ff },
+      { core: 0xffcf63, glow: 0xffef9f },
+      { core: 0xa58dff, glow: 0xdfd4ff },
+    ],
+    hazards: [
+      { core: 0xff6f90, glow: 0xffc0ce },
+      { core: 0xff9566, glow: 0xffceb0 },
+      { core: 0x7dc7ff, glow: 0xc4e7ff },
+    ],
+    moons: [
+      { core: 0xeef7ff, glow: 0xffffff },
+    ],
+  },
 };
 
 function cloneLaunchPresets(launchPresets) {
@@ -1656,6 +1672,33 @@ function makeDyingVariant(spec, specIndex) {
   return level;
 }
 
+function makeFlickerVariant(spec) {
+  const level = variantLevel('flicker', {
+    ...spec,
+    summary: spec.summary ?? 'Planets phase out on their countdown rings. Wait for the relay to exist before you commit.',
+  });
+  const defaults = spec.flickerDefaults ?? {};
+  level.systemState = 'flicker';
+  level.tutorial = spec.tutorial ?? null;
+  level.planets = level.planets.map((planet, index) => {
+    const flicker = spec.flicker?.[index];
+    if (!flicker) {
+      return planet;
+    }
+
+    return {
+      ...planet,
+      flicker: {
+        periodSeconds: flicker.periodSeconds ?? defaults.periodSeconds ?? 5.6,
+        visibleSeconds: flicker.visibleSeconds ?? defaults.visibleSeconds ?? 3.1,
+        phaseSeconds: flicker.phaseSeconds ?? defaults.phaseSeconds ?? 0,
+        transitionSeconds: flicker.transitionSeconds ?? defaults.transitionSeconds ?? 0.32,
+      },
+    };
+  });
+  return level;
+}
+
 const ICY_WORLD_SPECS = [
   { baseId: 'first-relay', id: 'polar-relay', name: 'Polar Relay', summary: 'Land on a frozen relay, then let the ball drift around the ice before you launch again.', defaultSlideAngularSpeed: 0.8, slideAngularSpeeds: { 0: 0.72, 1: -0.82 } },
   { baseId: 'mirror-harbor', id: 'frost-gate', name: 'Frost Gate', summary: 'The two-gate relay only works if you let the icy harbor drift into the correct launch face.', defaultSlideAngularSpeed: 0.82 },
@@ -1791,6 +1834,115 @@ const DYING_WORLD_SPECS = [
   { baseId: 'final-circuit', id: 'terminal-circuit', name: 'Terminal Circuit', summary: 'The final dying system is all pressure: the circuit falls inward from the first touch to the last burn.', decayScale: 1.3, goalOpenSecondsDelta: -1 },
 ];
 
+const FLICKER_WORLD_SPECS = [
+  {
+    baseId: 'first-relay',
+    id: 'blink-relay',
+    name: 'Blink Relay',
+    summary: 'The outer relay blinks away on its ring. Launch while it is solid, or wait for the return beat.',
+    tutorial: { type: 'flicker', copy: 'Flicker rings count down to a planet vanishing or returning.' },
+    flicker: { 1: { periodSeconds: 6.4, visibleSeconds: 4.5, phaseSeconds: 0.25 } },
+  },
+  {
+    baseId: 'inner-step',
+    id: 'phase-step',
+    name: 'Phase Step',
+    summary: 'The middle and outer relays alternate. Use the first while it exists, then leave as the next one returns.',
+    flicker: {
+      1: { periodSeconds: 5.8, visibleSeconds: 3.0, phaseSeconds: 0.15 },
+      2: { periodSeconds: 5.8, visibleSeconds: 3.0, phaseSeconds: 3.05 },
+    },
+  },
+  {
+    baseId: 'forked-harbor',
+    id: 'stagger-harbor',
+    name: 'Stagger Harbor',
+    summary: 'Both harbors work, but their clocks are offset. Pick the side whose return lines up with the exit.',
+    flicker: {
+      1: { periodSeconds: 6.2, visibleSeconds: 3.2, phaseSeconds: 0.4 },
+      2: { periodSeconds: 6.2, visibleSeconds: 3.2, phaseSeconds: 3.45 },
+      3: { periodSeconds: 7.0, visibleSeconds: 4.2, phaseSeconds: 1.1 },
+    },
+  },
+  {
+    baseId: 'moon-switch',
+    id: 'blink-switch',
+    name: 'Blink Switch',
+    summary: 'The switch world is only solid on alternating beats with its moon. Time the catch before waking the rim.',
+    flicker: {
+      1: { periodSeconds: 5.6, visibleSeconds: 2.8, phaseSeconds: 2.8 },
+      2: { periodSeconds: 5.6, visibleSeconds: 3.0, phaseSeconds: 0.3 },
+      4: { periodSeconds: 6.4, visibleSeconds: 3.5, phaseSeconds: 1.7 },
+    },
+  },
+  {
+    baseId: 'long-transfer',
+    id: 'relay-lanterns',
+    name: 'Relay Lanterns',
+    summary: 'The long transfer becomes a lantern chain: the first relay fades as the far station lights back up.',
+    flicker: {
+      1: { periodSeconds: 6.0, visibleSeconds: 3.0, phaseSeconds: 0.2 },
+      2: { periodSeconds: 6.0, visibleSeconds: 3.1, phaseSeconds: 3.05 },
+      4: { periodSeconds: 7.2, visibleSeconds: 4.0, phaseSeconds: 1.0 },
+    },
+  },
+  {
+    baseId: 'halo-run',
+    id: 'halo-beacons',
+    name: 'Halo Beacons',
+    summary: 'A wide halo route pulses in pairs. Relay through the lit side instead of chasing a vanished dock.',
+    flicker: {
+      1: { periodSeconds: 6.4, visibleSeconds: 3.2, phaseSeconds: 0.5 },
+      3: { periodSeconds: 6.4, visibleSeconds: 3.2, phaseSeconds: 3.7 },
+      4: { periodSeconds: 7.4, visibleSeconds: 3.8, phaseSeconds: 1.2 },
+    },
+  },
+  {
+    baseId: 'moon-catch',
+    id: 'phase-moon',
+    name: 'Phase Moon',
+    summary: 'The moon and relay blink on opposite halves of the clock, turning the catch into a relay handoff.',
+    flicker: {
+      1: { periodSeconds: 5.8, visibleSeconds: 3.0, phaseSeconds: 2.9 },
+      2: { periodSeconds: 5.8, visibleSeconds: 3.0, phaseSeconds: 0.05 },
+      3: { periodSeconds: 6.8, visibleSeconds: 3.6, phaseSeconds: 1.4 },
+    },
+  },
+  {
+    baseId: 'crown-window',
+    id: 'crown-flash',
+    name: 'Crown Flash',
+    summary: 'The crown no longer stays built. Read the countdowns and send the ball through the active rim.',
+    flicker: {
+      1: { periodSeconds: 6.2, visibleSeconds: 3.0, phaseSeconds: 0.1 },
+      2: { periodSeconds: 6.2, visibleSeconds: 3.1, phaseSeconds: 3.25 },
+      3: { periodSeconds: 7.0, visibleSeconds: 3.4, phaseSeconds: 1.7 },
+    },
+  },
+  {
+    baseId: 'counterspin-gate',
+    id: 'counterblink-gate',
+    name: 'Counterblink Gate',
+    summary: 'Counterspin still sets the angle, but the recovery gate phases out if you leave too late.',
+    flicker: {
+      1: { periodSeconds: 5.7, visibleSeconds: 3.0, phaseSeconds: 0.35 },
+      3: { periodSeconds: 6.5, visibleSeconds: 3.3, phaseSeconds: 3.1 },
+      4: { periodSeconds: 7.0, visibleSeconds: 3.8, phaseSeconds: 1.25 },
+    },
+  },
+  {
+    baseId: 'final-circuit',
+    id: 'flicker-circuit',
+    name: 'Flicker Circuit',
+    summary: 'The full circuit alternates in relays. Move through the active planets and leave before each countdown expires.',
+    flicker: {
+      1: { periodSeconds: 5.8, visibleSeconds: 3.0, phaseSeconds: 0.25 },
+      2: { periodSeconds: 5.8, visibleSeconds: 3.0, phaseSeconds: 3.15 },
+      3: { periodSeconds: 6.8, visibleSeconds: 3.5, phaseSeconds: 1.1 },
+    },
+  },
+];
+
 const EXPANSION_LEVEL_DEFINITIONS = [
   ...ICY_WORLD_SPECS.map((spec) => makeIcyVariant(spec)),
   ...PORTAL_WORLD_SPECS.map((spec) => makePortalVariant(spec)),
@@ -1800,6 +1952,7 @@ const EXPANSION_LEVEL_DEFINITIONS = [
   ...LAVA_WORLD_SPECS.map((spec) => makeLavaVariant(spec)),
   ...PULSAR_WORLD_SPECS.map((spec) => makePulsarVariant(spec)),
   ...DYING_WORLD_SPECS.map((spec, index) => makeDyingVariant(spec, index)),
+  ...FLICKER_WORLD_SPECS.map((spec) => makeFlickerVariant(spec)),
   ...HOSTILE_WORLD_SPECS.map((spec) => makeHostileVariant(spec)),
 ];
 
@@ -1926,6 +2079,16 @@ const CAMPAIGN_LEVEL_ORDER = [
   'crown-collapse',
   'counterfall-gate',
   'terminal-circuit',
+  'blink-relay',
+  'phase-step',
+  'stagger-harbor',
+  'blink-switch',
+  'relay-lanterns',
+  'halo-beacons',
+  'phase-moon',
+  'crown-flash',
+  'counterblink-gate',
+  'flicker-circuit',
   'sentry-arc',
   'watch-relay',
   'gun-harbor',
@@ -2009,6 +2172,44 @@ export function isPlanetLandingSide(planet, landingDirection, time = 0) {
   const axis = getPlanetSplitAxis(planet, time);
   const normal = normalize(landingDirection ?? vec(1, 0));
   return axis.x * normal.x + axis.y * normal.y >= (planet.splitSurface.threshold ?? 0);
+}
+
+export function getPlanetFlickerState(planet, time = 0) {
+  const flicker = planet?.flicker;
+  if (!flicker) {
+    return {
+      active: true,
+      visible: 1,
+      progress: 1,
+      mode: 'steady',
+      timeRemaining: Number.POSITIVE_INFINITY,
+    };
+  }
+
+  const periodSeconds = Math.max(0.4, flicker.periodSeconds ?? 5.6);
+  const visibleSeconds = clamp(flicker.visibleSeconds ?? periodSeconds * 0.55, 0.08, periodSeconds - 0.08);
+  const hiddenSeconds = Math.max(0.08, periodSeconds - visibleSeconds);
+  const transitionSeconds = Math.max(0.001, Math.min(flicker.transitionSeconds ?? 0.32, Math.min(visibleSeconds, hiddenSeconds) * 0.5));
+  const phaseTime = ((time - (flicker.phaseSeconds ?? 0)) % periodSeconds + periodSeconds) % periodSeconds;
+  const active = phaseTime < visibleSeconds;
+  const segmentTime = active ? phaseTime : phaseTime - visibleSeconds;
+  const segmentDuration = active ? visibleSeconds : hiddenSeconds;
+  const timeRemaining = Math.max(0, segmentDuration - segmentTime);
+  let visible = active ? 1 : 0;
+
+  if (active && timeRemaining < transitionSeconds) {
+    visible = clamp(timeRemaining / transitionSeconds, 0, 1);
+  } else if (!active && timeRemaining < transitionSeconds) {
+    visible = clamp(1 - timeRemaining / transitionSeconds, 0, 1);
+  }
+
+  return {
+    active,
+    visible,
+    progress: clamp(segmentTime / segmentDuration, 0, 1),
+    mode: active ? 'visible' : 'hidden',
+    timeRemaining,
+  };
 }
 
 function scalePointFromSun(point, sun, scale = SYSTEM_LAYOUT_SCALE) {
@@ -2476,6 +2677,26 @@ function updatePlanetCollapseState(level, planet) {
   planet.collapseState = 'orbiting';
 }
 
+function updatePlanetFlickerState(level, planet) {
+  if (!planet.flicker || planet.collapseState === 'consumed' || planet.collapseState === 'plunging') {
+    if (!planet.flicker) {
+      planet.flickerProgress = 1;
+      planet.flickerMode = 'steady';
+      planet.flickerTimeRemaining = Number.POSITIVE_INFINITY;
+    }
+    return;
+  }
+
+  const flickerState = getPlanetFlickerState(planet, level.time ?? 0);
+  planet.active = flickerState.active;
+  planet.flickerVisibility = flickerState.visible;
+  planet.flickerProgress = flickerState.progress;
+  planet.flickerMode = flickerState.mode;
+  planet.flickerTimeRemaining = flickerState.timeRemaining;
+  planet.infallFade = Math.min(planet.infallFade ?? 1, flickerState.visible);
+  planet.collapseState = flickerState.active ? 'stable' : 'phased-out';
+}
+
 function separateActivePlanetOverlaps(level) {
   if (level.systemState !== 'dying') {
     return;
@@ -2542,9 +2763,13 @@ export function setLevelTime(level, time) {
     planet.orbitCenter.x = orbitState.orbitCenter.x;
     planet.orbitCenter.y = orbitState.orbitCenter.y;
     updatePlanetCollapseState(level, planet);
+    updatePlanetFlickerState(level, planet);
   });
   separateActivePlanetOverlaps(level);
-  level.planets.forEach((planet) => updatePlanetCollapseState(level, planet));
+  level.planets.forEach((planet) => {
+    updatePlanetCollapseState(level, planet);
+    updatePlanetFlickerState(level, planet);
+  });
   level.portals?.forEach((portal) => {
     setOrbitalBodyTime(portal, time, systemCenter);
   });
@@ -2671,7 +2896,7 @@ function updateBallHeat(level, ball, delta) {
 
 export function getPlanetVelocity(level, planetIndex, time = level.time ?? 0) {
   const planet = level.planets[planetIndex];
-  if (!planet || planet.collapseState === 'consumed') {
+  if (!planet || planet.collapseState === 'consumed' || planet.active === false) {
     return vec(0, 0);
   }
 
@@ -2684,9 +2909,21 @@ export function advanceBallAnchor(level, ball, delta) {
   }
 
   const planet = level.planets[ball.anchorPlanetIndex];
-  if (!planet || planet.collapseState === 'consumed') {
+  if (!planet || planet.collapseState === 'consumed' || planet.active === false) {
+    const eventState = cloneBallRuntimeState(ball);
+    const reason = planet?.active === false && planet?.flicker ? 'planet-vanished' : 'planet-consumed';
     ball.anchorPlanetIndex = null;
-    return;
+    ball.anchorNormal = null;
+    ball.velocity.x = 0;
+    ball.velocity.y = 0;
+    return {
+      type: 'crash',
+      reason,
+      planetIndex: planet?.index ?? null,
+      planetName: planet?.name ?? 'vanishing planet',
+      eventState,
+      displayEventState: cloneBallRuntimeState(eventState),
+    };
   }
 
   const previousPosition = cloneVec(ball.position);
@@ -2734,7 +2971,7 @@ export function getPlanetSlideAngularSpeed(planet, ball) {
 
 export function getPlanetSurfaceVelocity(level, planetIndex, anchorNormal, ball = null) {
   const planet = level.planets[planetIndex];
-  if (!planet || (!planet.spinSpeed && !planet.slideAngularSpeed)) {
+  if (!planet || planet.active === false || (!planet.spinSpeed && !planet.slideAngularSpeed)) {
     return vec(0, 0);
   }
 
@@ -2914,6 +3151,9 @@ function resolveTurretSightContact(level, ball, previousPosition) {
   const time = ball.time ?? level.time ?? 0;
   for (let planetIndex = 0; planetIndex < level.planets.length; planetIndex += 1) {
     const planet = level.planets[planetIndex];
+    if (planet.active === false) {
+      continue;
+    }
     for (const turret of planet.turrets ?? []) {
       const lineState = getTurretLineState(planet, turret, time);
       const hitWidth = lineState.width + COURSE.ballRadius * 0.42;
@@ -3143,7 +3383,7 @@ export function syncBallToAnchor(level, ball) {
   }
 
   const planet = level.planets[ball.anchorPlanetIndex];
-  if (!planet || planet.collapseState === 'consumed') {
+  if (!planet || planet.collapseState === 'consumed' || planet.active === false) {
     ball.anchorPlanetIndex = null;
     return;
   }
@@ -3432,19 +3672,25 @@ export function stepBall(level, ball, delta) {
   if (
     ball.anchorPlanetIndex !== null
     && ball.anchorPlanetIndex !== undefined
-    && level.planets[ball.anchorPlanetIndex]?.collapseState === 'consumed'
+    && (
+      level.planets[ball.anchorPlanetIndex]?.collapseState === 'consumed'
+      || level.planets[ball.anchorPlanetIndex]?.active === false
+    )
   ) {
     const eventState = cloneBallRuntimeState(ball);
     const consumedPlanet = level.planets[ball.anchorPlanetIndex];
+    const reason = consumedPlanet?.active === false && consumedPlanet?.flicker
+      ? 'planet-vanished'
+      : 'planet-consumed';
     ball.anchorPlanetIndex = null;
     ball.anchorNormal = null;
     ball.velocity.x = 0;
     ball.velocity.y = 0;
     return {
       type: 'crash',
-      reason: 'planet-consumed',
+      reason,
       planetIndex: consumedPlanet?.index ?? null,
-      planetName: consumedPlanet?.name ?? 'collapsing planet',
+      planetName: consumedPlanet?.name ?? 'vanishing planet',
       eventState,
       displayEventState: cloneBallRuntimeState(eventState),
     };
