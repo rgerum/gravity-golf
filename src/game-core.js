@@ -19,6 +19,10 @@ const GOAL_CAPTURE_RATIO = 0.95;
 const PLANET_COLLISION_PADDING = 0.92;
 const PLANET_LANDING_PADDING = 0.03;
 const ICE_PLANET_LANDING_PADDING = -0.01;
+const LAVA_DEFAULT_SAFE_SECONDS = 2.6;
+const BALL_HEAT_MAX = 1;
+const BALL_HEAT_COOL_RATE_FLIGHT = 0.72;
+const BALL_HEAT_COOL_RATE_ANCHORED = 0.38;
 const PLANET_RADIUS_SCALE = 0.5;
 const SUN_COLLISION_RADIUS = 0.42;
 export const SOLAR_GRAVITY_MULTIPLIER = 5;
@@ -57,6 +61,7 @@ export const WORLD_DEFINITIONS = [
   { id: 'aperture-reach', name: 'Aperture Reach' },
   { id: 'binary-crown', name: 'Binary Crown' },
   { id: 'ancient-worlds', name: 'Ancient Worlds' },
+  { id: 'lava-reach', name: 'Lava Reach' },
 ];
 
 const CORE_LEVEL_DEFINITIONS = [
@@ -1317,6 +1322,26 @@ function makeIcyVariant(spec) {
   return level;
 }
 
+function makeLavaVariant(spec) {
+  const level = variantLevel('ember', spec);
+  level.planets = level.planets.map((planet, index) => {
+    if (!planet.landable) {
+      return planet;
+    }
+
+    const lavaSafeSeconds = typeof spec.lavaSafeSeconds === 'number'
+      ? spec.lavaSafeSeconds
+      : spec.lavaSafeSeconds?.[index];
+
+    return {
+      ...planet,
+      surfaceType: 'lava',
+      lavaSafeSeconds: lavaSafeSeconds ?? LAVA_DEFAULT_SAFE_SECONDS,
+    };
+  });
+  return level;
+}
+
 function makePortalVariant(spec) {
   const level = variantLevel('prism', spec);
   const pairSeed = spec.id;
@@ -1460,11 +1485,25 @@ const ANCIENT_WORLD_SPECS = [
   { baseId: 'final-moon-circuit', id: 'unlock-circuit', name: 'Unlock Circuit', summary: 'The last circuit of the campaign first asks for a monolith landing, then a clean relay escape.', unlockPlanetIndex: 2, goalOpenSeconds: 7 },
 ];
 
+const LAVA_WORLD_SPECS = [
+  { baseId: 'fast-window', id: 'ember-window', name: 'Ember Window', summary: 'The lane still opens and closes on timing, but now the launch world itself is heating the ball while you wait.', lavaSafeSeconds: { 0: 2.8 } },
+  { baseId: 'forked-harbor', id: 'melt-harbor', name: 'Melt Harbor', summary: 'Both harbors burn. The choice is not just where to land, but where you can leave before the heat runs out.', lavaSafeSeconds: { 0: 3.3, 1: 2.2, 2: 2.5, 3: 2.2 } },
+  { baseId: 'inner-step', id: 'cinder-step', name: 'Cinder Step', summary: 'The outer relay is now a cinder world, so the clean handoff becomes a race against the heat.', lavaSafeSeconds: { 0: 3.2, 1: 2.4, 2: 2.15 } },
+  { baseId: 'moon-switch', id: 'basalt-switch', name: 'Basalt Switch', summary: 'The switch route still opens the finish, but the molten worlds force a much faster second shot.', lavaSafeSeconds: { 0: 3.1, 1: 2.35, 2: 2.45 } },
+  { baseId: 'false-periapsis', id: 'scorch-periapsis', name: 'Scorch Periapsis', summary: 'The close touch is safe only briefly. Ride the hot world too long and the ball burns before the rim transfer.', lavaSafeSeconds: { 0: 3.2, 1: 2.25, 2: 2.4 } },
+  { baseId: 'halo-run', id: 'magma-halo', name: 'Magma Halo', summary: 'The halo route remains long, but every relay in it is now hot enough to punish hesitation.', lavaSafeSeconds: { 0: 3.2, 1: 2.3, 3: 2.35, 4: 2.25 } },
+  { baseId: 'split-sentinel', id: 'firebreak', name: 'Firebreak', summary: 'The mirrored stops both work on paper. In practice only one lava landing gives you time to escape.', lavaSafeSeconds: { 0: 3.15, 1: 2.3, 2: 2.3, 3: 2.1 } },
+  { baseId: 'moon-catch', id: 'pyre-moon', name: 'Pyre Moon', summary: 'Catch the moon, then leave the molten relay before the ball crosses from glowing to gone.', lavaSafeSeconds: { 0: 3.2, 1: 2.25, 2: 2.25, 3: 2.05 } },
+  { baseId: 'crown-window', id: 'lava-window', name: 'Lava Window', summary: 'The crown still opens on a timer, but every lava stop turns the whole route into a precise sprint.', lavaSafeSeconds: { 0: 3.15, 1: 2.3, 2: 2.2, 3: 2.2 } },
+  { baseId: 'final-circuit', id: 'eruption-circuit', name: 'Eruption Circuit', summary: 'The final relay circuit survives in molten form: one clean route, no idle seconds anywhere.', lavaSafeSeconds: { 0: 3.2, 1: 2.35, 2: 2.2, 3: 2.15 } },
+];
+
 const EXPANSION_LEVEL_DEFINITIONS = [
   ...ICY_WORLD_SPECS.map((spec) => makeIcyVariant(spec)),
   ...PORTAL_WORLD_SPECS.map((spec) => makePortalVariant(spec)),
   ...BINARY_WORLD_SPECS.map((spec) => makeBinaryVariant(spec)),
   ...ANCIENT_WORLD_SPECS.map((spec) => makeAncientVariant(spec)),
+  ...LAVA_WORLD_SPECS.map((spec) => makeLavaVariant(spec)),
 ];
 
 const LEVEL_DEFINITIONS = [...CORE_LEVEL_DEFINITIONS, ...EXPANSION_LEVEL_DEFINITIONS];
@@ -1550,6 +1589,16 @@ const CAMPAIGN_LEVEL_ORDER = [
   'sealed-lattice',
   'shepherd-shrine',
   'unlock-circuit',
+  'ember-window',
+  'melt-harbor',
+  'cinder-step',
+  'basalt-switch',
+  'scorch-periapsis',
+  'magma-halo',
+  'firebreak',
+  'pyre-moon',
+  'lava-window',
+  'eruption-circuit',
 ];
 
 const campaignOrderIndex = new Map(
@@ -2070,6 +2119,68 @@ export function getBallSurfaceRadius(planet) {
     + (planet?.surfaceType === 'ice' ? ICE_PLANET_LANDING_PADDING : 0);
 }
 
+function getBallHeatValue(ball) {
+  return clamp(ball?.heat ?? 0, 0, BALL_HEAT_MAX);
+}
+
+export function getBallHeatRatio(ball) {
+  return getBallHeatValue(ball) / BALL_HEAT_MAX;
+}
+
+function getPlanetLavaHeatRate(planet) {
+  if (!planet || planet.surfaceType !== 'lava') {
+    return 0;
+  }
+
+  const safeSeconds = Math.max(0.5, planet.lavaSafeSeconds ?? LAVA_DEFAULT_SAFE_SECONDS);
+  return BALL_HEAT_MAX / safeSeconds;
+}
+
+export function getLavaOverheatRemaining(planet, ball) {
+  const heatRate = getPlanetLavaHeatRate(planet);
+  if (!(heatRate > 0)) {
+    return Number.POSITIVE_INFINITY;
+  }
+  return Math.max(0, (BALL_HEAT_MAX - getBallHeatValue(ball)) / heatRate);
+}
+
+function updateBallHeat(level, ball, delta) {
+  const anchorPlanet = (
+    ball.anchorPlanetIndex !== null
+    && ball.anchorPlanetIndex !== undefined
+  ) ? level.planets[ball.anchorPlanetIndex] : null;
+
+  let nextHeat = getBallHeatValue(ball);
+  if (anchorPlanet?.surfaceType === 'lava') {
+    nextHeat += getPlanetLavaHeatRate(anchorPlanet) * delta;
+  } else {
+    const coolRate = anchorPlanet ? BALL_HEAT_COOL_RATE_ANCHORED : BALL_HEAT_COOL_RATE_FLIGHT;
+    nextHeat -= coolRate * delta;
+  }
+
+  ball.heat = clamp(nextHeat, 0, BALL_HEAT_MAX);
+
+  if (
+    delta > 0
+    && anchorPlanet?.surfaceType === 'lava'
+    && ball.heat >= BALL_HEAT_MAX - 0.000001
+  ) {
+    const eventState = cloneBallRuntimeState(ball);
+    ball.velocity.x = 0;
+    ball.velocity.y = 0;
+    return {
+      type: 'crash',
+      reason: 'lava',
+      planetIndex: ball.anchorPlanetIndex,
+      planetName: anchorPlanet.name ?? 'lava world',
+      eventState,
+      displayEventState: cloneBallRuntimeState(eventState),
+    };
+  }
+
+  return null;
+}
+
 export function getPlanetVelocity(level, planetIndex, time = level.time ?? 0) {
   const planet = level.planets[planetIndex];
   if (!planet) {
@@ -2081,7 +2192,7 @@ export function getPlanetVelocity(level, planetIndex, time = level.time ?? 0) {
 
 export function advanceBallAnchor(level, ball, delta) {
   if (ball.anchorPlanetIndex === null || ball.anchorPlanetIndex === undefined) {
-    return;
+    return null;
   }
 
   const planet = level.planets[ball.anchorPlanetIndex];
@@ -2099,6 +2210,7 @@ export function advanceBallAnchor(level, ball, delta) {
   }
 
   syncBallToAnchor(level, ball);
+  return updateBallHeat(level, ball, delta);
 }
 
 export function getPlanetSlideAngularSpeed(planet, ball) {
@@ -2148,6 +2260,7 @@ function cloneBallRuntimeState(ball) {
     anchorNormal: ball.anchorNormal ? cloneVec(ball.anchorNormal) : null,
     anchorSinceTime: ball.anchorSinceTime ?? 0,
     portalCooldown: ball.portalCooldown ?? 0,
+    heat: ball.heat ?? 0,
   };
 }
 
@@ -2310,6 +2423,7 @@ export function createBallState(level) {
     anchorNormal,
     anchorSinceTime: level.time ?? 0,
     portalCooldown: 0,
+    heat: 0,
   };
 }
 
@@ -2584,6 +2698,7 @@ export function stepBall(level, ball, delta) {
   setLevelTime(level, nextTime);
   ball.time = nextTime;
   ball.portalCooldown = Math.max(0, (ball.portalCooldown ?? 0) - delta);
+  updateBallHeat(level, ball, delta);
 
   if ((!level.goalUnlockRequired || level.goalUnlocked) && !isGoalOpen(level, ball.time)) {
     const eventState = cloneBallRuntimeState(ball);
@@ -2680,6 +2795,7 @@ export function reverseStepBall(level, ball, delta, options = {}) {
   ball.velocity.y = previousVelocity.y;
   ball.anchorPlanetIndex = null;
   ball.anchorNormal = ball.anchorNormal ? cloneVec(ball.anchorNormal) : null;
+  updateBallHeat(level, ball, -delta);
 
   const launchPlanetIndex = options.launchPlanetIndex ?? null;
   if (launchPlanetIndex !== null) {
@@ -2716,6 +2832,7 @@ export function simulateShot(level, shot, options = {}) {
     launchGracePlanetIndex: anchorPlanetIndex ?? findContainingLandingPlanetIndex(level, startPosition),
     anchorPlanetIndex,
     anchorNormal: cloneVec(anchorNormal),
+    heat: options.heat ?? 0,
   };
   const frames = captureFrames ? [] : null;
   let launchState = null;
@@ -2748,7 +2865,31 @@ export function simulateShot(level, shot, options = {}) {
         setLevelTime(level, launchTime);
         ball.time = launchTime;
         if (ball.anchorPlanetIndex !== null) {
-          advanceBallAnchor(level, ball, step);
+          const anchorResult = advanceBallAnchor(level, ball, step);
+          if (anchorResult?.type === 'crash') {
+            pushFrame();
+            return {
+              outcome: anchorResult.type,
+              reason: anchorResult.reason ?? '',
+              planetIndex: anchorResult.planetIndex ?? null,
+              planetName: anchorResult.planetName ?? '',
+              waitTime,
+              landingCount: ball.landingCount ?? 0,
+              time: 0,
+              steps: 0,
+              finalTime: ball.time ?? launchTime,
+              anchorPlanetIndex: ball.anchorPlanetIndex ?? null,
+              anchorNormal: ball.anchorNormal ? cloneVec(ball.anchorNormal) : null,
+              heat: ball.heat ?? 0,
+              minGoalDistance: distanceBetween(ball.position, level.goalCenter),
+              minPlanetClearance: Number.POSITIVE_INFINITY,
+              finalPosition: cloneVec(ball.position),
+              launchState,
+              eventState: anchorResult.eventState ? cloneBallRuntimeState(anchorResult.eventState) : null,
+              displayEventState: anchorResult.displayEventState ? cloneBallRuntimeState(anchorResult.displayEventState) : null,
+              frames,
+            };
+          }
         }
         pushFrame();
         remainingWait -= step;
@@ -2758,7 +2899,30 @@ export function simulateShot(level, shot, options = {}) {
       setLevelTime(level, launchTime);
       ball.time = launchTime;
       if (ball.anchorPlanetIndex !== null) {
-        advanceBallAnchor(level, ball, waitTime);
+        const anchorResult = advanceBallAnchor(level, ball, waitTime);
+        if (anchorResult?.type === 'crash') {
+          return {
+            outcome: anchorResult.type,
+            reason: anchorResult.reason ?? '',
+            planetIndex: anchorResult.planetIndex ?? null,
+            planetName: anchorResult.planetName ?? '',
+            waitTime,
+            landingCount: ball.landingCount ?? 0,
+            time: 0,
+            steps: 0,
+            finalTime: ball.time ?? launchTime,
+            anchorPlanetIndex: ball.anchorPlanetIndex ?? null,
+            anchorNormal: ball.anchorNormal ? cloneVec(ball.anchorNormal) : null,
+            heat: ball.heat ?? 0,
+            minGoalDistance: distanceBetween(ball.position, level.goalCenter),
+            minPlanetClearance: Number.POSITIVE_INFINITY,
+            finalPosition: cloneVec(ball.position),
+            launchState,
+            eventState: anchorResult.eventState ? cloneBallRuntimeState(anchorResult.eventState) : null,
+            displayEventState: anchorResult.displayEventState ? cloneBallRuntimeState(anchorResult.displayEventState) : null,
+            frames,
+          };
+        }
       }
     }
   }
@@ -2776,6 +2940,7 @@ export function simulateShot(level, shot, options = {}) {
       finalTime: ball.time ?? startTime + waitTime,
       anchorPlanetIndex: ball.anchorPlanetIndex ?? null,
       anchorNormal: ball.anchorNormal ? cloneVec(ball.anchorNormal) : null,
+      heat: ball.heat ?? 0,
       minGoalDistance: distanceBetween(ball.position, level.goalCenter),
       minPlanetClearance: Number.POSITIVE_INFINITY,
       finalPosition: cloneVec(ball.position),
@@ -2839,6 +3004,7 @@ export function simulateShot(level, shot, options = {}) {
         finalTime: ball.time ?? startTime + time,
         anchorPlanetIndex: ball.anchorPlanetIndex ?? null,
         anchorNormal: ball.anchorNormal ? cloneVec(ball.anchorNormal) : null,
+        heat: ball.heat ?? 0,
         minGoalDistance,
         minPlanetClearance,
         finalPosition: cloneVec(ball.position),
@@ -2862,6 +3028,7 @@ export function simulateShot(level, shot, options = {}) {
     finalTime: ball.time ?? startTime + time,
     anchorPlanetIndex: ball.anchorPlanetIndex ?? null,
     anchorNormal: ball.anchorNormal ? cloneVec(ball.anchorNormal) : null,
+    heat: ball.heat ?? 0,
     minGoalDistance,
     minPlanetClearance,
     finalPosition: cloneVec(ball.position),

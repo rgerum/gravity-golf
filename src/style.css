@@ -252,6 +252,13 @@ h1 {
   display: none;
 }
 
+.status-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
 .time-control {
   display: none;
   margin-top: 12px;
@@ -326,6 +333,13 @@ h1 {
   background: rgba(255, 187, 124, 0.12);
   color: #fff2de;
   box-shadow: 0 0 18px rgba(255, 187, 124, 0.12);
+}
+
+.status-pill.is-danger {
+  border-color: rgba(255, 109, 58, 0.54);
+  background: rgba(255, 109, 58, 0.16);
+  color: #fff0df;
+  box-shadow: 0 0 22px rgba(255, 109, 58, 0.18);
 }
 
 .action-row {
