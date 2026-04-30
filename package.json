@@ -8,12 +8,16 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "convex:dev": "convex dev",
+    "convex:deploy": "convex deploy",
     "test:levels": "node scripts/test-levels.js",
     "test:rewind": "node scripts/test-rewind.js",
     "test:rewind:robust": "node scripts/test-rewind-robust.js",
     "test:rewind:engine": "node scripts/test-rewind-engine.js"
   },
   "dependencies": {
+    "@convex-dev/aggregate": "^0.2.1",
+    "convex": "^1.36.1",
     "three": "^0.184.0",
     "vite": "^8.0.9"
   }
