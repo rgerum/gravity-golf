@@ -312,6 +312,7 @@ const ADMIN_CHEAT_CODE = 'orbitadmin';
 const FPS_OVERLAY_STORAGE_KEY = 'gravityBilliardFpsOverlay';
 const LAST_LEVEL_STORAGE_KEY = 'gravityBilliardLastLevel';
 const COMMUNITY_RUN_STORAGE_KEY = 'gravityGolfCommunityRunId';
+const WORLD_RUN_STATS_STORAGE_KEY = 'gravityGolfWorldRunStats';
 const COMMUNITY_STATS_MIN_SAMPLE_COUNT = 5;
 const DEFAULT_CONTROL_SHOT = { angleDeg: 0, power: 1.8 };
 const TIME_SPEED_VALUES = [-1, 0, 1, 2];
@@ -1239,8 +1240,10 @@ function getWorldMapPointString(points) {
 }
 
 function createEmptyWorldRunStats(worldIndex) {
+  const worldDefinition = WORLD_DEFINITIONS[worldIndex] ?? null;
   return {
     worldIndex,
+    worldId: worldDefinition?.id ?? `world-${worldIndex + 1}`,
     levelsCleared: 0,
     shots: 0,
     retries: 0,
@@ -1249,9 +1252,64 @@ function createEmptyWorldRunStats(worldIndex) {
   };
 }
 
+function readPersistedWorldRunStats(worldIndex) {
+  try {
+    const rawStats = window.localStorage.getItem(WORLD_RUN_STATS_STORAGE_KEY);
+    if (!rawStats) {
+      return null;
+    }
+
+    const parsedStats = JSON.parse(rawStats);
+    const expectedWorldId = WORLD_DEFINITIONS[worldIndex]?.id ?? `world-${worldIndex + 1}`;
+    if (
+      parsedStats?.worldIndex !== worldIndex
+      || parsedStats?.worldId !== expectedWorldId
+    ) {
+      return null;
+    }
+
+    return {
+      ...createEmptyWorldRunStats(worldIndex),
+      levelsCleared: clamp(Number(parsedStats.levelsCleared) || 0, 0, WORLD_SIZE),
+      shots: Math.max(0, Number(parsedStats.shots) || 0),
+      retries: Math.max(0, Number(parsedStats.retries) || 0),
+      relays: Math.max(0, Number(parsedStats.relays) || 0),
+      flightTime: Math.max(0, Number(parsedStats.flightTime) || 0),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function persistWorldRunStats() {
+  try {
+    window.localStorage.setItem(WORLD_RUN_STATS_STORAGE_KEY, JSON.stringify(state.worldRunStats));
+  } catch {
+    // Ignore persistence errors in restricted contexts.
+  }
+}
+
+function clearPersistedWorldRunStats() {
+  try {
+    window.localStorage.removeItem(WORLD_RUN_STATS_STORAGE_KEY);
+  } catch {
+    // Ignore persistence errors in restricted contexts.
+  }
+}
+
 function syncWorldRunForLevel(level) {
-  if (state.worldRunStats.worldIndex !== level.worldIndex) {
-    state.worldRunStats = createEmptyWorldRunStats(level.worldIndex);
+  const expectedWorldId = WORLD_DEFINITIONS[level.worldIndex]?.id ?? `world-${level.worldIndex + 1}`;
+  if (
+    state.worldRunStats.worldIndex !== level.worldIndex
+    || state.worldRunStats.worldId !== expectedWorldId
+  ) {
+    const startFresh = level.worldLevelNumber === 1;
+    state.worldRunStats = startFresh
+      ? createEmptyWorldRunStats(level.worldIndex)
+      : (readPersistedWorldRunStats(level.worldIndex) ?? createEmptyWorldRunStats(level.worldIndex));
+    if (startFresh) {
+      clearPersistedWorldRunStats();
+    }
   }
   state.levelStartStats.shots = state.shots;
   state.levelStartStats.resets = state.resets;
@@ -1272,6 +1330,7 @@ function recordCompletedWorldLevelStats(completedLevelIndex) {
     0,
     (state.ball.time ?? state.level.time ?? 0) - (completedLevel.startTimeSeconds ?? 0),
   );
+  persistWorldRunStats();
 }
 
 function formatStatValue(value, format) {
@@ -1405,6 +1464,11 @@ async function submitWorldMapCommunityStats(finishedWorldIndex, completedLevelCo
     return;
   }
 
+  if (state.worldRunStats.levelsCleared < WORLD_SIZE) {
+    resetWorldMapCommunityStats('idle');
+    return;
+  }
+
   const finishedWorld = WORLD_DEFINITIONS[finishedWorldIndex];
   if (!finishedWorld) {
     resetWorldMapCommunityStats('idle');
@@ -1528,6 +1592,7 @@ function continueFromWorldMap() {
   }
 
   const nextLevelIndex = state.worldMap.nextLevelIndex;
+  clearPersistedWorldRunStats();
   hideWorldMap();
   applyLevel(nextLevelIndex);
   resetBall(`Level ${state.levelIndex + 1}: ${state.level.name}.`, state.level.summary);
