@@ -1,4 +1,5 @@
 import './style.css';
+import { ConvexHttpClient } from 'convex/browser';
 import * as THREE from 'three';
 import {
   BALL_HIT_RADIUS,
@@ -310,6 +311,8 @@ const ADMIN_STORAGE_KEY = 'gravityBilliardAdminMode';
 const ADMIN_CHEAT_CODE = 'orbitadmin';
 const FPS_OVERLAY_STORAGE_KEY = 'gravityBilliardFpsOverlay';
 const LAST_LEVEL_STORAGE_KEY = 'gravityBilliardLastLevel';
+const COMMUNITY_RUN_STORAGE_KEY = 'gravityGolfCommunityRunId';
+const COMMUNITY_STATS_MIN_SAMPLE_COUNT = 5;
 const DEFAULT_CONTROL_SHOT = { angleDeg: 0, power: 1.8 };
 const TIME_SPEED_VALUES = [-1, 0, 1, 2];
 const ambientLight = new THREE.HemisphereLight(0x8bd5ff, 0x03070c, 1.18);
@@ -920,6 +923,11 @@ const state = {
     nextLevelIndex: 0,
     completedLevelCount: 0,
     renderKey: '',
+    communityKey: '',
+    communityStatus: 'idle',
+    communityPercentile: null,
+    communitySampleCount: 0,
+    communityMinSampleCount: COMMUNITY_STATS_MIN_SAMPLE_COUNT,
   },
   worldRunStats: {
     worldIndex: initialLevel.worldIndex,
@@ -991,6 +999,7 @@ let lastSceneWidth = 0;
 let lastSceneHeight = 0;
 let lastViewportHeight = 0;
 let pendingResizeFrame = 0;
+let communityStatsClient = null;
 
 function getViewportMetrics() {
   const aspect = sceneHost.clientWidth / Math.max(1, sceneHost.clientHeight);
@@ -1089,6 +1098,38 @@ function persistLastLevelIndex(levelIndex) {
   } catch {
     // Ignore persistence errors in restricted contexts.
   }
+}
+
+function createRandomId(prefix) {
+  if (window.crypto?.randomUUID) {
+    return `${prefix}-${window.crypto.randomUUID()}`;
+  }
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
+
+function getCommunityRunId() {
+  try {
+    const existing = window.localStorage.getItem(COMMUNITY_RUN_STORAGE_KEY);
+    if (existing) {
+      return existing;
+    }
+    const next = createRandomId('run');
+    window.localStorage.setItem(COMMUNITY_RUN_STORAGE_KEY, next);
+    return next;
+  } catch {
+    return createRandomId('run');
+  }
+}
+
+function getCommunityStatsClient() {
+  const convexUrl = import.meta.env.VITE_CONVEX_URL;
+  if (!convexUrl) {
+    return null;
+  }
+  if (!communityStatsClient) {
+    communityStatsClient = new ConvexHttpClient(convexUrl);
+  }
+  return communityStatsClient;
 }
 
 function getCurrentGameRef() {
@@ -1274,7 +1315,58 @@ function renderWorldMapStats() {
         </div>
       </div>
     `;
-  }).join('');
+  }).join('') + getWorldMapCommunityStatsMarkup(stats.length);
+  syncWorldMapCommunityStats();
+}
+
+function getWorldMapCommunityStatsMarkup(index) {
+  return `
+    <div class="world-map-stat world-map-community-stat" style="--stat-ratio: 0; --stat-delay: ${index * 90}ms;" data-community-stat hidden>
+      <div class="world-map-stat-head">
+        <span>Community</span>
+        <strong data-community-value>Syncing</strong>
+      </div>
+      <p data-community-copy>Comparing your run.</p>
+    </div>
+  `;
+}
+
+function syncWorldMapCommunityStats() {
+  const communityNode = worldMapStats.querySelector('[data-community-stat]');
+  if (!communityNode) {
+    return;
+  }
+
+  if (state.worldMap.communityStatus === 'idle') {
+    communityNode.hidden = true;
+    return;
+  }
+
+  const valueNode = communityNode.querySelector('[data-community-value]');
+  const copyNode = communityNode.querySelector('[data-community-copy]');
+  communityNode.hidden = false;
+  communityNode.classList.toggle('is-loading', state.worldMap.communityStatus === 'loading');
+  communityNode.classList.toggle('has-percentile', state.worldMap.communityStatus === 'ready' && state.worldMap.communityPercentile !== null);
+
+  if (state.worldMap.communityStatus === 'loading') {
+    valueNode.textContent = 'Syncing';
+    copyNode.textContent = 'Comparing your run.';
+    return;
+  }
+
+  if (state.worldMap.communityStatus === 'ready' && state.worldMap.communityPercentile !== null) {
+    valueNode.textContent = `Better than ${state.worldMap.communityPercentile}%`;
+    copyNode.textContent = `Compared with ${state.worldMap.communitySampleCount} world runs.`;
+    return;
+  }
+
+  if (state.worldMap.communityStatus === 'pending') {
+    valueNode.textContent = 'Setting pace';
+    copyNode.textContent = `${state.worldMap.communitySampleCount}/${state.worldMap.communityMinSampleCount} runs recorded.`;
+    return;
+  }
+
+  communityNode.hidden = true;
 }
 
 function animateWorldMapStats() {
@@ -1298,11 +1390,65 @@ function animateWorldMapStats() {
   requestAnimationFrame(tick);
 }
 
+function resetWorldMapCommunityStats(status = 'idle') {
+  state.worldMap.communityStatus = status;
+  state.worldMap.communityPercentile = null;
+  state.worldMap.communitySampleCount = 0;
+  state.worldMap.communityMinSampleCount = COMMUNITY_STATS_MIN_SAMPLE_COUNT;
+  syncWorldMapCommunityStats();
+}
+
+async function submitWorldMapCommunityStats(finishedWorldIndex, completedLevelCount) {
+  const client = getCommunityStatsClient();
+  if (!client) {
+    resetWorldMapCommunityStats('idle');
+    return;
+  }
+
+  const finishedWorld = WORLD_DEFINITIONS[finishedWorldIndex];
+  if (!finishedWorld) {
+    resetWorldMapCommunityStats('idle');
+    return;
+  }
+
+  const submissionKey = `${finishedWorld.id}:${completedLevelCount}:${state.worldRunStats.shots}:${state.worldRunStats.retries}:${state.worldRunStats.flightTime.toFixed(2)}`;
+  state.worldMap.communityKey = submissionKey;
+  resetWorldMapCommunityStats('loading');
+
+  try {
+    const result = await client.mutation('worldStats:submitWorldResult', {
+      worldId: finishedWorld.id,
+      clientRunId: getCommunityRunId(),
+      completedLevelCount,
+      levelsCleared: state.worldRunStats.levelsCleared,
+      launches: state.worldRunStats.shots,
+      retries: state.worldRunStats.retries,
+      relays: state.worldRunStats.relays,
+      flightTime: Number(state.worldRunStats.flightTime.toFixed(2)),
+    });
+
+    if (state.worldMap.communityKey !== submissionKey || !state.worldMap.open) {
+      return;
+    }
+
+    state.worldMap.communitySampleCount = result?.sampleCount ?? 0;
+    state.worldMap.communityMinSampleCount = result?.minSampleCount ?? COMMUNITY_STATS_MIN_SAMPLE_COUNT;
+    state.worldMap.communityPercentile = Number.isFinite(result?.percentile) ? result.percentile : null;
+    state.worldMap.communityStatus = state.worldMap.communityPercentile === null ? 'pending' : 'ready';
+    syncWorldMapCommunityStats();
+  } catch {
+    if (state.worldMap.communityKey === submissionKey) {
+      resetWorldMapCommunityStats('idle');
+    }
+  }
+}
+
 function syncWorldMap() {
   worldMapModal.hidden = !state.worldMap.open;
   worldMapModal.classList.toggle('is-open', state.worldMap.open);
   worldMapModal.classList.toggle('is-visible', state.worldMap.open);
   if (!state.worldMap.open) {
+    resetWorldMapCommunityStats('idle');
     return;
   }
 
@@ -1359,6 +1505,7 @@ function syncWorldMap() {
     state.worldMap.renderKey = renderKey;
     renderWorldMapStats();
     animateWorldMapStats();
+    submitWorldMapCommunityStats(finishedWorldIndex, state.worldMap.completedLevelCount);
   }
 }
 

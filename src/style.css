@@ -1107,6 +1107,38 @@ h1 {
   }
 }
 
+.world-map-community-stat {
+  margin-top: 7px;
+  padding: 10px 11px;
+  border: 1px solid rgba(125, 243, 217, 0.12);
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(10, 23, 30, 0.62), rgba(6, 13, 22, 0.42));
+}
+
+.world-map-community-stat[hidden] {
+  display: none;
+}
+
+.world-map-community-stat .world-map-stat-head {
+  margin-bottom: 4px;
+}
+
+.world-map-community-stat strong {
+  color: #cafff3;
+}
+
+.world-map-community-stat.has-percentile strong {
+  color: #ffd08a;
+}
+
+.world-map-community-stat p {
+  margin: 0;
+  color: rgba(237, 243, 255, 0.66);
+  font-size: 0.68rem;
+  line-height: 1.3;
+}
+
 .world-map-stage::before,
 .world-map-stage::after {
   content: '';
