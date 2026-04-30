@@ -19,6 +19,7 @@ const GOAL_CAPTURE_RATIO = 0.95;
 const PLANET_COLLISION_PADDING = 0.92;
 const PLANET_LANDING_PADDING = 0.03;
 const ICE_PLANET_LANDING_PADDING = -0.01;
+const TWIN_PLANET_GAP_BALL_DIAMETERS = 1.2;
 const LAVA_DEFAULT_SAFE_SECONDS = 2.6;
 const BALL_HEAT_MAX = 1;
 const BALL_HEAT_COOL_RATE_FLIGHT = 0.72;
@@ -74,6 +75,7 @@ export const WORLD_DEFINITIONS = [
   { id: 'relay-reach', name: 'Relay Reach' },
   { id: 'hazard-verge', name: 'Hazard Verge' },
   { id: 'moon-lattice', name: 'Moon Lattice' },
+  { id: 'twin-planets', name: 'Twin Planets' },
   { id: 'frostline-verge', name: 'Frostline Verge' },
   { id: 'aperture-reach', name: 'Aperture Reach' },
   { id: 'binary-crown', name: 'Binary Crown' },
@@ -1697,6 +1699,116 @@ function makeSplitVariant(spec) {
   return level;
 }
 
+function makeTwinPlanetVariant(spec) {
+  const level = variantLevel('prism', {
+    ...spec,
+    summary: spec.summary ?? 'Every world in this system is a close twin pair. Use the two-body rhythm instead of aiming at a single planet.',
+  });
+  const twinDefaults = spec.twinDefaults ?? {};
+  const twinEntries = [];
+
+  level.planets.forEach((planet, index) => {
+    const pair = spec.twinPairs?.[index] ?? {};
+    const baseRadius = planet.radius ?? 0.64;
+    const twinRadius = Number((baseRadius * (pair.radiusScale ?? twinDefaults.radiusScale ?? 0.46)).toFixed(3));
+    const minimumOrbitRadius = twinRadius * PLANET_RADIUS_SCALE
+      + COURSE.ballRadius * TWIN_PLANET_GAP_BALL_DIAMETERS;
+    const authoredOrbitRadius = pair.orbitRadius ?? twinDefaults.orbitRadius ?? clamp(baseRadius * 0.44, 0.38, 0.56);
+    const orbitRadius = Number(Math.max(authoredOrbitRadius, minimumOrbitRadius).toFixed(3));
+    const orbitSpeed = pair.orbitAngularSpeed
+      ?? twinDefaults.orbitAngularSpeed
+      ?? ((index % 2 === 0 ? 1 : -1) * (2.35 + index * 0.18));
+    const centerPoint = pointFromPolar(planet.position);
+    const radialDirection = lengthSq(centerPoint) > 0.000001 ? normalize(centerPoint) : directionFromAngleDeg(pair.angleDeg ?? 0);
+    const tangent = vec(-radialDirection.y, radialDirection.x);
+    const phaseDirection = pair.phaseDeg === 90 ? radialDirection : tangent;
+    const firstPoint = vec(
+      centerPoint.x + phaseDirection.x * orbitRadius,
+      centerPoint.y + phaseDirection.y * orbitRadius,
+    );
+    const secondPoint = vec(
+      centerPoint.x - phaseDirection.x * orbitRadius,
+      centerPoint.y - phaseDirection.y * orbitRadius,
+    );
+    const twinGravity = Number(((planet.gravity ?? 7) * (pair.gravityScale ?? twinDefaults.gravityScale ?? 0.52)).toFixed(3));
+    const landingRadius = planet.landingRadius !== undefined
+      ? Number((planet.landingRadius * 0.68).toFixed(3))
+      : undefined;
+    const centerKey = `${index}:center`;
+    const firstKey = `${index}:a`;
+    const secondKey = `${index}:b`;
+
+    twinEntries.push({
+      key: centerKey,
+      orbitAroundKey: planet.orbitAround !== undefined ? `${planet.orbitAround}:center` : undefined,
+      planet: {
+        ...planet,
+        name: `${planet.name} Center`,
+        hidden: true,
+        landable: false,
+        gravity: 0,
+        falloff: 0,
+        radius: 0.001,
+        landingRadius: undefined,
+        orbitAround: undefined,
+        orbitAngularSpeed: planet.orbitAngularSpeed ?? 0,
+        spinAngularSpeed: 0,
+      },
+    });
+
+    twinEntries.push({
+      key: firstKey,
+      orbitAroundKey: centerKey,
+      planet: {
+        ...planet,
+        name: `${planet.name} A`,
+        position: polarFromPoint(firstPoint),
+        radius: twinRadius,
+        gravity: twinGravity,
+        falloff: Number(((planet.falloff ?? 4.8) * 0.72).toFixed(3)),
+        landingRadius,
+        orbitAround: undefined,
+        orbitAngularSpeed: orbitSpeed,
+        orbitEccentricity: pair.orbitEccentricity ?? 0,
+        spinAngularSpeed: planet.spinAngularSpeed ?? 0.12,
+      },
+    });
+
+    twinEntries.push({
+      key: secondKey,
+      orbitAroundKey: centerKey,
+      planet: {
+        ...planet,
+        name: `${planet.name} B`,
+        position: polarFromPoint(secondPoint),
+        radius: twinRadius,
+        gravity: twinGravity,
+        falloff: Number(((planet.falloff ?? 4.8) * 0.72).toFixed(3)),
+        landingRadius,
+        orbitAround: undefined,
+        orbitAngularSpeed: orbitSpeed,
+        orbitEccentricity: pair.orbitEccentricity ?? 0,
+        spinAngularSpeed: pair.spinAngularSpeed ?? -orbitSpeed * 0.28,
+        core: pair.companionCore ?? 0xe9efff,
+        glow: pair.companionGlow ?? 0xffffff,
+      },
+    });
+  });
+
+  twinEntries.sort((left, right) => left.planet.position.radius - right.planet.position.radius);
+  const keyToIndex = new Map(twinEntries.map((entry, index) => [entry.key, index]));
+
+  level.planets = twinEntries.map((entry) => {
+    const planet = { ...entry.planet };
+    if (entry.orbitAroundKey !== undefined) {
+      planet.orbitAround = keyToIndex.get(entry.orbitAroundKey);
+    }
+    return planet;
+  });
+  level.startPlanetIndex = keyToIndex.get(`${level.startPlanetIndex ?? 0}:a`) ?? 0;
+  return level;
+}
+
 function makeDyingVariant(spec, specIndex) {
   const level = variantLevel('collapse', {
     ...spec,
@@ -1954,6 +2066,19 @@ const BINARY_WORLD_SPECS = [
   { baseId: 'counterspin-gate', id: 'counterdouble', name: 'Counterdouble', summary: 'The off-angle launch now stabilizes under two competing suns before you ever reach the gate.', secondaryOrbitIndices: [3], extraSun: { position: polar(4.9, -148), core: 0xb0e0ff, glow: 0x5fa5ff } },
   { baseId: 'guarded-relay', id: 'binary-guard', name: 'Binary Guard', summary: 'The relay route still survives, but the second sun squeezes the last outward seam.', secondaryOrbitIndices: [1], extraSun: { position: polar(5.8, 146), core: 0xbfe8ff, glow: 0x71b4ff } },
   { baseId: 'double-slalom', id: 'binary-slalom', name: 'Binary Slalom', summary: 'The slalom already threads giants; now the twin suns twist the approach into a deeper S-curve.', extraSun: { position: polar(5.3, 142), core: 0xb2ddff, glow: 0x63a7ff } },
+];
+
+const TWIN_PLANET_WORLD_SPECS = [
+  { baseId: 'open-lane', id: 'twin-lane', name: 'Twin Lane', summary: 'A simple opening lane, but the launch world is now two small planets circling each other.', twinDefaults: { orbitAngularSpeed: 2.0 } },
+  { baseId: 'first-relay', id: 'twin-arc', name: 'Inner Twin Relay', summary: 'The first real twin puzzle starts from a shifted face and asks for a wider angled relay.', startAnchorShift: { angle: -18 }, goalShift: { radius: 0.35, angle: -10 }, launchAngleDelta: -18, powerScale: 0.94, twinDefaults: { orbitAngularSpeed: 2.2 } },
+  { baseId: 'guarded-relay', id: 'twin-relay', name: 'Guarded Twin Relay', summary: 'A familiar relay route gains a non-landable outer twin pair that blocks lazy exits.', goalShift: { radius: 0.25, angle: 5 }, launchAngleDelta: 4, twinDefaults: { orbitAngularSpeed: 2.45, radiusScale: 0.34, gravityScale: 0.46 } },
+  { baseId: 'forked-harbor', id: 'eclipse-twins', name: 'Forked Twins', summary: 'Two harbor routes split around a non-landable rim pair, so choosing the right twin relay matters.', twinDefaults: { orbitAngularSpeed: -2.2, radiusScale: 0.28, gravityScale: 0.44 } },
+  { baseId: 'false-periapsis', id: 'swift-twins', name: 'Periapsis Twins', summary: 'A close relay pair and a rim hazard pair create several possible twin-planet exits.', twinDefaults: { orbitAngularSpeed: 2.55, radiusScale: 0.32, gravityScale: 0.46 } },
+  { baseId: 'periapsis-brood', id: 'sweep-twins', name: 'Brood Twins', summary: 'A close periapsis relay opens into several off-axis twin exits instead of a single moon ladder.', twinDefaults: { orbitAngularSpeed: -2.5, radiusScale: 0.2, gravityScale: 0.38 } },
+  { baseId: 'far-side-switch', id: 'hot-twins', name: 'Far-Side Twins', summary: 'A far-side relay pair now sits across the sun, making the route read differently from the brood fan before it.', planetTweaks: { 3: { position: polar(7.8, -132), orbitAngularSpeed: 0.14, spinAngularSpeed: -0.62 } }, twinDefaults: { orbitAngularSpeed: 2.35, radiusScale: 0.28, gravityScale: 0.44 } },
+  { baseId: 'guarded-brood', id: 'locked-twins', name: 'Guarded Ladder Twins', summary: 'A ladder of landable twin pairs climbs past an unsafe outer guard.', twinDefaults: { orbitAngularSpeed: -2.35, radiusScale: 0.3, gravityScale: 0.44 } },
+  { baseId: 'countermoon-gate', id: 'shield-twins', name: 'Countergate Twins', summary: 'Counterspin relays, a side dock, and two non-landable sentinel pairs create a gated route.', twinDefaults: { orbitAngularSpeed: 2.25, radiusScale: 0.26, gravityScale: 0.42 } },
+  { baseId: 'halo-shepherds', id: 'guarded-twins', name: 'Halo Twins', summary: 'The final twin sector route spreads relays around a wide halo with multiple unsafe sentinels.', twinDefaults: { orbitAngularSpeed: -2.45, radiusScale: 0.16, gravityScale: 0.36 } },
 ];
 
 const ANCIENT_WORLD_SPECS = [
@@ -2614,6 +2739,7 @@ const EXPANSION_LEVEL_DEFINITIONS = [
   ...ICY_WORLD_SPECS.map((spec) => makeIcyVariant(spec)),
   ...PORTAL_WORLD_SPECS.map((spec) => makePortalVariant(spec)),
   ...BINARY_WORLD_SPECS.map((spec) => makeBinaryVariant(spec)),
+  ...TWIN_PLANET_WORLD_SPECS.map((spec) => makeTwinPlanetVariant(spec)),
   ...ANCIENT_WORLD_SPECS.map((spec) => makeAncientVariant(spec)),
   ...SPLIT_WORLD_SPECS.map((spec) => makeSplitVariant(spec)),
   ...LAVA_WORLD_SPECS.map((spec) => makeLavaVariant(spec)),
@@ -2670,6 +2796,16 @@ const CAMPAIGN_LEVEL_ORDER = [
   'crown-lattice',
   'shepherd-crown',
   'final-moon-circuit',
+  'twin-lane',
+  'twin-arc',
+  'twin-relay',
+  'eclipse-twins',
+  'swift-twins',
+  'sweep-twins',
+  'hot-twins',
+  'locked-twins',
+  'shield-twins',
+  'guarded-twins',
   'polar-relay',
   'frost-gate',
   'whiteout-lock',
@@ -3456,6 +3592,13 @@ function getPlanetSunEngulfRadius(level, planet) {
 }
 
 function updatePlanetCollapseState(level, planet) {
+  if (planet?.hidden) {
+    planet.active = true;
+    planet.infallFade = 0;
+    planet.collapseState = 'hidden';
+    return;
+  }
+
   const dynamicEngulfRadius = getPlanetSunEngulfRadius(level, planet);
   if (!dynamicEngulfRadius) {
     planet.active = true;
@@ -3533,13 +3676,13 @@ function separateActivePlanetOverlaps(level) {
   for (let pass = 0; pass < 3; pass += 1) {
     for (let leftIndex = 0; leftIndex < level.planets.length; leftIndex += 1) {
       const left = level.planets[leftIndex];
-      if (left.active === false) {
+      if (left.active === false || left.hidden) {
         continue;
       }
 
       for (let rightIndex = leftIndex + 1; rightIndex < level.planets.length; rightIndex += 1) {
         const right = level.planets[rightIndex];
-        if (right.active === false) {
+        if (right.active === false || right.hidden) {
           continue;
         }
 
@@ -3999,7 +4142,7 @@ function resolveTurretSightContact(level, ball, previousPosition) {
   const time = ball.time ?? level.time ?? 0;
   for (let planetIndex = 0; planetIndex < level.planets.length; planetIndex += 1) {
     const planet = level.planets[planetIndex];
-    if (planet.active === false) {
+    if (planet.active === false || planet.hidden) {
       continue;
     }
     for (const turret of planet.turrets ?? []) {
@@ -4331,7 +4474,7 @@ function landBallOnPlanet(ball, planet, planetIndex) {
 function findContainingLandingPlanetIndex(level, position) {
   for (let index = 0; index < level.planets.length; index += 1) {
     const planet = level.planets[index];
-    if (!planet.landable || planet.active === false) {
+    if (!planet.landable || planet.active === false || planet.hidden) {
       continue;
     }
 
@@ -4347,6 +4490,10 @@ function findContainingLandingPlanetIndex(level, position) {
 function resolvePlanetContact(level, ball) {
   for (let index = 0; index < level.planets.length; index += 1) {
     const planet = level.planets[index];
+    if (planet.hidden) {
+      continue;
+    }
+
     if (planet.active === false) {
       if (ball.launchGracePlanetIndex === index) {
         ball.launchGracePlanetIndex = null;
@@ -4570,7 +4717,7 @@ export function samplePlanetGravity(level, point) {
   const netGravity = vec(0, 0);
 
   for (const planet of level.planets) {
-    if (planet.active === false) {
+    if (planet.active === false || planet.hidden) {
       continue;
     }
 
