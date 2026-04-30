@@ -245,6 +245,8 @@ const UNDO_REWIND_SPEED = -8;
 const GOAL_CLOSE_ANIMATION_DURATION = 0.46;
 const GOAL_CLOSE_MODAL_DELAY = 0.12;
 const GOAL_UNLOCK_REVEAL_DURATION = 0.52;
+const METEOR_PLANET_EXPLOSION_SECONDS = 1.15;
+const METEOR_PLANET_BREAK_DELAY_SECONDS = 0.12;
 const MAX_PHYSICS_STEPS_PER_FRAME = 4;
 const ballRestY = COURSE.ballRadius - 0.01;
 const BALL_STRETCH_SPEED_THRESHOLD = 1.6;
@@ -428,6 +430,9 @@ pulsarJetsRoot.add(pulsarWarningRing);
 const sunShockwaveRoot = new THREE.Group();
 world.add(sunShockwaveRoot);
 
+const planetExplosionRoot = new THREE.Group();
+world.add(planetExplosionRoot);
+
 const extraSunsRoot = new THREE.Group();
 world.add(extraSunsRoot);
 
@@ -439,6 +444,9 @@ world.add(dustCloudsRoot);
 
 const asteroidsRoot = new THREE.Group();
 world.add(asteroidsRoot);
+
+const meteorsRoot = new THREE.Group();
+world.add(meteorsRoot);
 
 const startPad = new THREE.Mesh(
   new THREE.RingGeometry(0.62, 0.98, 48),
@@ -875,6 +883,7 @@ const state = {
   ballTraceCursor: 0,
   ballTraceCarry: 0,
   sunShockwaves: [],
+  planetExplosions: [],
   message: 'Plot the first slingshot.',
   hint: 'Use the planets to curve into the event horizon.',
   debug: {
@@ -890,6 +899,7 @@ let extraSunVisuals = [];
 let portalVisuals = [];
 let dustCloudVisuals = [];
 let asteroidVisuals = [];
+let meteorVisuals = [];
 let gravityFieldVisuals = null;
 let gravityFieldSamples = [];
 let physicsAccumulator = 0;
@@ -1408,6 +1418,8 @@ function syncPlanetCollapseEffects() {
     const collapseState = visual.planet.collapseState ?? 'stable';
     if (visual.lastCollapseState !== 'plunging' && collapseState === 'plunging') {
       spawnSunShockwave(0.85 + (visual.planet.radius ?? 0.4) * 0.75);
+    } else if (visual.lastCollapseState !== 'meteor-destroyed' && collapseState === 'meteor-destroyed') {
+      spawnPlanetExplosion(visual.planet);
     }
     visual.lastCollapseState = collapseState;
   });
@@ -3564,6 +3576,13 @@ function describeFailureHint(reason) {
     return `Retry ${state.level.name}. Wait for the belt gap or aim through the open lane.`;
   }
 
+  if (reason === 'meteor') {
+    const impactPlanet = state.ball.crashPlanetIndex !== null && state.ball.crashPlanetIndex !== undefined
+      ? state.level.planets[state.ball.crashPlanetIndex]
+      : null;
+    return `Retry ${state.level.name}. Leave ${impactPlanet?.name ?? 'the impact lane'} before the meteor arrives.`;
+  }
+
   if (reason === 'planet-consumed') {
     if (state.level.redGiant) {
       return `Retry ${state.level.name}. Launch before the red giant reaches the planet.`;
@@ -3832,6 +3851,10 @@ function getFailureTitle(reason) {
     return 'Shattered on the belt.';
   }
 
+  if (reason === 'meteor') {
+    return 'Meteor impact.';
+  }
+
   if (reason === 'goal-closed') {
     return 'Black hole closed.';
   }
@@ -4000,6 +4023,17 @@ function clearSunShockwaves() {
   state.sunShockwaves = [];
 }
 
+function clearPlanetExplosions() {
+  state.planetExplosions.forEach((explosion) => {
+    explosion.group.traverse((node) => {
+      node.geometry?.dispose?.();
+      disposeMaterial(node.material);
+    });
+    planetExplosionRoot.remove(explosion.group);
+  });
+  state.planetExplosions = [];
+}
+
 function spawnSunShockwave(strength = 1) {
   const mesh = new THREE.Mesh(
     new THREE.RingGeometry(0.44, 0.5, 96),
@@ -4039,6 +4073,196 @@ function updateSunShockwaves(delta) {
       disposeMaterial(shockwave.mesh.material);
       sunShockwaveRoot.remove(shockwave.mesh);
       state.sunShockwaves.splice(index, 1);
+    }
+  }
+}
+
+function spawnPlanetExplosion(planet) {
+  const group = new THREE.Group();
+  group.position.set(planet.position.x, 0, planet.position.y);
+  group.renderOrder = 13;
+  const coreColor = new THREE.Color(planet.core ?? 0xff9a66);
+  const glowColor = new THREE.Color(planet.glow ?? 0xffd48a);
+  const radius = planet.radius ?? 0.4;
+
+  const flash = new THREE.Mesh(
+    new THREE.CircleGeometry(radius * 2.8, 36),
+    new THREE.MeshBasicMaterial({
+      color: glowColor,
+      transparent: true,
+      opacity: 0.9,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+    }),
+  );
+  flash.rotation.x = -Math.PI / 2;
+  flash.position.y = 0.34;
+  flash.renderOrder = 16;
+  group.add(flash);
+
+  const shockwave = new THREE.Mesh(
+    new THREE.RingGeometry(radius * 0.9, radius * 1.1, 72),
+    new THREE.MeshBasicMaterial({
+      color: glowColor,
+      transparent: true,
+      opacity: 0.68,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+    }),
+  );
+  shockwave.rotation.x = -Math.PI / 2;
+  shockwave.position.y = 0.12;
+  shockwave.renderOrder = 14;
+  group.add(shockwave);
+
+  const dust = new THREE.Mesh(
+    new THREE.CircleGeometry(radius * 2.2, 40),
+    new THREE.MeshBasicMaterial({
+      color: mixColors(coreColor, glowColor, 0.45),
+      transparent: true,
+      opacity: 0.28,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    }),
+  );
+  dust.rotation.x = -Math.PI / 2;
+  dust.position.y = 0.07;
+  dust.renderOrder = 12;
+  group.add(dust);
+
+  const fragments = [];
+  const majorFragmentCount = 8;
+  for (let index = 0; index < majorFragmentCount; index += 1) {
+    const angle = (index / majorFragmentCount) * Math.PI * 2 + ((planet.index ?? 0) * 0.37);
+    const startOffset = radius * (0.18 + (index % 3) * 0.035);
+    const speed = radius * (1.7 + (index % 4) * 0.28);
+    const size = radius * (0.34 + ((index * 5) % 4) * 0.04);
+    const fragment = new THREE.Mesh(
+      new THREE.DodecahedronGeometry(size, 0),
+      new THREE.MeshStandardMaterial({
+        color: mixColors(coreColor, glowColor, (index % 3) * 0.22),
+        emissive: glowColor,
+        emissiveIntensity: 0.68,
+        roughness: 0.78,
+        metalness: 0.04,
+        transparent: true,
+        opacity: 0,
+      }),
+    );
+    fragment.scale.set(
+      1.2 + (index % 2) * 0.26,
+      0.7 + (index % 3) * 0.1,
+      0.9 + (index % 4) * 0.08,
+    );
+    fragment.position.set(
+      Math.cos(angle) * startOffset,
+      0.22 + index * 0.004,
+      Math.sin(angle) * startOffset,
+    );
+    fragment.rotation.set(index * 0.51, index * 0.93, index * 0.29);
+    group.add(fragment);
+    fragments.push({
+      mesh: fragment,
+      direction: { x: Math.cos(angle), y: Math.sin(angle) },
+      speed,
+      startOffset,
+      lift: 0.18 + (index % 3) * 0.05,
+      spin: 1.1 + (index % 5) * 0.28,
+      emissive: 0.68,
+      kind: 'major',
+    });
+  }
+
+  const minorFragmentCount = 18;
+  for (let index = 0; index < minorFragmentCount; index += 1) {
+    const angle = (index / minorFragmentCount) * Math.PI * 2 + ((planet.index ?? 0) * 0.19);
+    const startOffset = radius * (0.08 + (index % 4) * 0.025);
+    const speed = radius * (2.8 + (index % 6) * 0.32);
+    const size = radius * (0.09 + ((index * 3) % 5) * 0.015);
+    const fragment = new THREE.Mesh(
+      new THREE.TetrahedronGeometry(size, 0),
+      new THREE.MeshStandardMaterial({
+        color: mixColors(coreColor, glowColor, 0.3 + (index % 4) * 0.12),
+        emissive: glowColor,
+        emissiveIntensity: 0.9,
+        roughness: 0.7,
+        metalness: 0.02,
+        transparent: true,
+        opacity: 0,
+      }),
+    );
+    fragment.position.set(
+      Math.cos(angle) * startOffset,
+      0.18 + index * 0.002,
+      Math.sin(angle) * startOffset,
+    );
+    fragment.rotation.set(index * 0.73, index * 0.41, index * 1.07);
+    group.add(fragment);
+    fragments.push({
+      mesh: fragment,
+      direction: { x: Math.cos(angle), y: Math.sin(angle) },
+      speed,
+      startOffset,
+      lift: 0.25 + (index % 4) * 0.05,
+      spin: 2.2 + (index % 7) * 0.34,
+      emissive: 0.9,
+      kind: 'minor',
+    });
+  }
+
+  planetExplosionRoot.add(group);
+  state.planetExplosions.push({
+    group,
+    flash,
+    shockwave,
+    dust,
+    fragments,
+    radius,
+    age: 0,
+    life: METEOR_PLANET_EXPLOSION_SECONDS,
+  });
+}
+
+function updatePlanetExplosions(delta) {
+  for (let index = state.planetExplosions.length - 1; index >= 0; index -= 1) {
+    const explosion = state.planetExplosions[index];
+    explosion.age += delta;
+    const t = clamp(explosion.age / explosion.life, 0, 1);
+    const flashT = clamp(t / 0.18, 0, 1);
+    const breakStart = METEOR_PLANET_BREAK_DELAY_SECONDS / explosion.life;
+    const driftT = clamp((t - breakStart) / Math.max(0.001, 1 - breakStart), 0, 1);
+    const burstT = THREE.MathUtils.smootherstep(clamp(driftT / 0.22, 0, 1), 0, 1);
+    const fragmentVisible = t >= breakStart;
+    const fade = 1 - THREE.MathUtils.smootherstep(clamp((t - 0.62) / 0.38, 0, 1), 0, 1);
+
+    explosion.flash.scale.setScalar(1 + flashT * 1.8);
+    explosion.flash.material.opacity = Math.max(0, 0.9 * (1 - flashT));
+    explosion.shockwave.scale.setScalar(1 + t * 5.2);
+    explosion.shockwave.material.opacity = Math.max(0, 0.68 * (1 - t));
+    explosion.dust.scale.setScalar(0.45 + t * 2.1);
+    explosion.dust.material.opacity = 0.28 * fade;
+
+    explosion.fragments.forEach((fragment, fragmentIndex) => {
+      const travel = fragment.startOffset + fragment.speed * (0.18 * burstT + 0.82 * driftT);
+      fragment.mesh.visible = fragmentVisible;
+      fragment.mesh.position.x = fragment.direction.x * travel;
+      fragment.mesh.position.z = fragment.direction.y * travel;
+      fragment.mesh.position.y = (fragment.kind === 'major' ? 0.22 : 0.18) + fragment.lift * Math.sin(Math.PI * driftT);
+      fragment.mesh.rotation.x += delta * fragment.spin;
+      fragment.mesh.rotation.y += delta * (fragment.spin * 0.72 + fragmentIndex * 0.02);
+      fragment.mesh.material.opacity = fragmentVisible ? fade : 0;
+      fragment.mesh.material.emissiveIntensity = fragment.emissive * fade;
+    });
+
+    if (t >= 1) {
+      explosion.group.traverse((node) => {
+        node.geometry?.dispose?.();
+        disposeMaterial(node.material);
+      });
+      planetExplosionRoot.remove(explosion.group);
+      state.planetExplosions.splice(index, 1);
     }
   }
 }
@@ -4568,6 +4792,59 @@ function rebuildAsteroids() {
     group.position.set(asteroid.position.x, 0, asteroid.position.y);
     asteroidsRoot.add(group);
     return { group, body, halo, asteroid };
+  });
+}
+
+function rebuildMeteors() {
+  clearGroup(meteorsRoot);
+  meteorVisuals = (state.level.meteorImpacts ?? []).map((meteor, index) => {
+    const group = new THREE.Group();
+    const color = new THREE.Color(meteor.color ?? 0xff865f);
+    const trailColor = new THREE.Color(meteor.trailColor ?? 0xffd48a);
+    const radius = meteor.radius ?? 0.18;
+
+    const trail = new THREE.Mesh(
+      new THREE.PlaneGeometry(radius * 1.2, 1.9),
+      new THREE.MeshBasicMaterial({
+        color: trailColor,
+        transparent: true,
+        opacity: 0.34,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      }),
+    );
+    trail.position.y = 0.16;
+    group.add(trail);
+
+    const halo = new THREE.Mesh(
+      new THREE.CircleGeometry(radius * 2.7, 24),
+      new THREE.MeshBasicMaterial({
+        color: trailColor,
+        transparent: true,
+        opacity: 0.2,
+        depthWrite: false,
+      }),
+    );
+    halo.rotation.x = -Math.PI / 2;
+    halo.position.y = 0.08;
+    group.add(halo);
+
+    const body = new THREE.Mesh(
+      new THREE.DodecahedronGeometry(radius, 0),
+      new THREE.MeshStandardMaterial({
+        color,
+        emissive: color,
+        emissiveIntensity: 0.7,
+        roughness: 0.82,
+        metalness: 0.05,
+      }),
+    );
+    body.position.y = 0.24;
+    body.rotation.set(index * 0.47, index * 0.91, index * 0.63);
+    group.add(body);
+
+    meteorsRoot.add(group);
+    return { group, body, halo, trail, meteor };
   });
 }
 
@@ -5135,6 +5412,7 @@ function applyLevel(index) {
   clearUndoCheckpoints();
   resetBallTrace();
   clearSunShockwaves();
+  clearPlanetExplosions();
   lastGoalTimerFraction = Number.NaN;
 
   updateSunVisual();
@@ -5152,6 +5430,7 @@ function applyLevel(index) {
   rebuildPortals();
   rebuildDustClouds();
   rebuildAsteroids();
+  rebuildMeteors();
   rebuildPlanets();
 }
 
@@ -5265,6 +5544,7 @@ function resetBall(message, hint, options = {}) {
   state.turretShot = null;
   resetBallTrace();
   clearSunShockwaves();
+  clearPlanetExplosions();
   resetBallRenderState();
   seedFlightHistoryFromCurrentState();
   state.message = message;
@@ -5822,9 +6102,17 @@ function updatePhysics(delta) {
   }
 
   if (state.ball.crashed) {
-    if (state.ball.crashKind === 'sun' || state.ball.crashKind === 'pulsar' || state.ball.crashKind === 'turret' || state.ball.crashKind === 'planet' || state.ball.crashKind === 'lava') {
+    if (state.ball.crashKind === 'sun' || state.ball.crashKind === 'pulsar' || state.ball.crashKind === 'turret' || state.ball.crashKind === 'planet' || state.ball.crashKind === 'lava' || state.ball.crashKind === 'asteroid') {
       const solarCrash = state.ball.crashKind === 'sun' || state.ball.crashKind === 'pulsar' || state.ball.crashKind === 'turret';
-      state.ball.transition += delta * (solarCrash ? 4.8 : state.ball.crashKind === 'lava' ? 5 : 4.3);
+      const meteorPlanetCrash = state.ball.crashReason === 'meteor' && state.ball.crashPlanetIndex !== null && state.ball.crashPlanetIndex !== undefined;
+      const crashDuration = meteorPlanetCrash
+        ? METEOR_PLANET_EXPLOSION_SECONDS
+        : solarCrash
+          ? 1 / 4.8
+          : state.ball.crashKind === 'lava'
+            ? 1 / 5
+            : 1 / 4.3;
+      state.ball.transition += delta / crashDuration;
       const t = Math.min(1, state.ball.transition);
       state.ball.position.x = THREE.MathUtils.lerp(
         state.ball.crashStartPosition.x,
@@ -5871,6 +6159,8 @@ function updatePhysics(delta) {
             ? state.ball.crashKind
             : state.ball.crashKind === 'lava'
               ? 'lava'
+              : state.ball.crashKind === 'asteroid'
+                ? state.ball.crashReason
               : state.ball.crashReason,
           state.hint,
           { countReset: true },
@@ -5915,6 +6205,8 @@ function updatePhysics(delta) {
             ? 'Shot down by a turret.'
             : anchorResult.reason === 'planet-vanished'
               ? 'Planet vanished.'
+              : anchorResult.reason === 'meteor'
+                ? 'Meteor impact.'
               : anchorResult.reason === 'planet-consumed'
                 ? 'Consumed by the sun.'
                 : 'Burned on the lava world.';
@@ -5925,6 +6217,8 @@ function updatePhysics(delta) {
               ? 'turret'
               : anchorResult.reason === 'planet-vanished'
                 ? 'planet'
+                : anchorResult.reason === 'meteor'
+                  ? 'asteroid'
                 : anchorResult.reason === 'planet-consumed'
                   ? 'sun'
                   : 'lava',
@@ -5989,14 +6283,16 @@ function updatePhysics(delta) {
           ? 'Planet vanished.'
         : result.reason === 'sun'
           ? 'Burned in the sun.'
-          : result.reason === 'pulsar'
-            ? 'Caught in the pulsar jet.'
+            : result.reason === 'pulsar'
+              ? 'Caught in the pulsar jet.'
             : result.reason === 'split-side'
               ? 'Wrong side.'
               : result.reason === 'lava'
                 ? 'Burned on the lava world.'
                 : result.reason === 'turret'
                   ? 'Shot down by a turret.'
+                : result.reason === 'meteor'
+                  ? 'Meteor impact.'
                 : result.reason === 'asteroid'
                   ? 'Asteroid impact.'
                 : result.reason === 'planet'
@@ -6008,6 +6304,8 @@ function updatePhysics(delta) {
       hint,
       result.reason === 'sun' || result.reason === 'pulsar' || result.reason === 'turret' || result.reason === 'asteroid'
         ? result.reason
+        : result.reason === 'meteor'
+          ? 'asteroid'
         : result.reason === 'planet-consumed'
           ? 'sun'
         : result.reason === 'planet-vanished'
@@ -6033,7 +6331,7 @@ function updatePhysics(delta) {
   }
 }
 
-function updateDecor(time) {
+function updateDecor(time, delta = 0) {
   const worldTime = state.level.time ?? 0;
   const goalLocked = isGoalLocked(state.level);
   const goalOpen = isGoalOpen(state.level, worldTime);
@@ -6068,6 +6366,7 @@ function updateDecor(time) {
   }
   updateSunVisual();
   syncPlanetCollapseEffects();
+  updatePlanetExplosions(Math.abs(delta));
   updatePulsarJets(time);
   updateLaunchMarker();
   startPad.scale.setScalar(1 + Math.sin(time * 2.7) * 0.06);
@@ -6120,6 +6419,27 @@ function updateDecor(time) {
     visual.body.rotation.y += (visual.asteroid.spinSpeed ?? 0.24) * 0.012;
     visual.body.rotation.x += (visual.asteroid.spinSpeed ?? 0.24) * 0.004;
     visual.halo.material.opacity = 0.1 + Math.sin(time * 2.1 + index) * 0.025;
+  });
+
+  meteorVisuals.forEach((visual, index) => {
+    const meteor = visual.meteor;
+    const target = meteor.targetPosition ?? meteor.position;
+    const dx = target.x - meteor.position.x;
+    const dy = target.y - meteor.position.y;
+    const angle = Math.atan2(dx, dy);
+    const visible = meteor.active;
+
+    visual.group.visible = visible;
+    visual.group.position.set(meteor.position.x, 0, meteor.position.y);
+    visual.group.rotation.y = angle;
+    visual.body.rotation.y += 0.035 + index * 0.002;
+    visual.body.rotation.x += 0.018;
+    visual.body.scale.setScalar(1);
+    visual.halo.scale.setScalar(1);
+    visual.trail.scale.y = meteor.active ? 1 + (meteor.progress ?? 0) * 0.55 : 0.2;
+    visual.trail.material.opacity = meteor.active ? 0.32 + Math.sin(time * 9 + index) * 0.06 : 0;
+    visual.halo.material.opacity = meteor.active ? 0.16 + Math.sin(time * 7.2 + index) * 0.04 : 0;
+    visual.body.material.opacity = visible ? 1 : 0;
   });
 
   const gravityFieldRefreshDue =
@@ -6189,7 +6509,20 @@ function updateDecor(time) {
     const pulse = 1 + Math.sin(time * (1.5 + index * 0.35) + index) * 0.05;
     const isLandable = Boolean(visual.planet.landable);
     const relayPulse = state.ball.landedPlanetIndex === index ? state.relayPulse : 0;
-    const planetVisibility = visual.planet.infallFade ?? (visual.planet.active === false ? 0 : 1);
+    const meteorExplosionAge = (
+      visual.planet.collapseState === 'meteor-destroyed'
+      && Number.isFinite(visual.planet.meteorDestroyedAt)
+    ) ? worldTime - visual.planet.meteorDestroyedAt : Number.POSITIVE_INFINITY;
+    const meteorExplosionProgress = clamp(meteorExplosionAge / METEOR_PLANET_EXPLOSION_SECONDS, 0, 1);
+    const meteorExplosionVisible = meteorExplosionAge >= 0 && meteorExplosionAge < METEOR_PLANET_EXPLOSION_SECONDS;
+    const meteorBreakProgress = clamp(meteorExplosionAge / METEOR_PLANET_BREAK_DELAY_SECONDS, 0, 1);
+    const meteorExplosionEase = meteorExplosionVisible
+      ? 1 - THREE.MathUtils.smootherstep(meteorBreakProgress, 0, 1)
+      : 0;
+    const planetVisibility = Math.max(
+      visual.planet.infallFade ?? (visual.planet.active === false ? 0 : 1),
+      meteorExplosionVisible ? meteorExplosionEase : 0,
+    );
     const isFlickerPlanet = Boolean(visual.planet.flicker);
     const darkSideExposure = isFlickerPlanet ? clamp(1 - planetVisibility, 0, 1) : 0;
     const collisionPulse = visual.planet.collisionPulse ?? 0;
@@ -6199,8 +6532,8 @@ function updateDecor(time) {
     visual.orbitPath.visible = planetVisibility > 0.02 || isFlickerPlanet;
     visual.group.scale.setScalar((isFlickerPlanet ? 1 : 0.72 + planetVisibility * 0.28) * (1 + collisionPulse * 0.08));
     visual.glow.material.opacity = isLandable
-      ? (0.13 + Math.sin(time * 2 + index) * 0.03 + relayPulse * 0.12) * planetVisibility
-      : (0.16 + Math.sin(time * 1.7 + index) * 0.04) * planetVisibility;
+      ? ((0.13 + Math.sin(time * 2 + index) * 0.03 + relayPulse * 0.12) * planetVisibility) + (meteorExplosionVisible ? meteorExplosionEase * 0.55 : 0)
+      : ((0.16 + Math.sin(time * 1.7 + index) * 0.04) * planetVisibility) + (meteorExplosionVisible ? meteorExplosionEase * 0.55 : 0);
     visual.orbitRing.rotation.z = time * (0.35 + index * 0.12);
     const textureRotationOffset = visual.planet.surfaceType === 'lava' ? Math.PI * 0.72 : 0;
     const flickerFlip = isFlickerPlanet
@@ -6439,7 +6772,7 @@ function animate() {
   updateSunShockwaves(delta);
   updateBallTransforms();
   updateCueVisual();
-  updateDecor(time);
+  updateDecor(time, delta);
 
   renderer.render(scene, camera);
   requestAnimationFrame(animate);

@@ -59,6 +59,9 @@ const DEFAULT_TURRET_LINE_WIDTH = 0.13;
 const DEFAULT_DUST_CLOUD_RADIUS = 1.15;
 const DEFAULT_DUST_CLOUD_DRAG = 0.9;
 const DUST_CLOUD_DRAG_MULTIPLIER = 3.2;
+const DEFAULT_METEOR_RADIUS = 0.18;
+const DEFAULT_METEOR_WARNING_SECONDS = 4.2;
+const DEFAULT_METEOR_IMPACT_RADIUS = 0.58;
 
 function polar(radius, angleDeg) {
   return { radius, angleDeg };
@@ -84,6 +87,7 @@ export const WORLD_DEFINITIONS = [
   { id: 'asteroid-belts', name: 'Asteroid Belts' },
   { id: 'supernova', name: 'Supernova' },
   { id: 'dust-clouds', name: 'Dust Clouds' },
+  { id: 'meteor-shower', name: 'Meteor Shower' },
 ];
 
 const CORE_LEVEL_DEFINITIONS = [
@@ -1248,6 +1252,21 @@ const WORLD_THEMES = {
       { core: 0xeef7ff, glow: 0xffffff },
     ],
   },
+  meteor: {
+    landable: [
+      { core: 0x7fc8ff, glow: 0xc4ecff },
+      { core: 0xffbf72, glow: 0xffe1a6 },
+      { core: 0x99dfb3, glow: 0xd8ffd9 },
+    ],
+    hazards: [
+      { core: 0xff6f65, glow: 0xffb392 },
+      { core: 0xff8a9e, glow: 0xffc6ce },
+      { core: 0x9e86ff, glow: 0xd8ccff },
+    ],
+    moons: [
+      { core: 0xe7edf5, glow: 0xffffff },
+    ],
+  },
 };
 
 function cloneLaunchPresets(launchPresets) {
@@ -1277,6 +1296,14 @@ function cloneDustClouds(dustClouds) {
   return (dustClouds ?? []).map((cloud) => ({ ...cloud }));
 }
 
+function cloneMeteorImpacts(meteorImpacts) {
+  return (meteorImpacts ?? []).map((meteor) => ({
+    ...meteor,
+    start: meteor.start ? { ...meteor.start } : meteor.start,
+    target: meteor.target ? { ...meteor.target } : meteor.target,
+  }));
+}
+
 function cloneLevel(baseId, overrides = {}) {
   const base = coreLevelById.get(baseId);
   if (!base) {
@@ -1289,6 +1316,7 @@ function cloneLevel(baseId, overrides = {}) {
     launchPresets: cloneLaunchPresets(overrides.launchPresets ?? base.launchPresets),
     planets: clonePlanets(overrides.planets ?? base.planets),
     dustClouds: cloneDustClouds(overrides.dustClouds ?? base.dustClouds),
+    meteorImpacts: cloneMeteorImpacts(overrides.meteorImpacts ?? base.meteorImpacts),
   };
 
   if ('tutorial' in overrides) {
@@ -1757,6 +1785,59 @@ function makeSupernovaVariant(spec, specIndex) {
     sunFadeStartRadius: endRadius + (planet.radius ?? 0.5) * 2.25 + 0.35,
     sunPlungeDuration: spec.sunPlungeDuration ?? 0.72,
   }));
+  return level;
+}
+
+function makeMeteorVariant(spec) {
+  const level = variantLevel('meteor', spec);
+  const authoredImpacts = (spec.meteorImpacts ?? []).map((meteor) => ({
+    ...meteor,
+    start: meteor.start,
+    color: meteor.color ?? 0xff865f,
+    trailColor: meteor.trailColor ?? 0xffd48a,
+  }));
+  const destroyedPlanetIndexes = new Set(
+    authoredImpacts
+      .filter((meteor) => meteor.destroysPlanet !== false && meteor.targetPlanetIndex !== null && meteor.targetPlanetIndex !== undefined)
+      .map((meteor) => meteor.targetPlanetIndex),
+  );
+  const lastAuthoredImpactTime = authoredImpacts.reduce(
+    (latest, meteor) => Math.max(latest, meteor.impactTimeSeconds ?? 0),
+    0,
+  );
+  const cleanupStartSeconds = spec.cleanupStartSeconds ?? Math.max(16, lastAuthoredImpactTime + 4);
+  const cleanupImpacts = level.planets
+    .map((_, planetIndex) => planetIndex)
+    .filter((planetIndex) => !destroyedPlanetIndexes.has(planetIndex))
+    .map((planetIndex, cleanupIndex) => ({
+      targetPlanetIndex: planetIndex,
+      impactTimeSeconds: Number((cleanupStartSeconds + cleanupIndex * 1.45).toFixed(2)),
+      warningSeconds: 5.0,
+      approachAngleDeg: ((planetIndex * 83 + cleanupIndex * 47 + 31) % 360) - 180,
+      startDistance: 10.5,
+      radius: 0.17,
+      color: 0xff865f,
+      trailColor: 0xffd48a,
+      cleanup: true,
+    }));
+
+  const ambientFlybys = (spec.ambientFlybys ?? [
+    { start: polar(12.4, -64), target: polar(11.2, 18), periodSeconds: 7.2, phaseSeconds: 0, radius: 0.13 },
+    { start: polar(12.1, 76), target: polar(10.9, -18), periodSeconds: 7.8, phaseSeconds: 1.1, radius: 0.14 },
+    { start: polar(11.8, -22), target: polar(12.0, 58), periodSeconds: 6.8, phaseSeconds: 2.0, radius: 0.12 },
+    { start: polar(12.3, 138), target: polar(10.8, 92), periodSeconds: 8.1, phaseSeconds: 3.0, radius: 0.13 },
+    { start: polar(11.9, -142), target: polar(11.0, -86), periodSeconds: 7.4, phaseSeconds: 4.1, radius: 0.12 },
+  ]).map((meteor) => ({
+    ...meteor,
+    warningSeconds: meteor.warningSeconds ?? meteor.periodSeconds ?? meteor.impactTimeSeconds ?? 8,
+    impactTimeSeconds: meteor.impactTimeSeconds ?? meteor.periodSeconds ?? 8,
+    destroysPlanet: false,
+    ambient: true,
+    color: meteor.color ?? 0xff9a66,
+    trailColor: meteor.trailColor ?? 0xffd8a0,
+  }));
+
+  level.meteorImpacts = [...ambientFlybys, ...authoredImpacts, ...cleanupImpacts];
   return level;
 }
 
@@ -2419,6 +2500,116 @@ const SUPERNOVA_WORLD_SPECS = [
   { baseId: 'final-circuit', id: 'supernova-circuit', name: 'Supernova Circuit', summary: 'The last route is a full relay circuit raced against a red giant swallowing the close worlds.', growSeconds: 8.2, endRadius: 2.32 },
 ];
 
+const METEOR_WORLD_SPECS = [
+  {
+    baseId: 'open-lane',
+    id: 'first-impact',
+    name: 'First Impact',
+    summary: 'A meteor breaks the far marker world. Watch the strike, then take the open lane.',
+    meteorImpacts: [
+      { targetPlanetIndex: 0, impactTimeSeconds: 6.2, warningSeconds: 5.2, approachAngleDeg: -84, startDistance: 10, radius: 0.2 },
+      { impactTimeSeconds: 8.6, warningSeconds: 4.4, start: polar(11.8, -36), target: polar(11.6, 42), destroysPlanet: false, radius: 0.16 },
+    ],
+  },
+  {
+    baseId: 'hot-giant',
+    id: 'cleared-giant',
+    name: 'Cleared Giant',
+    summary: 'The hostile giant blocks the bend until the meteor erases its gravity well.',
+    meteorImpacts: [
+      { targetPlanetIndex: 0, impactTimeSeconds: 3.8, warningSeconds: 3.8, approachAngleDeg: 86, startDistance: 10, radius: 0.22 },
+      { impactTimeSeconds: 7.4, warningSeconds: 4.2, start: polar(12.0, -54), target: polar(11.5, -6), destroysPlanet: false, radius: 0.15 },
+    ],
+    launchPresets: [{ angleDeg: 18, power: 2.18 }],
+  },
+  {
+    baseId: 'fast-window',
+    id: 'meteor-gate',
+    name: 'Meteor Gate',
+    summary: 'No planet is hit yet. Read the passing shower and launch through the moving gap.',
+    meteorImpacts: [
+      { impactTimeSeconds: 4.2, warningSeconds: 4.2, start: polar(12.0, -36), target: polar(10.8, 28), destroysPlanet: false, radius: 0.17 },
+      { impactTimeSeconds: 6.8, warningSeconds: 4.6, start: polar(11.7, 54), target: polar(10.9, -12), destroysPlanet: false, radius: 0.16 },
+    ],
+    cleanupStartSeconds: 13.4,
+  },
+  {
+    baseId: 'first-relay',
+    id: 'last-platform',
+    name: 'Last Platform',
+    preferRelay: true,
+    summary: 'The launch world will not survive. Leave it, catch the relay, and finish before the cleanup wave.',
+    meteorImpacts: [
+      { targetPlanetIndex: 0, impactTimeSeconds: 5.2, warningSeconds: 4.8, approachAngleDeg: -18, startDistance: 9.6, radius: 0.2 },
+      { impactTimeSeconds: 8.2, warningSeconds: 4.4, start: polar(11.8, 72), target: polar(10.8, 14), destroysPlanet: false, radius: 0.16 },
+    ],
+    cleanupStartSeconds: 14.2,
+  },
+  {
+    baseId: 'inner-step',
+    id: 'relay-impact',
+    name: 'Relay Impact',
+    summary: 'Use the outer relay, but do not wait there after the incoming meteor commits.',
+    meteorImpacts: [
+      { targetPlanetIndex: 1, impactTimeSeconds: 9.4, warningSeconds: 4.2, approachAngleDeg: 76, startDistance: 10, radius: 0.22 },
+      { impactTimeSeconds: 5.8, warningSeconds: 3.8, start: polar(11.7, -58), target: polar(10.8, 8), destroysPlanet: false, radius: 0.15 },
+    ],
+  },
+  {
+    baseId: 'forked-harbor',
+    id: 'broken-harbor',
+    name: 'Broken Harbor',
+    summary: 'One harbor is bait because the shower removes it mid-route; the other stays playable.',
+    meteorImpacts: [
+      { targetPlanetIndex: 1, impactTimeSeconds: 5.8, warningSeconds: 4.4, approachAngleDeg: -108, startDistance: 10, radius: 0.2 },
+      { impactTimeSeconds: 9.8, warningSeconds: 4.8, start: polar(12.0, 66), target: polar(11.2, 18), destroysPlanet: false, radius: 0.16 },
+    ],
+  },
+  {
+    baseId: 'shielded-arc',
+    id: 'shieldfall',
+    name: 'Shieldfall',
+    summary: 'Wait for the shield world to shatter, then slip through the lane it was warping.',
+    meteorImpacts: [
+      { targetPlanetIndex: 0, impactTimeSeconds: 4.6, warningSeconds: 4.6, approachAngleDeg: 158, startDistance: 10, radius: 0.24 },
+      { impactTimeSeconds: 8.8, warningSeconds: 4.4, start: polar(11.8, -48), target: polar(11.0, 20), destroysPlanet: false, radius: 0.15 },
+    ],
+  },
+  {
+    baseId: 'moon-switch',
+    id: 'falling-moon',
+    name: 'Falling Moon',
+    summary: 'The small moon relay disappears on schedule, so the switch route must happen early.',
+    meteorImpacts: [
+      { targetPlanetIndex: 3, impactTimeSeconds: 7.0, warningSeconds: 5.0, approachAngleDeg: -60, startDistance: 10, radius: 0.18 },
+      { impactTimeSeconds: 10.2, warningSeconds: 4.6, start: polar(11.9, 58), target: polar(10.9, 8), destroysPlanet: false, radius: 0.16 },
+    ],
+  },
+  {
+    baseId: 'counterspin-gate',
+    id: 'impact-gate',
+    name: 'Impact Gate',
+    summary: 'A meteor opens the middle of the counterspin gate, but the exit relay will not wait forever.',
+    meteorImpacts: [
+      { targetPlanetIndex: 4, impactTimeSeconds: 4.8, warningSeconds: 4.8, approachAngleDeg: -86, startDistance: 10, radius: 0.22 },
+      { targetPlanetIndex: 2, impactTimeSeconds: 10.0, warningSeconds: 5.6, approachAngleDeg: -44, startDistance: 10, radius: 0.18 },
+      { impactTimeSeconds: 7.6, warningSeconds: 4.0, start: polar(12.0, 62), target: polar(11.0, 22), destroysPlanet: false, radius: 0.15 },
+    ],
+  },
+  {
+    baseId: 'final-circuit',
+    id: 'meteor-circuit',
+    name: 'Meteor Circuit',
+    summary: 'The full circuit becomes a survival route: leave doomed relays and use the lane after impact.',
+    meteorImpacts: [
+      { targetPlanetIndex: 3, impactTimeSeconds: 4.4, warningSeconds: 4.4, approachAngleDeg: -50, startDistance: 10, radius: 0.22 },
+      { targetPlanetIndex: 1, impactTimeSeconds: 8.8, warningSeconds: 5.2, approachAngleDeg: 82, startDistance: 10, radius: 0.2 },
+      { targetPlanetIndex: 2, impactTimeSeconds: 12.2, warningSeconds: 5.8, approachAngleDeg: -8, startDistance: 10, radius: 0.2 },
+      { impactTimeSeconds: 6.8, warningSeconds: 4.0, start: polar(12.1, -60), target: polar(11.2, -8), destroysPlanet: false, radius: 0.15 },
+    ],
+  },
+];
+
 const EXPANSION_LEVEL_DEFINITIONS = [
   ...ICY_WORLD_SPECS.map((spec) => makeIcyVariant(spec)),
   ...PORTAL_WORLD_SPECS.map((spec) => makePortalVariant(spec)),
@@ -2433,6 +2624,7 @@ const EXPANSION_LEVEL_DEFINITIONS = [
   ...ASTEROID_WORLD_SPECS.map((spec) => makeAsteroidBeltLevel(spec)),
   ...SUPERNOVA_WORLD_SPECS.map((spec, index) => makeSupernovaVariant(spec, index)),
   ...DUST_WORLD_SPECS.map((spec) => makeDustVariant(spec)),
+  ...METEOR_WORLD_SPECS.map((spec) => makeMeteorVariant(spec)),
 ];
 
 const LEVEL_DEFINITIONS = [...CORE_LEVEL_DEFINITIONS, ...EXPANSION_LEVEL_DEFINITIONS];
@@ -2608,6 +2800,16 @@ const CAMPAIGN_LEVEL_ORDER = [
   'cloud-halo',
   'crown-haze',
   'dust-circuit',
+  'first-impact',
+  'cleared-giant',
+  'meteor-gate',
+  'last-platform',
+  'relay-impact',
+  'shieldfall',
+  'broken-harbor',
+  'falling-moon',
+  'impact-gate',
+  'meteor-circuit',
 ];
 
 const campaignOrderIndex = new Map(
@@ -2746,6 +2948,78 @@ function asteroidPositionAtTime(asteroid, sun, time) {
   const direction = directionFromAngleDeg(angleDeg);
   const orbitRadius = asteroid.orbitRadius ?? asteroid.position?.radius ?? 0;
   return vec(sun.x + direction.x * orbitRadius, sun.y + direction.y * orbitRadius);
+}
+
+function getMeteorTargetPosition(level, meteor, time, orbitStateCache = new Map()) {
+  if (meteor.target) {
+    return cloneVec(meteor.target);
+  }
+
+  if (meteor.targetPlanetIndex !== null && meteor.targetPlanetIndex !== undefined) {
+    const targetPlanet = level.planets[meteor.targetPlanetIndex];
+    if (targetPlanet) {
+      return cloneVec(getOrbitState(level, meteor.targetPlanetIndex, time, orbitStateCache).position);
+    }
+  }
+
+  return cloneVec(meteor.target ?? level.sun ?? vec(0, 0));
+}
+
+function updateMeteorImpactState(level, meteor, time, orbitStateCache = new Map()) {
+  const warningSeconds = Math.max(0.001, meteor.warningSeconds ?? DEFAULT_METEOR_WARNING_SECONDS);
+  const impactTime = meteor.impactTimeSeconds ?? warningSeconds;
+  const startTime = impactTime - warningSeconds;
+  const progress = clamp((time - startTime) / warningSeconds, 0, 1);
+  const targetPosition = getMeteorTargetPosition(level, meteor, impactTime, orbitStateCache);
+
+  meteor.targetPosition = targetPosition;
+
+  if (meteor.destroysPlanet === false && meteor.periodSeconds) {
+    const periodSeconds = Math.max(0.001, meteor.periodSeconds);
+    const phaseSeconds = meteor.phaseSeconds ?? 0;
+    const cycleTime = ((time - phaseSeconds) % periodSeconds + periodSeconds) % periodSeconds;
+    const cycleProgress = clamp(cycleTime / periodSeconds, 0, 1);
+    meteor.position.x = meteor.start.x + (targetPosition.x - meteor.start.x) * cycleProgress;
+    meteor.position.y = meteor.start.y + (targetPosition.y - meteor.start.y) * cycleProgress;
+    meteor.progress = cycleProgress;
+    meteor.active = true;
+    meteor.impacted = false;
+    return;
+  }
+
+  meteor.position.x = meteor.start.x + (targetPosition.x - meteor.start.x) * progress;
+  meteor.position.y = meteor.start.y + (targetPosition.y - meteor.start.y) * progress;
+  meteor.progress = progress;
+  meteor.active = time >= startTime && time < impactTime;
+  meteor.impacted = time >= impactTime;
+
+  if (meteor.targetPlanetIndex === null || meteor.targetPlanetIndex === undefined) {
+    return;
+  }
+
+  const targetPlanet = level.planets[meteor.targetPlanetIndex];
+  if (!targetPlanet || meteor.destroysPlanet === false) {
+    return;
+  }
+
+  const impactPlanetPosition = getOrbitState(level, meteor.targetPlanetIndex, impactTime, new Map()).position;
+  const hitRadius = (meteor.impactRadius ?? DEFAULT_METEOR_IMPACT_RADIUS) + (targetPlanet.radius ?? 0);
+  const hitTargetPlanet = distanceBetween(targetPosition, impactPlanetPosition) <= hitRadius;
+
+  if (meteor.impacted) {
+    if (hitTargetPlanet) {
+      targetPlanet.position.x = impactPlanetPosition.x;
+      targetPlanet.position.y = impactPlanetPosition.y;
+      targetPlanet.active = false;
+      targetPlanet.destroyedByMeteor = true;
+      targetPlanet.meteorDestroyedAt = impactTime;
+      targetPlanet.infallFade = 0;
+      targetPlanet.collapseState = 'meteor-destroyed';
+    }
+  } else if (targetPlanet.destroyedByMeteor) {
+    delete targetPlanet.destroyedByMeteor;
+    delete targetPlanet.meteorDestroyedAt;
+  }
 }
 
 function angleDegBetween(from, to) {
@@ -3335,6 +3609,9 @@ export function setLevelTime(level, time) {
     asteroid.position.x = position.x;
     asteroid.position.y = position.y;
   });
+  level.meteorImpacts?.forEach((meteor) => {
+    updateMeteorImpactState(level, meteor, time, orbitStateCache);
+  });
   return level;
 }
 
@@ -3473,7 +3750,11 @@ export function advanceBallAnchor(level, ball, delta) {
   const planet = level.planets[ball.anchorPlanetIndex];
   if (!planet || planet.collapseState === 'consumed' || planet.active === false) {
     const eventState = cloneBallRuntimeState(ball);
-    const reason = planet?.active === false && planet?.flicker ? 'planet-vanished' : 'planet-consumed';
+    const reason = planet?.destroyedByMeteor
+      ? 'meteor'
+      : planet?.active === false && planet?.flicker
+        ? 'planet-vanished'
+        : 'planet-consumed';
     ball.anchorPlanetIndex = null;
     ball.anchorNormal = null;
     ball.velocity.x = 0;
@@ -3499,6 +3780,11 @@ export function advanceBallAnchor(level, ball, delta) {
   }
 
   syncBallToAnchor(level, ball);
+  const meteorContactResult = resolveMeteorContact(level, ball);
+  if (meteorContactResult) {
+    return meteorContactResult;
+  }
+
   const turretContactResult = resolveTurretSightContact(level, ball, previousPosition);
   if (turretContactResult) {
     return turretContactResult;
@@ -3878,6 +4164,52 @@ export function createLevelRuntime(index) {
       color: asteroid.color ?? 0x8d929a,
     }))
     : [];
+  const meteorImpacts = Array.isArray(source.meteorImpacts)
+    ? source.meteorImpacts.map((meteor, meteorIndex) => {
+      const impactTimeSeconds = meteor.impactTimeSeconds ?? DEFAULT_METEOR_WARNING_SECONDS;
+      const targetPlanetIndex = meteor.targetPlanetIndex ?? null;
+      const meteorLevelContext = {
+        planets,
+        sun: cloneVec(primarySunBody?.basePosition ?? systemCenter),
+        systemCenter,
+        primarySunBody,
+        secondarySunBody,
+        extraSuns,
+      };
+      const target = meteor.target
+        ? scalePointFromSun(pointFromPolar(meteor.target), systemCenter)
+        : targetPlanetIndex !== null
+          ? cloneVec(getOrbitState(meteorLevelContext, targetPlanetIndex, impactTimeSeconds).position)
+          : null;
+      const start = meteor.start
+        ? scalePointFromSun(pointFromPolar(meteor.start), systemCenter)
+        : target
+          ? (() => {
+            const approach = directionFromAngleDeg(meteor.approachAngleDeg ?? 0);
+            const distance = meteor.startDistance ?? 8.5;
+            return vec(target.x - approach.x * distance, target.y - approach.y * distance);
+          })()
+          : scalePointFromSun(pointFromPolar(polar(11.5, meteor.approachAngleDeg ?? 0)), systemCenter);
+
+      return {
+        ...meteor,
+        index: meteorIndex,
+        radius: meteor.radius ?? DEFAULT_METEOR_RADIUS,
+        impactRadius: meteor.impactRadius ?? DEFAULT_METEOR_IMPACT_RADIUS,
+        warningSeconds: meteor.warningSeconds ?? DEFAULT_METEOR_WARNING_SECONDS,
+        impactTimeSeconds,
+        destroysPlanet: meteor.destroysPlanet ?? true,
+        killsAnchoredBall: meteor.killsAnchoredBall ?? true,
+        start,
+        target,
+        targetPlanetIndex,
+        position: vec(0, 0),
+        targetPosition: vec(0, 0),
+        color: meteor.color ?? 0xffa05f,
+        trailColor: meteor.trailColor ?? 0xffd28a,
+      };
+    })
+    : [];
   const startPlanetIndex = inferStartPlanetIndex(source, planets);
   const startPlanet = planets[startPlanetIndex];
   const startAngleDeg = source.startAngleDeg
@@ -3919,6 +4251,7 @@ export function createLevelRuntime(index) {
     portals,
     dustClouds,
     asteroids,
+    meteorImpacts,
   };
 
   if (!level.planets[level.startPlanetIndex].landable) {
@@ -4115,6 +4448,32 @@ function resolveAsteroidContact(level, ball) {
   return null;
 }
 
+function resolveMeteorContact(level, ball) {
+  for (const meteor of level.meteorImpacts ?? []) {
+    if (!meteor.active) {
+      continue;
+    }
+
+    const touchRadius = (meteor.radius ?? DEFAULT_METEOR_RADIUS) + COURSE.ballRadius * PLANET_COLLISION_PADDING;
+    if (distanceBetween(ball.position, meteor.position) <= touchRadius) {
+      const eventState = cloneBallRuntimeState(ball);
+      ball.velocity.x = 0;
+      ball.velocity.y = 0;
+      return {
+        type: 'crash',
+        reason: 'meteor',
+        meteorIndex: meteor.index,
+        planetIndex: meteor.targetPlanetIndex ?? null,
+        eventState,
+        displayEventState: cloneBallRuntimeState(eventState),
+        crashTargetPosition: cloneVec(meteor.position),
+      };
+    }
+  }
+
+  return null;
+}
+
 function resolveSunContact(level, ball, previousPosition = null) {
   if (isSegmentInPulsarJets(level, previousPosition, ball.position, ball.time ?? level.time ?? 0)) {
     const eventState = cloneBallRuntimeState(ball);
@@ -4298,14 +4657,17 @@ export function stepBall(level, ball, delta) {
     && ball.anchorPlanetIndex !== undefined
     && (
       level.planets[ball.anchorPlanetIndex]?.collapseState === 'consumed'
+      || level.planets[ball.anchorPlanetIndex]?.destroyedByMeteor
       || level.planets[ball.anchorPlanetIndex]?.active === false
     )
   ) {
     const eventState = cloneBallRuntimeState(ball);
     const consumedPlanet = level.planets[ball.anchorPlanetIndex];
-    const reason = consumedPlanet?.active === false && consumedPlanet?.flicker
-      ? 'planet-vanished'
-      : 'planet-consumed';
+    const reason = consumedPlanet?.destroyedByMeteor
+      ? 'meteor'
+      : consumedPlanet?.active === false && consumedPlanet?.flicker
+        ? 'planet-vanished'
+        : 'planet-consumed';
     ball.anchorPlanetIndex = null;
     ball.anchorNormal = null;
     ball.velocity.x = 0;
@@ -4388,6 +4750,12 @@ export function stepBall(level, ball, delta) {
   if (asteroidContactResult) {
     asteroidContactResult.portalEvent = portalEvent;
     return asteroidContactResult;
+  }
+
+  const meteorContactResult = resolveMeteorContact(level, ball);
+  if (meteorContactResult) {
+    meteorContactResult.portalEvent = portalEvent;
+    return meteorContactResult;
   }
 
   const friction = getBallFriction(level, ball.position, delta);

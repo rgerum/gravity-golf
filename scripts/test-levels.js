@@ -141,6 +141,7 @@ function createMisses() {
     timeout: 0,
     landed: 0,
     turret: 0,
+    meteor: 0,
   };
 }
 
