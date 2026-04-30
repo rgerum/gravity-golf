@@ -161,6 +161,10 @@ const CORE_LEVEL_DEFINITIONS = [
     name: 'First Relay',
     preferRelay: true,
     summary: 'Start deep in the system, hop outward onto the relay world, then burn for the goal.',
+    tutorial: {
+      type: 'relay',
+      copy: 'Land on another planet to set up your next launch.',
+    },
     sun: [0, 0],
     startPlanetIndex: 0,
     launchPresets: [

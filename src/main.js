@@ -6419,6 +6419,7 @@ function getActiveTutorial() {
 function syncTutorialOverlay() {
   const tutorial = getActiveTutorial();
   tutorialCard.hidden = !tutorial;
+  tutorialCard.classList.toggle('is-relay', tutorial?.type === 'relay');
   tutorialCard.classList.toggle('is-monolith', tutorial?.type === 'monolith');
   tutorialCard.classList.toggle('is-dust', tutorial?.type === 'dust');
   if (!tutorial) {
