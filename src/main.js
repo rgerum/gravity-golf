@@ -75,8 +75,8 @@ app.innerHTML = `
               </div>
             </div>
             <div class="action-row">
-              <button id="retryButton" class="hud-button" type="button">Retry</button>
-              <button id="undoButton" class="hud-button hud-button-primary" type="button">Undo</button>
+              <button id="retryButton" class="hud-button" type="button"><span>Retry</span><kbd>R</kbd></button>
+              <button id="undoButton" class="hud-button hud-button-primary" type="button"><span>Undo</span><kbd>Z</kbd></button>
             </div>
           </div>
           <div class="hud-bottom">
@@ -148,8 +148,8 @@ app.innerHTML = `
               <p class="game-over-hint" id="gameOverHint" hidden>Retry the route or rewind to the previous boundary.</p>
             </div>
             <div class="game-over-actions">
-              <button id="gameOverRetryButton" class="hud-button" type="button">Retry</button>
-              <button id="gameOverUndoButton" class="hud-button hud-button-primary" type="button">Undo</button>
+              <button id="gameOverRetryButton" class="hud-button" type="button"><span>Retry</span><kbd>R</kbd></button>
+              <button id="gameOverUndoButton" class="hud-button hud-button-primary" type="button"><span>Undo</span><kbd>Z</kbd></button>
             </div>
           </div>
         </div>
@@ -6551,12 +6551,35 @@ debugTuningInputs.forEach((input) => {
   });
 });
 
+function isEditableShortcutTarget(target) {
+  return target instanceof HTMLInputElement
+    || target instanceof HTMLTextAreaElement
+    || target instanceof HTMLSelectElement
+    || target?.isContentEditable;
+}
+
 window.addEventListener('keydown', (event) => {
+  if (isEditableShortcutTarget(event.target)) {
+    return;
+  }
+
   if (state.worldMap.open) {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
       continueFromWorldMap();
     }
+    return;
+  }
+
+  if (!event.altKey && !event.shiftKey && event.code === 'KeyZ') {
+    event.preventDefault();
+    startUndo();
+    return;
+  }
+
+  if (!event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && event.code === 'KeyR') {
+    event.preventDefault();
+    restartLevel();
     return;
   }
 

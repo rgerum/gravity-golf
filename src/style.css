@@ -363,7 +363,26 @@ h1 {
   font-size: 0.68rem;
   font-weight: 600;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   transition: transform 140ms ease, border-color 140ms ease, background-color 140ms ease, opacity 140ms ease;
+}
+
+.hud-button kbd {
+  min-width: 1.35rem;
+  height: 1.35rem;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(225, 241, 255, 0.2);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(238, 246, 255, 0.86);
+  font: inherit;
+  font-size: 0.62rem;
+  line-height: 1;
 }
 
 .hud-button:hover:not(:disabled) {
@@ -380,6 +399,12 @@ h1 {
 .hud-button-primary {
   border-color: rgba(125, 243, 217, 0.24);
   background: linear-gradient(180deg, rgba(27, 57, 64, 0.9), rgba(10, 24, 26, 0.88));
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .hud-button kbd {
+    display: inline-flex;
+  }
 }
 
 .tutorial-overlay {
