@@ -55,12 +55,23 @@ app.innerHTML = `
         <div class="stage-overlay">
           <div class="hud-top">
             <div class="level-block">
-              <p class="level-kicker" id="levelKicker">Orbital Course</p>
-              <h1 id="levelLabel">Level 1 / 1</h1>
-              <p class="level-name" id="levelName">Launch Window</p>
-              <div class="hud-pills">
-                <span class="status-pill" id="runStatusPill">Shot 1 · Launch Pad</span>
-                <span class="status-pill" id="windowStatusPill">Window live</span>
+              <div class="level-header">
+                <div class="level-copy">
+                  <p class="level-kicker" id="levelKicker">Orbital Course</p>
+                  <h1 id="levelLabel">Level 1 / 1</h1>
+                  <p class="level-name" id="levelName">Launch Window</p>
+                  <div class="hud-pills">
+                    <span class="status-pill" id="runStatusPill">Shot 1 · Launch Pad</span>
+                    <span class="status-pill" id="windowStatusPill">Window live</span>
+                  </div>
+                </div>
+                <button id="worldMapButton" class="map-button" type="button" aria-label="Open world map" title="Open world map">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M9 18l-6 3V6l6-3 6 3 6-3v15l-6 3-6-3z" />
+                    <path d="M9 3v15" />
+                    <path d="M15 6v15" />
+                  </svg>
+                </button>
               </div>
               <div class="time-control">
                 <label class="time-control-label" for="timeSpeedSlider">
@@ -162,7 +173,7 @@ app.innerHTML = `
               <p class="world-map-progress" id="worldMapProgress">10 levels cleared</p>
             </div>
             <div class="world-map-stats" id="worldMapStats" aria-label="Completed world stats"></div>
-            <div class="world-map-stage" aria-hidden="true">
+            <div class="world-map-stage">
               <div class="galaxy-dust"></div>
               <div class="galaxy-core"></div>
               <div class="galaxy-ring galaxy-ring-outer"></div>
@@ -177,6 +188,7 @@ app.innerHTML = `
             </div>
             <div class="world-map-actions">
               <button id="worldMapContinueButton" class="hud-button hud-button-primary" type="button">Enter Relay Reach</button>
+              <button id="worldMapReplayButton" class="hud-button" type="button" hidden>Replay World</button>
             </div>
           </div>
         </div>
@@ -220,7 +232,9 @@ const worldMapTrailBase = document.querySelector('#worldMapTrailBase');
 const worldMapTrailProgress = document.querySelector('#worldMapTrailProgress');
 const worldMapDotLayer = document.querySelector('#worldMapDotLayer');
 const worldMapContinueButton = document.querySelector('#worldMapContinueButton');
+const worldMapReplayButton = document.querySelector('#worldMapReplayButton');
 const worldMapStats = document.querySelector('#worldMapStats');
+const worldMapButton = document.querySelector('#worldMapButton');
 const sceneHost = document.querySelector('#scene');
 let gameOverVisibilityFrame = 0;
 
@@ -314,6 +328,7 @@ const FPS_OVERLAY_STORAGE_KEY = 'gravityBilliardFpsOverlay';
 const LAST_LEVEL_STORAGE_KEY = 'gravityBilliardLastLevel';
 const COMMUNITY_RUN_STORAGE_KEY = 'gravityGolfCommunityRunId';
 const WORLD_RUN_STATS_STORAGE_KEY = 'gravityGolfWorldRunStats';
+const WORLD_STATS_HISTORY_STORAGE_KEY = 'gravityGolfWorldStatsHistory';
 const COMMUNITY_STATS_MIN_SAMPLE_COUNT = 5;
 const DEFAULT_CONTROL_SHOT = { angleDeg: 0, power: 1.8 };
 const TIME_SPEED_VALUES = [-1, 0, 1, 2];
@@ -924,7 +939,10 @@ const state = {
     open: false,
     nextLevelIndex: 0,
     completedLevelCount: 0,
+    selectedWorldIndex: 0,
+    openedFromHud: false,
     renderKey: '',
+    animateStatsOnNextRender: false,
     communityKey: '',
     communityStatus: 'idle',
     communityPercentile: null,
@@ -933,6 +951,7 @@ const state = {
   },
   worldRunStats: {
     worldIndex: initialLevel.worldIndex,
+    worldId: initialLevel.worldId,
     levelsCleared: 0,
     shots: 0,
     retries: 0,
@@ -943,6 +962,7 @@ const state = {
     shots: 0,
     resets: 0,
   },
+  worldStatsHistory: readWorldStatsHistory(),
   goalCloseAnimation: {
     active: false,
     elapsed: 0,
@@ -1268,6 +1288,60 @@ function createEmptyWorldRunStats(worldIndex) {
   };
 }
 
+function normalizeWorldRunStats(stats, worldIndex) {
+  return {
+    ...createEmptyWorldRunStats(worldIndex),
+    levelsCleared: clamp(Number(stats?.levelsCleared) || 0, 0, WORLD_SIZE),
+    shots: Math.max(0, Number(stats?.shots) || 0),
+    retries: Math.max(0, Number(stats?.retries) || 0),
+    relays: Math.max(0, Number(stats?.relays) || 0),
+    flightTime: Math.max(0, Number(stats?.flightTime) || 0),
+  };
+}
+
+function readWorldStatsHistory() {
+  try {
+    const rawHistory = window.localStorage.getItem(WORLD_STATS_HISTORY_STORAGE_KEY);
+    if (!rawHistory) {
+      return {};
+    }
+
+    const parsedHistory = JSON.parse(rawHistory);
+    const nextHistory = {};
+    WORLD_DEFINITIONS.forEach((worldDefinition, worldIndex) => {
+      const savedStats = parsedHistory?.[worldDefinition.id];
+      if (savedStats) {
+        nextHistory[worldDefinition.id] = normalizeWorldRunStats(savedStats, worldIndex);
+      }
+    });
+    return nextHistory;
+  } catch {
+    return {};
+  }
+}
+
+function persistWorldStatsHistory() {
+  try {
+    window.localStorage.setItem(WORLD_STATS_HISTORY_STORAGE_KEY, JSON.stringify(state.worldStatsHistory));
+  } catch {
+    // Ignore persistence errors in restricted contexts.
+  }
+}
+
+function getWorldHistoryStats(worldIndex) {
+  const worldId = WORLD_DEFINITIONS[worldIndex]?.id;
+  return worldId ? state.worldStatsHistory[worldId] ?? null : null;
+}
+
+function saveCompletedWorldStats(worldIndex) {
+  const worldId = WORLD_DEFINITIONS[worldIndex]?.id;
+  if (!worldId || state.worldRunStats.levelsCleared < WORLD_SIZE) {
+    return;
+  }
+  state.worldStatsHistory[worldId] = normalizeWorldRunStats(state.worldRunStats, worldIndex);
+  persistWorldStatsHistory();
+}
+
 function readPersistedWorldRunStats(worldIndex) {
   try {
     const rawStats = window.localStorage.getItem(WORLD_RUN_STATS_STORAGE_KEY);
@@ -1285,12 +1359,7 @@ function readPersistedWorldRunStats(worldIndex) {
     }
 
     return {
-      ...createEmptyWorldRunStats(worldIndex),
-      levelsCleared: clamp(Number(parsedStats.levelsCleared) || 0, 0, WORLD_SIZE),
-      shots: Math.max(0, Number(parsedStats.shots) || 0),
-      retries: Math.max(0, Number(parsedStats.retries) || 0),
-      relays: Math.max(0, Number(parsedStats.relays) || 0),
-      flightTime: Math.max(0, Number(parsedStats.flightTime) || 0),
+      ...normalizeWorldRunStats(parsedStats, worldIndex),
     };
   } catch {
     return null;
@@ -1347,6 +1416,7 @@ function recordCompletedWorldLevelStats(completedLevelIndex) {
     (state.ball.time ?? state.level.time ?? 0) - (completedLevel.startTimeSeconds ?? 0),
   );
   persistWorldRunStats();
+  saveCompletedWorldStats(worldIndex);
 }
 
 function formatStatValue(value, format) {
@@ -1356,8 +1426,7 @@ function formatStatValue(value, format) {
   return String(Math.round(value));
 }
 
-function getWorldMapStats() {
-  const stats = state.worldRunStats;
+function getWorldMapStats(stats = state.worldRunStats) {
   const levelsCleared = Math.max(1, stats.levelsCleared);
   return [
     {
@@ -1375,15 +1444,43 @@ function getWorldMapStats() {
   ];
 }
 
-function renderWorldMapStats() {
-  const stats = getWorldMapStats();
+function getSelectedWorldStats() {
+  const selectedWorldIndex = clamp(state.worldMap.selectedWorldIndex, 0, WORLD_DEFINITIONS.length - 1);
+  if (selectedWorldIndex === state.worldRunStats.worldIndex) {
+    return state.worldRunStats;
+  }
+  return getWorldHistoryStats(selectedWorldIndex) ?? createEmptyWorldRunStats(selectedWorldIndex);
+}
+
+function selectedWorldHasStats() {
+  return getSelectedWorldStats().levelsCleared > 0;
+}
+
+let worldMapStatsAnimationFrame = 0;
+
+function cancelWorldMapStatsAnimation() {
+  if (!worldMapStatsAnimationFrame) {
+    return;
+  }
+  cancelAnimationFrame(worldMapStatsAnimationFrame);
+  worldMapStatsAnimationFrame = 0;
+}
+
+function renderWorldMapStats({ animate = false } = {}) {
+  if (!animate) {
+    cancelWorldMapStatsAnimation();
+  }
+
+  const selectedStats = getSelectedWorldStats();
+  const stats = getWorldMapStats(selectedStats);
   worldMapStats.innerHTML = stats.map((stat, index) => {
     const ratio = clamp(stat.value / Math.max(1, stat.max), 0.04, 1);
+    const displayValue = animate ? '0' : formatStatValue(stat.value, stat.format);
     return `
       <div class="world-map-stat" style="--stat-ratio: ${ratio}; --stat-delay: ${index * 90}ms;">
         <div class="world-map-stat-head">
           <span>${stat.label}</span>
-          <strong data-final-value="${stat.value}" data-format="${stat.format}">0</strong>
+          <strong data-final-value="${stat.value}" data-format="${stat.format}">${displayValue}</strong>
         </div>
         <div class="world-map-stat-track">
           <span></span>
@@ -1445,6 +1542,7 @@ function syncWorldMapCommunityStats() {
 }
 
 function animateWorldMapStats() {
+  cancelWorldMapStatsAnimation();
   const values = [...worldMapStats.querySelectorAll('[data-final-value]')];
   const startedAt = performance.now();
   const duration = 1050;
@@ -1458,11 +1556,13 @@ function animateWorldMapStats() {
       node.textContent = formatStatValue(finalValue * eased, format);
     });
     if (t < 1 && state.worldMap.open) {
-      requestAnimationFrame(tick);
+      worldMapStatsAnimationFrame = requestAnimationFrame(tick);
+    } else {
+      worldMapStatsAnimationFrame = 0;
     }
   }
 
-  requestAnimationFrame(tick);
+  worldMapStatsAnimationFrame = requestAnimationFrame(tick);
 }
 
 function resetWorldMapCommunityStats(status = 'idle') {
@@ -1528,6 +1628,7 @@ function syncWorldMap() {
   worldMapModal.classList.toggle('is-open', state.worldMap.open);
   worldMapModal.classList.toggle('is-visible', state.worldMap.open);
   if (!state.worldMap.open) {
+    cancelWorldMapStatsAnimation();
     resetWorldMapCommunityStats('idle');
     return;
   }
@@ -1535,15 +1636,26 @@ function syncWorldMap() {
   const completedWorldCount = getWorldMapCompletedWorldCount(state.worldMap.completedLevelCount);
   const activeWorldIndex = clamp(completedWorldCount, 0, WORLD_DEFINITIONS.length - 1);
   const finishedWorldIndex = clamp(Math.max(0, completedWorldCount - 1), 0, WORLD_DEFINITIONS.length - 1);
-  const finishedWorld = WORLD_DEFINITIONS[finishedWorldIndex];
   const enteringWorld = WORLD_DEFINITIONS[activeWorldIndex];
-  const renderKey = `${state.worldMap.completedLevelCount}:${state.worldRunStats.worldIndex}:${state.worldRunStats.shots}:${state.worldRunStats.retries}:${state.worldRunStats.relays}:${state.worldRunStats.flightTime.toFixed(1)}`;
+  const selectedWorldIndex = clamp(state.worldMap.selectedWorldIndex, 0, WORLD_DEFINITIONS.length - 1);
+  const selectedWorld = WORLD_DEFINITIONS[selectedWorldIndex];
+  const selectedStats = getSelectedWorldStats();
+  const selectedCompleted = selectedStats.levelsCleared >= WORLD_SIZE;
+  const selectedVisited = selectedWorldIndex <= activeWorldIndex || Boolean(getWorldHistoryStats(selectedWorldIndex));
+  const renderKey = `${state.worldMap.openedFromHud}:${state.worldMap.completedLevelCount}:${state.worldMap.selectedWorldIndex}:${selectedStats.worldId}:${selectedStats.levelsCleared}:${selectedStats.shots}:${selectedStats.retries}:${selectedStats.relays}:${selectedStats.flightTime.toFixed(1)}`;
   worldMapTitle.innerHTML = `
-    <span class="world-map-title-prefix">Finished</span>
-    <strong class="world-map-title-name">${finishedWorld.name}</strong>
+    <span class="world-map-title-prefix">${selectedCompleted ? 'Cleared' : selectedVisited ? 'Visited' : 'Locked'}</span>
+    <strong class="world-map-title-name">${selectedWorld.name}</strong>
   `;
-  worldMapProgress.textContent = `${state.worldMap.completedLevelCount} levels cleared · World ${activeWorldIndex + 1} of ${WORLD_DEFINITIONS.length}`;
-  worldMapContinueButton.textContent = `Enter ${enteringWorld.name}`;
+  worldMapProgress.textContent = selectedVisited
+    ? `${selectedStats.levelsCleared}/${WORLD_SIZE} levels cleared · World ${selectedWorldIndex + 1} of ${WORLD_DEFINITIONS.length}`
+    : `Reach this sector to unlock it.`;
+  worldMapContinueButton.textContent = state.worldMap.openedFromHud
+    ? `Resume Level ${state.levelIndex + 1}`
+    : `Enter ${enteringWorld.name}`;
+  worldMapReplayButton.hidden = !selectedVisited;
+  worldMapReplayButton.disabled = !selectedVisited;
+  worldMapReplayButton.textContent = `Play ${selectedWorld.name} Again`;
   worldMapTrailBase.setAttribute('points', getWorldMapPointString(WORLD_MAP_POINTS));
   worldMapTrailProgress.setAttribute(
     'points',
@@ -1552,10 +1664,12 @@ function syncWorldMap() {
   worldMapDotLayer.innerHTML = WORLD_MAP_POINTS.map((point, index) => {
     const completed = index < completedWorldCount;
     const active = index === activeWorldIndex;
+    const selected = index === selectedWorldIndex;
     const className = [
       'world-map-dot',
       completed ? 'is-complete' : '',
       active ? 'is-active' : '',
+      selected ? 'is-selected' : '',
     ].filter(Boolean).join(' ');
     return `<circle class="${className}" cx="${point.x.toFixed(1)}" cy="${point.y.toFixed(1)}" r="1.45"></circle>`;
   }).join('');
@@ -1563,37 +1677,57 @@ function syncWorldMap() {
     const point = WORLD_MAP_POINTS[index];
     const completed = index < completedWorldCount;
     const active = index === activeWorldIndex;
-    const visibleLabel = completed || active;
+    const selected = index === selectedWorldIndex;
+    const visited = index <= activeWorldIndex || Boolean(getWorldHistoryStats(index));
+    const visibleLabel = active || selected;
     const className = [
       'world-map-node',
       completed ? 'is-complete' : '',
       active ? 'is-active' : '',
+      selected ? 'is-selected' : '',
+      visited ? 'is-visited' : '',
       point.x > 62 ? 'is-label-left' : '',
     ].filter(Boolean).join(' ');
     return `
-      <div class="${className}" style="--map-x: ${point.x}%; --map-y: ${point.y}%;">
+      <button class="${className}" style="--map-x: ${point.x}%; --map-y: ${point.y}%;" type="button" data-world-index="${index}" ${visited ? '' : 'disabled'}>
         ${visibleLabel ? `
           <span class="world-map-label">
             <strong>${worldDefinition.name}</strong>
           </span>
         ` : ''}
-      </div>
+      </button>
     `;
   }).join('');
 
   if (state.worldMap.renderKey !== renderKey) {
     state.worldMap.renderKey = renderKey;
-    renderWorldMapStats();
-    animateWorldMapStats();
-    submitWorldMapCommunityStats(finishedWorldIndex, state.worldMap.completedLevelCount);
+    const animateStats = state.worldMap.animateStatsOnNextRender;
+    state.worldMap.animateStatsOnNextRender = false;
+    renderWorldMapStats({ animate: animateStats });
+    if (animateStats) {
+      animateWorldMapStats();
+    }
+    if (!state.worldMap.openedFromHud && selectedWorldIndex === finishedWorldIndex && selectedCompleted) {
+      submitWorldMapCommunityStats(finishedWorldIndex, state.worldMap.completedLevelCount);
+    } else {
+      resetWorldMapCommunityStats('idle');
+    }
   }
 }
 
-function showWorldMap(nextLevelIndex, completedLevelCount) {
+function showWorldMap(nextLevelIndex, completedLevelCount, options = {}) {
+  const completedWorldCount = getWorldMapCompletedWorldCount(completedLevelCount);
+  const activeWorldIndex = clamp(completedWorldCount, 0, WORLD_DEFINITIONS.length - 1);
+  const defaultSelectedWorldIndex = options.openedFromHud
+    ? activeWorldIndex
+    : clamp(Math.max(0, completedWorldCount - 1), 0, WORLD_DEFINITIONS.length - 1);
   state.worldMap.open = true;
   state.worldMap.nextLevelIndex = nextLevelIndex;
   state.worldMap.completedLevelCount = completedLevelCount;
+  state.worldMap.selectedWorldIndex = clamp(options.selectedWorldIndex ?? defaultSelectedWorldIndex, 0, WORLD_DEFINITIONS.length - 1);
+  state.worldMap.openedFromHud = Boolean(options.openedFromHud);
   state.worldMap.renderKey = '';
+  state.worldMap.animateStatsOnNextRender = true;
   syncWorldMap();
 }
 
@@ -1608,9 +1742,42 @@ function continueFromWorldMap() {
   }
 
   const nextLevelIndex = state.worldMap.nextLevelIndex;
+  const openedFromHud = state.worldMap.openedFromHud;
+  if (!openedFromHud) {
+    clearPersistedWorldRunStats();
+  }
+  hideWorldMap();
+  if (!openedFromHud) {
+    applyLevel(nextLevelIndex);
+    resetBall(`Level ${state.levelIndex + 1}: ${state.level.name}.`, state.level.summary);
+  }
+}
+
+function openWorldMapFromHud() {
+  if (state.gameOver.open || state.goalCloseAnimation.active || state.vibeJam.entry || state.vibeJam.redirecting) {
+    return;
+  }
+  showWorldMap(state.levelIndex, state.levelIndex, {
+    openedFromHud: true,
+    selectedWorldIndex: state.level.worldIndex,
+  });
+}
+
+worldMapButton.addEventListener('click', openWorldMapFromHud);
+
+function playSelectedWorldAgain() {
+  if (!state.worldMap.open) {
+    return;
+  }
+
+  const selectedWorldIndex = clamp(state.worldMap.selectedWorldIndex, 0, WORLD_DEFINITIONS.length - 1);
+  const targetLevelIndex = clamp(selectedWorldIndex * WORLD_SIZE, 0, LEVELS.length - 1);
   clearPersistedWorldRunStats();
   hideWorldMap();
-  applyLevel(nextLevelIndex);
+  state.score = 0;
+  state.shots = 0;
+  state.resets = 0;
+  applyLevel(targetLevelIndex);
   resetBall(`Level ${state.levelIndex + 1}: ${state.level.name}.`, state.level.summary);
 }
 
@@ -6756,6 +6923,21 @@ undoButton.addEventListener('click', startUndo);
 gameOverRetryButton.addEventListener('click', restartLevel);
 gameOverUndoButton.addEventListener('click', startUndo);
 worldMapContinueButton.addEventListener('click', continueFromWorldMap);
+worldMapReplayButton.addEventListener('click', playSelectedWorldAgain);
+worldMapNodes.addEventListener('click', (event) => {
+  const node = event.target.closest('[data-world-index]');
+  if (!node || node.disabled) {
+    return;
+  }
+
+  const selectedWorldIndex = Number.parseInt(node.dataset.worldIndex, 10);
+  if (!Number.isFinite(selectedWorldIndex)) {
+    return;
+  }
+
+  state.worldMap.selectedWorldIndex = clamp(selectedWorldIndex, 0, WORLD_DEFINITIONS.length - 1);
+  syncWorldMap();
+});
 timeSpeedSlider.addEventListener('input', (event) => {
   const nextIndex = clamp(Number.parseInt(event.target.value, 10), 0, TIME_SPEED_VALUES.length - 1);
   state.timeSpeedIndex = nextIndex;
