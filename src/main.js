@@ -6774,12 +6774,14 @@ function updateCueVisual() {
 }
 
 function launchShot(direction, power, anchor) {
+  let launchCheckpoint = null;
   if (!state.adminReplay.active) {
-    saveUndoCheckpoint();
+    launchCheckpoint = saveUndoCheckpoint();
   }
-  if (!state.currentFlightStartCheckpoint) {
-    state.currentFlightStartCheckpoint = cloneCheckpoint(createCurrentCheckpoint());
+  if (!launchCheckpoint) {
+    launchCheckpoint = createCurrentCheckpoint();
   }
+  state.currentFlightStartCheckpoint = cloneCheckpoint(launchCheckpoint);
   const activeStageIndex = getActiveStageIndex();
   const launchPlanetIndex = state.ball.anchorPlanetIndex;
   const launchDirection = constrainLaunchDirection(direction, power);
