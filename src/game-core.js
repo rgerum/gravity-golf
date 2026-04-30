@@ -6,7 +6,7 @@ export const COURSE = {
   goalPullRadius: 4.6,
   goalPullStrength: 6.2,
   outBoundsX: 13.8,
-  outBoundsY: 8.2,
+  outBoundsY: 10,
 };
 
 export const MAX_DRAG_DISTANCE = 2.75;
@@ -14,6 +14,7 @@ export const BALL_HIT_RADIUS = 0.82;
 
 export const PLANET_GRAVITY_MULTIPLIER = 2.35;
 const BALL_STOP_SPEED = 0.055;
+const BALL_SETTLE_ACCELERATION = 0.04;
 const BALL_FRICTION_BASE = 0.992;
 const GOAL_CAPTURE_RATIO = 0.95;
 const PLANET_COLLISION_PADDING = 0.92;
@@ -4909,6 +4910,11 @@ function getBallFriction(level, point, delta) {
   return Math.pow(BALL_FRICTION_BASE, delta * 60) * getDustDragFactorAtPoint(level, point, delta);
 }
 
+function canBallSettle(level, ball, acceleration = null) {
+  const localAcceleration = acceleration ?? sampleBallAcceleration(level, ball.position);
+  return length(localAcceleration) < BALL_SETTLE_ACCELERATION;
+}
+
 export function stepBall(level, ball, delta) {
   if (
     ball.anchorPlanetIndex !== null
@@ -4940,7 +4946,7 @@ export function stepBall(level, ball, delta) {
     };
   }
 
-  if (lengthSq(ball.velocity) < 0.000001) {
+  if (lengthSq(ball.velocity) < 0.000001 && canBallSettle(level, ball)) {
     ball.velocity.x = 0;
     ball.velocity.y = 0;
     return { type: 'settled' };
@@ -5030,7 +5036,7 @@ export function stepBall(level, ball, delta) {
     return { type: 'crash', reason: 'bounds', eventState, displayEventState: cloneBallRuntimeState(eventState), portalEvent };
   }
 
-  if (length(ball.velocity) < BALL_STOP_SPEED) {
+  if (length(ball.velocity) < BALL_STOP_SPEED && canBallSettle(level, ball)) {
     const eventState = cloneBallRuntimeState(ball);
     ball.velocity.x = 0;
     ball.velocity.y = 0;
