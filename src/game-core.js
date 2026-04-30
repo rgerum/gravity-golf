@@ -3167,6 +3167,117 @@ function wrapAngleRad(angle) {
   return ((angle % turn) + turn) % turn;
 }
 
+function rotateAngleDeg(angleDeg, deltaDeg) {
+  return (angleDeg ?? 0) + deltaDeg;
+}
+
+function rotatePolarPosition(position, deltaDeg) {
+  if (!position) {
+    return position;
+  }
+  return {
+    ...position,
+    angleDeg: rotateAngleDeg(position.angleDeg, deltaDeg),
+  };
+}
+
+function rotateOrbitSource(source, deltaDeg) {
+  if (!source) {
+    return source;
+  }
+  return {
+    ...source,
+    position: rotatePolarPosition(source.position, deltaDeg),
+    ...(source.orbitRotationDeg !== undefined
+      ? { orbitRotationDeg: rotateAngleDeg(source.orbitRotationDeg, deltaDeg) }
+      : {}),
+  };
+}
+
+function rotateShot(shot, deltaDeg) {
+  return {
+    ...shot,
+    angleDeg: rotateAngleDeg(shot.angleDeg, deltaDeg),
+  };
+}
+
+function rotateLevelSourceGoalRight(source) {
+  const goalPoint = pointFromPolar(source.goalCenter);
+  const sunReference = source.binarySystem?.primarySun?.position
+    ? pointFromPolar(source.binarySystem.primarySun.position)
+    : vec(source.sun?.[0] ?? 0, source.sun?.[1] ?? 0);
+  const deltaDeg = -angleDegBetween(sunReference, goalPoint);
+  if (Math.abs(deltaDeg) < 0.000001) {
+    return source;
+  }
+
+  return {
+    ...source,
+    startAnchor: rotatePolarPosition(source.startAnchor, deltaDeg),
+    goalCenter: rotatePolarPosition(source.goalCenter, deltaDeg),
+    ...(source.startAngleDeg !== undefined
+      ? { startAngleDeg: rotateAngleDeg(source.startAngleDeg, deltaDeg) }
+      : {}),
+    launchPresets: source.launchPresets.map((preset) => rotateShot(preset, deltaDeg)),
+    adminSolutions: Array.isArray(source.adminSolutions)
+      ? source.adminSolutions.map((solution) => ({
+        ...solution,
+        shots: solution.shots.map((shot) => rotateShot(shot, deltaDeg)),
+      }))
+      : source.adminSolutions,
+    binarySystem: source.binarySystem
+      ? {
+        ...source.binarySystem,
+        primarySun: rotateOrbitSource(source.binarySystem.primarySun, deltaDeg),
+        secondarySun: rotateOrbitSource(source.binarySystem.secondarySun, deltaDeg),
+      }
+      : source.binarySystem,
+    planets: source.planets.map((planet) => ({
+      ...planet,
+      position: rotatePolarPosition(planet.position, deltaDeg),
+      ...(planet.orbitRotationDeg !== undefined
+        ? { orbitRotationDeg: rotateAngleDeg(planet.orbitRotationDeg, deltaDeg) }
+        : {}),
+      turrets: Array.isArray(planet.turrets)
+        ? planet.turrets.map((turret) => ({
+          ...turret,
+          angleDeg: rotateAngleDeg(turret.angleDeg, deltaDeg),
+        }))
+        : planet.turrets,
+    })),
+    extraSuns: Array.isArray(source.extraSuns)
+      ? source.extraSuns.map((solarBody) => rotateOrbitSource(solarBody, deltaDeg))
+      : source.extraSuns,
+    portals: Array.isArray(source.portals)
+      ? source.portals.map((portal) => rotateOrbitSource(portal, deltaDeg))
+      : source.portals,
+    dustClouds: Array.isArray(source.dustClouds)
+      ? source.dustClouds.map((cloud) => rotateOrbitSource(cloud, deltaDeg))
+      : source.dustClouds,
+    asteroids: Array.isArray(source.asteroids)
+      ? source.asteroids.map((asteroid) => ({
+        ...asteroid,
+        position: rotatePolarPosition(asteroid.position, deltaDeg),
+        baseAngleDeg: rotateAngleDeg(asteroid.baseAngleDeg ?? asteroid.position?.angleDeg, deltaDeg),
+      }))
+      : source.asteroids,
+    meteorImpacts: Array.isArray(source.meteorImpacts)
+      ? source.meteorImpacts.map((meteor) => ({
+        ...meteor,
+        target: rotatePolarPosition(meteor.target, deltaDeg),
+        start: rotatePolarPosition(meteor.start, deltaDeg),
+        approachAngleDeg: rotateAngleDeg(meteor.approachAngleDeg, deltaDeg),
+      }))
+      : source.meteorImpacts,
+    pulsarJets: source.pulsarJets
+      ? {
+        ...source.pulsarJets,
+        angleDeg: rotateAngleDeg(source.pulsarJets.angleDeg, deltaDeg),
+      }
+      : source.pulsarJets,
+  };
+}
+
 function rotateVector(vector, angle) {
   const cosAngle = Math.cos(angle);
   const sinAngle = Math.sin(angle);
@@ -4210,7 +4321,7 @@ function inferStartPlanetIndex(source, planets) {
 }
 
 export function createLevelRuntime(index) {
-  const source = LEVELS[index];
+  const source = rotateLevelSourceGoalRight(LEVELS[index]);
   validateLevelDefinition(source);
   const worldIndex = Math.floor(index / WORLD_SIZE);
   const worldDefinition = WORLD_DEFINITIONS[worldIndex]
