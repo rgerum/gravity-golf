@@ -279,6 +279,7 @@ const VISUAL_FIELD_PADDING_Y = 1.8;
 const LANDSCAPE_CAMERA_ZOOM_MIN = 0.74;
 const LANDSCAPE_CAMERA_ZOOM_START_ASPECT = 1.45;
 const LANDSCAPE_CAMERA_ZOOM_END_ASPECT = 2.35;
+const PORTRAIT_ROTATED_PLAYFIELD_MAX_WIDTH = 820;
 
 const gravityFieldPalette = {
   low: new THREE.Color(0x24507d),
@@ -998,28 +999,43 @@ let lastGoalTimerFraction = Number.NaN;
 const gravityFieldTintColor = new THREE.Color();
 let lastSceneWidth = 0;
 let lastSceneHeight = 0;
+let lastPlayfieldRotated = null;
 let lastViewportHeight = 0;
 let pendingResizeFrame = 0;
 let communityStatsClient = null;
 
+function shouldRotatePlayfieldForViewport(width = sceneHost.clientWidth, height = sceneHost.clientHeight) {
+  return width <= PORTRAIT_ROTATED_PLAYFIELD_MAX_WIDTH && height > width;
+}
+
 function getViewportMetrics() {
-  const aspect = sceneHost.clientWidth / Math.max(1, sceneHost.clientHeight);
+  const width = sceneHost.clientWidth;
+  const height = sceneHost.clientHeight;
+  const aspect = width / Math.max(1, height);
+  const playfieldRotated = shouldRotatePlayfieldForViewport(width, height);
+  const referenceAspect = playfieldRotated ? height / Math.max(1, width) : aspect;
   const landscapeT = clamp(
-    (aspect - LANDSCAPE_CAMERA_ZOOM_START_ASPECT)
+    (referenceAspect - LANDSCAPE_CAMERA_ZOOM_START_ASPECT)
       / (LANDSCAPE_CAMERA_ZOOM_END_ASPECT - LANDSCAPE_CAMERA_ZOOM_START_ASPECT),
     0,
     1,
   );
   const cameraScale = THREE.MathUtils.lerp(1, LANDSCAPE_CAMERA_ZOOM_MIN, landscapeT);
-  const viewHeight = CAMERA_VIEW_SIZE * cameraScale;
-  const viewWidth = viewHeight * aspect;
+  const worldViewHeight = CAMERA_VIEW_SIZE * cameraScale;
+  const worldViewWidth = worldViewHeight * referenceAspect;
+  const viewWidth = playfieldRotated ? worldViewHeight : worldViewWidth;
+  const viewHeight = playfieldRotated ? worldViewWidth : worldViewHeight;
 
   return {
     aspect,
+    referenceAspect,
+    playfieldRotated,
     landscapeT,
     cameraScale,
     viewWidth,
     viewHeight,
+    worldViewWidth,
+    worldViewHeight,
     halfWidth: viewWidth / 2,
     halfHeight: viewHeight / 2,
   };
@@ -1028,8 +1044,8 @@ function getViewportMetrics() {
 function getVisualFieldSize() {
   const viewport = getViewportMetrics();
   return {
-    width: Math.max(COURSE.width + VISUAL_FIELD_PADDING_X, viewport.viewWidth + VISUAL_FIELD_PADDING_X),
-    height: Math.max(COURSE.height + VISUAL_FIELD_PADDING_Y, viewport.viewHeight + VISUAL_FIELD_PADDING_Y),
+    width: Math.max(COURSE.width + VISUAL_FIELD_PADDING_X, viewport.worldViewWidth + VISUAL_FIELD_PADDING_X),
+    height: Math.max(COURSE.height + VISUAL_FIELD_PADDING_Y, viewport.worldViewHeight + VISUAL_FIELD_PADDING_Y),
   };
 }
 
@@ -7506,6 +7522,8 @@ function updateDecor(time, delta = 0) {
 
 function updateCameraProjection() {
   const viewport = getViewportMetrics();
+  camera.up.set(viewport.playfieldRotated ? 1 : 0, 0, viewport.playfieldRotated ? 0 : -1);
+  camera.lookAt(0, 0, 0);
   camera.left = -viewport.halfWidth;
   camera.right = viewport.halfWidth;
   camera.top = viewport.halfHeight;
@@ -7551,15 +7569,21 @@ function resize() {
   syncViewportHeight();
   const width = sceneHost.clientWidth;
   const height = sceneHost.clientHeight;
+  const playfieldRotated = shouldRotatePlayfieldForViewport(width, height);
   syncGameOverActionAnchors();
   if (width <= 0 || height <= 0) {
     return;
   }
-  if (width === lastSceneWidth && height === lastSceneHeight) {
+  if (
+    width === lastSceneWidth
+    && height === lastSceneHeight
+    && playfieldRotated === lastPlayfieldRotated
+  ) {
     return;
   }
   lastSceneWidth = width;
   lastSceneHeight = height;
+  lastPlayfieldRotated = playfieldRotated;
   updateCameraProjection();
   updateCourseSurfaceVisuals();
   rebuildGravityField();

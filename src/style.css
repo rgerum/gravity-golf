@@ -1582,6 +1582,7 @@ h1 {
   }
 
   .action-row {
+    width: 100%;
     justify-content: flex-end;
   }
 
@@ -1597,6 +1598,7 @@ h1 {
 
   .hud-button {
     min-height: 46px;
+    min-width: 0;
     flex: 1 1 0;
   }
 
@@ -1717,12 +1719,11 @@ h1 {
   }
 
   .game-over-panel {
+    position: relative;
     width: auto;
     min-height: 100%;
     padding: 0;
-    display: grid;
-    grid-template-rows: auto 1fr auto;
-    gap: 10px;
+    display: block;
     border: 0;
     border-radius: 0;
     background: none;
@@ -1734,8 +1735,11 @@ h1 {
   }
 
   .game-over-copy {
-    grid-row: 3;
-    width: min(430px, 100%);
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 64px;
+    width: auto;
     max-width: 100%;
     padding: 12px 13px;
     border-radius: 18px;
@@ -1749,7 +1753,11 @@ h1 {
   }
 
   .game-over-actions {
-    grid-row: 1;
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
     margin-top: 0;
     justify-content: flex-end;
     gap: 8px;
@@ -1757,6 +1765,7 @@ h1 {
 
   .game-over-actions .hud-button {
     flex: 1 1 0;
+    min-width: 0;
     min-height: 46px;
   }
 
@@ -1801,6 +1810,48 @@ h1 {
   .tutorial-copy {
     font-size: 0.76rem;
     line-height: 1.22;
+  }
+}
+
+@media (orientation: portrait) and (max-width: 820px) {
+  .stage-overlay {
+    position: absolute;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    gap: 10px;
+    align-items: stretch;
+    padding-bottom: 72px;
+  }
+
+  .hud-top,
+  .hud-bottom {
+    display: contents;
+  }
+
+  .level-block {
+    grid-row: 1;
+  }
+
+  .status-card {
+    grid-row: 3;
+  }
+
+  .action-row {
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    bottom: calc(10px + env(safe-area-inset-bottom));
+    width: auto;
+  }
+
+  .game-over-actions {
+    display: none;
+  }
+
+  .debug-tuning-panel,
+  .perf-panel {
+    grid-row: 3;
+    justify-self: end;
   }
 }
 
@@ -1897,6 +1948,7 @@ h1 {
   .action-row {
     grid-column: 3;
     grid-row: 1 / span 3;
+    width: auto;
     flex-direction: column;
     justify-content: center;
     align-self: center;
