@@ -1,6 +1,6 @@
 # Level Design Notes
 
-These are working notes from building and validating levels in `gravity-billiard`.
+These are working notes from building and validating levels in `gravity-golf`.
 
 ## Where I Struggle
 

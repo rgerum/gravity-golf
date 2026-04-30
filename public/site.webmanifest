@@ -1,6 +1,6 @@
 {
-  "name": "Gravity Billiard",
-  "short_name": "Gravity",
+  "name": "Gravity Golf",
+  "short_name": "Gravity Golf",
   "description": "Slingshot through orbital gravity wells and drop into the black hole.",
   "start_url": "/?source=pwa",
   "scope": "/",
