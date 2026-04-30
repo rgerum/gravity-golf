@@ -91,6 +91,35 @@ app.innerHTML = `
                 <span class="status-pill" id="heatStatusPill">Heat stable</span>
               </div>
             </div>
+            <div class="debug-tuning-panel" id="debugTuningPanel" aria-label="Visual debug tuning" hidden>
+              <div class="debug-tuning-header">
+                <span>Visual Debug</span>
+              </div>
+              <label class="debug-slider" for="gridGlowOpacitySlider">
+                <span>Grid glow <strong data-debug-value="gridGlowOpacity">0.22</strong></span>
+                <input id="gridGlowOpacitySlider" data-debug-tuning="gridGlowOpacity" type="range" min="0" max="0.5" step="0.01" value="0.22" />
+              </label>
+              <label class="debug-slider" for="gridCoreOpacitySlider">
+                <span>Grid line <strong data-debug-value="gridCoreOpacity">0.00</strong></span>
+                <input id="gridCoreOpacitySlider" data-debug-tuning="gridCoreOpacity" type="range" min="0" max="0.8" step="0.01" value="0" />
+              </label>
+              <label class="debug-slider" for="starCountSlider">
+                <span>Stars <strong data-debug-value="starCount">900</strong></span>
+                <input id="starCountSlider" data-debug-tuning="starCount" type="range" min="0" max="900" step="10" value="900" />
+              </label>
+              <label class="debug-slider" for="starOpacitySlider">
+                <span>Star opacity <strong data-debug-value="starOpacity">0.88</strong></span>
+                <input id="starOpacitySlider" data-debug-tuning="starOpacity" type="range" min="0" max="1" step="0.01" value="0.88" />
+              </label>
+              <label class="debug-slider" for="starSizeSlider">
+                <span>Star size <strong data-debug-value="starSize">0.72</strong></span>
+                <input id="starSizeSlider" data-debug-tuning="starSize" type="range" min="0.05" max="1.2" step="0.025" value="0.72" />
+              </label>
+              <label class="debug-slider" for="starSpreadSlider">
+                <span>Star spread <strong data-debug-value="starSpread">0.80</strong></span>
+                <input id="starSpreadSlider" data-debug-tuning="starSpread" type="range" min="0.8" max="2.4" step="0.05" value="0.8" />
+              </label>
+            </div>
             <div class="perf-panel" id="fpsPanel" hidden>
               <span class="perf-label">FPS</span>
               <strong id="fpsValue">--</strong>
@@ -138,9 +167,10 @@ app.innerHTML = `
               <div class="galaxy-ring galaxy-ring-outer"></div>
               <div class="galaxy-ring galaxy-ring-mid"></div>
               <div class="galaxy-ring galaxy-ring-inner"></div>
-              <svg class="world-map-path" viewBox="0 0 100 100" preserveAspectRatio="none">
+              <svg class="world-map-path" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">
                 <polyline id="worldMapTrailBase" points="" />
                 <polyline id="worldMapTrailProgress" points="" />
+                <g id="worldMapDotLayer"></g>
               </svg>
               <div class="world-map-nodes" id="worldMapNodes"></div>
             </div>
@@ -168,6 +198,8 @@ const timeSpeedValue = document.querySelector('#timeSpeedValue');
 const powerFill = document.querySelector('#powerFill');
 const fpsPanel = document.querySelector('#fpsPanel');
 const fpsValue = document.querySelector('#fpsValue');
+const debugTuningInputs = [...document.querySelectorAll('[data-debug-tuning]')];
+const debugTuningValueNodes = [...document.querySelectorAll('[data-debug-value]')];
 const actionRow = document.querySelector('.action-row');
 const retryButton = document.querySelector('#retryButton');
 const undoButton = document.querySelector('#undoButton');
@@ -185,6 +217,7 @@ const worldMapProgress = document.querySelector('#worldMapProgress');
 const worldMapNodes = document.querySelector('#worldMapNodes');
 const worldMapTrailBase = document.querySelector('#worldMapTrailBase');
 const worldMapTrailProgress = document.querySelector('#worldMapTrailProgress');
+const worldMapDotLayer = document.querySelector('#worldMapDotLayer');
 const worldMapContinueButton = document.querySelector('#worldMapContinueButton');
 const worldMapStats = document.querySelector('#worldMapStats');
 const sceneHost = document.querySelector('#scene');
@@ -227,6 +260,17 @@ const gravityGridConfig = {
   rows: 22,
   insetX: 0.9,
   insetY: 0.75,
+  smoothingStrength: 0.34,
+  curveSubdivisions: 3,
+};
+
+const visualDebugDefaults = {
+  gridGlowOpacity: 0.22,
+  gridCoreOpacity: 0,
+  starCount: 900,
+  starOpacity: 0.88,
+  starSize: 0.72,
+  starSpread: 0.8,
 };
 
 const VISUAL_FIELD_PADDING_X = 2.4;
@@ -524,25 +568,42 @@ goalTimerArc.position.y = 0.02;
 goalGroup.add(goalTimerArc);
 
 const starsGeometry = new THREE.BufferGeometry();
-const starPositions = [];
-for (let i = 0; i < 420; i += 1) {
-  starPositions.push(
-    THREE.MathUtils.randFloatSpread(COURSE.width * 1.55),
-    THREE.MathUtils.randFloat(0.45, 1.8),
-    THREE.MathUtils.randFloatSpread(COURSE.height * 1.6),
-  );
-}
-starsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starPositions, 3));
+let starFieldSignature = '';
 
+function rebuildStarField(count, spread) {
+  const normalizedCount = clamp(Math.round(count), 0, 1200);
+  const normalizedSpread = clamp(spread, 0.5, 3);
+  const signature = `${normalizedCount}:${normalizedSpread.toFixed(3)}`;
+  if (signature === starFieldSignature) {
+    return;
+  }
+
+  const random = createSeededRandom(0x5eed51a7);
+  const starPositions = [];
+  for (let i = 0; i < normalizedCount; i += 1) {
+    starPositions.push(
+      (random() - 0.5) * COURSE.width * 1.55 * normalizedSpread,
+      THREE.MathUtils.lerp(0.45, 1.8, random()),
+      (random() - 0.5) * COURSE.height * 1.6 * normalizedSpread,
+    );
+  }
+  starsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starPositions, 3));
+  starsGeometry.computeBoundingSphere();
+  starFieldSignature = signature;
+}
+
+rebuildStarField(visualDebugDefaults.starCount, visualDebugDefaults.starSpread);
+
+const starsMaterial = new THREE.PointsMaterial({
+  color: 0xd7e6ff,
+  size: visualDebugDefaults.starSize,
+  transparent: true,
+  opacity: visualDebugDefaults.starOpacity,
+  sizeAttenuation: false,
+});
 const stars = new THREE.Points(
   starsGeometry,
-  new THREE.PointsMaterial({
-    color: 0xd7e6ff,
-    size: 0.475,
-    transparent: true,
-    opacity: 0.88,
-    sizeAttenuation: false,
-  }),
+  starsMaterial,
 );
 stars.renderOrder = 0;
 world.add(stars);
@@ -892,6 +953,7 @@ const state = {
     fpsValue: 0,
     fpsFrameCount: 0,
     fpsElapsed: 0,
+    tuning: { ...visualDebugDefaults },
   },
 };
 
@@ -1164,6 +1226,16 @@ function syncWorldMap() {
     'points',
     getWorldMapPointString(WORLD_MAP_POINTS.slice(0, activeWorldIndex + 1)),
   );
+  worldMapDotLayer.innerHTML = WORLD_MAP_POINTS.map((point, index) => {
+    const completed = index < completedWorldCount;
+    const active = index === activeWorldIndex;
+    const className = [
+      'world-map-dot',
+      completed ? 'is-complete' : '',
+      active ? 'is-active' : '',
+    ].filter(Boolean).join(' ');
+    return `<circle class="${className}" cx="${point.x.toFixed(1)}" cy="${point.y.toFixed(1)}" r="1.45"></circle>`;
+  }).join('');
   worldMapNodes.innerHTML = WORLD_DEFINITIONS.map((worldDefinition, index) => {
     const point = WORLD_MAP_POINTS[index];
     const completed = index < completedWorldCount;
@@ -1177,7 +1249,6 @@ function syncWorldMap() {
     ].filter(Boolean).join(' ');
     return `
       <div class="${className}" style="--map-x: ${point.x}%; --map-y: ${point.y}%;">
-        <span class="world-map-dot"></span>
         ${visibleLabel ? `
           <span class="world-map-label">
             <strong>${worldDefinition.name}</strong>
@@ -3749,6 +3820,42 @@ function syncPerfOverlay() {
   fpsValue.textContent = state.debug.fpsValue > 0 ? String(Math.round(state.debug.fpsValue)) : '--';
 }
 
+function formatDebugTuningValue(key, value) {
+  if (key === 'starCount') {
+    return String(Math.round(value));
+  }
+  if (key === 'starSize') {
+    return value.toFixed(2);
+  }
+  return value.toFixed(2);
+}
+
+function syncDebugTuningPanel() {
+  const tuning = state.debug.tuning;
+
+  debugTuningInputs.forEach((input) => {
+    const key = input.dataset.debugTuning;
+    if (!key || !(key in tuning)) {
+      return;
+    }
+    if (document.activeElement !== input) {
+      input.value = String(tuning[key]);
+    }
+  });
+
+  debugTuningValueNodes.forEach((node) => {
+    const key = node.dataset.debugValue;
+    if (!key || !(key in tuning)) {
+      return;
+    }
+    node.textContent = formatDebugTuningValue(key, tuning[key]);
+  });
+
+  starsMaterial.opacity = tuning.starOpacity;
+  starsMaterial.size = tuning.starSize;
+  rebuildStarField(tuning.starCount, tuning.starSpread);
+}
+
 function shouldAnchorGameOverActionsToHud() {
   return window.matchMedia('(orientation: landscape) and (max-height: 560px)').matches;
 }
@@ -4301,16 +4408,25 @@ function ensureGravityFieldSamples(columns, rows) {
       for (let column = 0; column <= columns; column += 1) {
         rowSamples.push({
           position: new THREE.Vector3(),
+          smoothedPosition: new THREE.Vector3(),
           color: new THREE.Color(),
+          baseX: 0,
+          baseY: 0,
         });
       }
+    }
+
+    for (const sample of rowSamples) {
+      sample.smoothedPosition ??= new THREE.Vector3();
+      sample.baseX ??= 0;
+      sample.baseY ??= 0;
     }
   }
 
   return gravityFieldSamples;
 }
 
-function createGravityFieldSample(baseX, baseY, halfWidth, halfHeight, target) {
+function createGravityFieldSample(baseX, baseY, halfWidth, halfHeight, maxDisplacement, target) {
   let gravityX = 0;
   let gravityY = 0;
   let tintWeight = 0;
@@ -4378,10 +4494,12 @@ function createGravityFieldSample(baseX, baseY, halfWidth, halfHeight, target) {
     halfHeight - Math.abs(baseY),
   );
   const edgeFade = THREE.MathUtils.smoothstep(edgeDistance, 0.12, 1.45);
-  const displacement = Math.min(0.82, Math.log1p(magnitude) * 0.22) * edgeFade;
+  const displacement = Math.min(maxDisplacement, Math.log1p(magnitude) * 0.22) * edgeFade;
   const intensity = clamp(Math.log1p(magnitude) / 3.9, 0, 1);
   const inverseMagnitude = magnitude > 0.0001 ? 1 / magnitude : 0;
 
+  target.baseX = baseX;
+  target.baseY = baseY;
   target.position.set(
     baseX + gravityX * inverseMagnitude * displacement,
     0.035 + intensity * 0.05,
@@ -4390,9 +4508,57 @@ function createGravityFieldSample(baseX, baseY, halfWidth, halfHeight, target) {
   mixFieldColor(target.color, intensity, tintWeight, tintR, tintG, tintB);
 }
 
+function smoothGravityFieldSamples(samples, columns, rows, maxDisplacement) {
+  const smoothingStrength = gravityGridConfig.smoothingStrength;
+  if (!(smoothingStrength > 0)) {
+    return;
+  }
+
+  for (let row = 0; row <= rows; row += 1) {
+    for (let column = 0; column <= columns; column += 1) {
+      const sample = samples[row][column];
+      const target = sample.smoothedPosition;
+
+      if (row === 0 || row === rows || column === 0 || column === columns) {
+        target.copy(sample.position);
+        continue;
+      }
+
+      const left = samples[row][column - 1].position;
+      const right = samples[row][column + 1].position;
+      const up = samples[row - 1][column].position;
+      const down = samples[row + 1][column].position;
+      const averageX = (left.x + right.x + up.x + down.x) * 0.25;
+      const averageY = (left.y + right.y + up.y + down.y) * 0.25;
+      const averageZ = (left.z + right.z + up.z + down.z) * 0.25;
+
+      target.set(
+        THREE.MathUtils.lerp(sample.position.x, averageX, smoothingStrength),
+        THREE.MathUtils.lerp(sample.position.y, averageY, smoothingStrength),
+        THREE.MathUtils.lerp(sample.position.z, averageZ, smoothingStrength),
+      );
+
+      const offsetX = target.x - sample.baseX;
+      const offsetZ = target.z - sample.baseY;
+      const displacement = Math.hypot(offsetX, offsetZ);
+      if (displacement > maxDisplacement) {
+        const scale = maxDisplacement / displacement;
+        target.x = sample.baseX + offsetX * scale;
+        target.z = sample.baseY + offsetZ * scale;
+      }
+    }
+  }
+
+  for (let row = 0; row <= rows; row += 1) {
+    for (let column = 0; column <= columns; column += 1) {
+      samples[row][column].position.copy(samples[row][column].smoothedPosition);
+    }
+  }
+}
+
 function getGravityFieldValueCount(columns, rows) {
   const segmentCount = (rows + 1) * columns + rows * (columns + 1);
-  return segmentCount * 6;
+  return segmentCount * Math.max(1, gravityGridConfig.curveSubdivisions) * 6;
 }
 
 function ensureGravityFieldVisuals(valueCount) {
@@ -4452,22 +4618,59 @@ function ensureGravityFieldVisuals(valueCount) {
   return gravityFieldVisuals;
 }
 
-function writeGravitySegment(positions, colors, offset, from, to) {
-  positions[offset] = from.position.x;
-  positions[offset + 1] = from.position.y;
-  positions[offset + 2] = from.position.z;
-  colors[offset] = from.color.r;
-  colors[offset + 1] = from.color.g;
-  colors[offset + 2] = from.color.b;
+function getCatmullRomValue(previous, from, to, next, t) {
+  const t2 = t * t;
+  const t3 = t2 * t;
+  return 0.5 * (
+    2 * from
+    + (-previous + to) * t
+    + (2 * previous - 5 * from + 4 * to - next) * t2
+    + (-previous + 3 * from - 3 * to + next) * t3
+  );
+}
 
-  positions[offset + 3] = to.position.x;
-  positions[offset + 4] = to.position.y;
-  positions[offset + 5] = to.position.z;
-  colors[offset + 3] = to.color.r;
-  colors[offset + 4] = to.color.g;
-  colors[offset + 5] = to.color.b;
+function writeGravityCurveSegment(positions, colors, offset, previous, from, to, next) {
+  const subdivisions = Math.max(1, gravityGridConfig.curveSubdivisions);
+  let startX = from.position.x;
+  let startY = from.position.y;
+  let startZ = from.position.z;
+  let startR = from.color.r;
+  let startG = from.color.g;
+  let startB = from.color.b;
 
-  return offset + 6;
+  for (let step = 1; step <= subdivisions; step += 1) {
+    const t = step / subdivisions;
+    const endX = getCatmullRomValue(previous.position.x, from.position.x, to.position.x, next.position.x, t);
+    const endY = getCatmullRomValue(previous.position.y, from.position.y, to.position.y, next.position.y, t);
+    const endZ = getCatmullRomValue(previous.position.z, from.position.z, to.position.z, next.position.z, t);
+    const endR = THREE.MathUtils.lerp(from.color.r, to.color.r, t);
+    const endG = THREE.MathUtils.lerp(from.color.g, to.color.g, t);
+    const endB = THREE.MathUtils.lerp(from.color.b, to.color.b, t);
+
+    positions[offset] = startX;
+    positions[offset + 1] = startY;
+    positions[offset + 2] = startZ;
+    colors[offset] = startR;
+    colors[offset + 1] = startG;
+    colors[offset + 2] = startB;
+
+    positions[offset + 3] = endX;
+    positions[offset + 4] = endY;
+    positions[offset + 5] = endZ;
+    colors[offset + 3] = endR;
+    colors[offset + 4] = endG;
+    colors[offset + 5] = endB;
+
+    offset += 6;
+    startX = endX;
+    startY = endY;
+    startZ = endZ;
+    startR = endR;
+    startG = endG;
+    startB = endB;
+  }
+
+  return offset;
 }
 
 function rebuildGravityField() {
@@ -4480,6 +4683,7 @@ function rebuildGravityField() {
   const rows = Math.max(2, Math.round(gravityGridConfig.rows * (height / baseHeight)));
   const halfWidth = width / 2;
   const halfHeight = height / 2;
+  const maxDisplacement = Math.min(width / columns, height / rows) * 0.5;
   const samples = ensureGravityFieldSamples(columns, rows);
   const valueCount = getGravityFieldValueCount(columns, rows);
   const visuals = ensureGravityFieldVisuals(valueCount);
@@ -4495,19 +4699,36 @@ function rebuildGravityField() {
     for (let column = 0; column <= columns; column += 1) {
       const xRatio = column / columns;
       const x = -halfWidth + xRatio * width;
-      createGravityFieldSample(x, y, halfWidth, halfHeight, rowSamples[column]);
+      createGravityFieldSample(x, y, halfWidth, halfHeight, maxDisplacement, rowSamples[column]);
     }
   }
+  smoothGravityFieldSamples(samples, columns, rows, maxDisplacement);
 
   for (let row = 0; row <= rows; row += 1) {
     for (let column = 0; column < columns; column += 1) {
-      offset = writeGravitySegment(positions, colors, offset, samples[row][column], samples[row][column + 1]);
+      offset = writeGravityCurveSegment(
+        positions,
+        colors,
+        offset,
+        samples[row][Math.max(0, column - 1)],
+        samples[row][column],
+        samples[row][column + 1],
+        samples[row][Math.min(columns, column + 2)],
+      );
     }
   }
 
   for (let row = 0; row < rows; row += 1) {
     for (let column = 0; column <= columns; column += 1) {
-      offset = writeGravitySegment(positions, colors, offset, samples[row][column], samples[row + 1][column]);
+      offset = writeGravityCurveSegment(
+        positions,
+        colors,
+        offset,
+        samples[Math.max(0, row - 1)][column],
+        samples[row][column],
+        samples[row + 1][column],
+        samples[Math.min(rows, row + 2)][column],
+      );
     }
   }
   visuals.geometry.setDrawRange(0, offset / 3);
@@ -5978,6 +6199,20 @@ timeSpeedSlider.addEventListener('input', (event) => {
   syncHud();
 });
 
+debugTuningInputs.forEach((input) => {
+  input.addEventListener('input', (event) => {
+    const key = event.target.dataset.debugTuning;
+    if (!key || !(key in state.debug.tuning)) {
+      return;
+    }
+    const rawValue = Number.parseFloat(event.target.value);
+    state.debug.tuning[key] = key === 'starCount'
+      ? Math.round(rawValue)
+      : rawValue;
+    syncDebugTuningPanel();
+  });
+});
+
 window.addEventListener('keydown', (event) => {
   if (state.worldMap.open) {
     if (event.key === 'Enter' || event.key === ' ') {
@@ -6460,8 +6695,17 @@ function updateDecor(time, delta = 0) {
   }
 
   if (gravityFieldVisuals) {
-    gravityFieldVisuals.glow.material.opacity = 0.16 + Math.sin(time * 1.6) * 0.03;
-    gravityFieldVisuals.core.material.opacity = 0.38 + Math.sin(time * 2 + 0.6) * 0.04;
+    const tuning = state.debug.tuning;
+    gravityFieldVisuals.glow.material.opacity = clamp(
+      tuning.gridGlowOpacity + Math.sin(time * 1.6) * tuning.gridGlowOpacity * 0.18,
+      0,
+      1,
+    );
+    gravityFieldVisuals.core.material.opacity = clamp(
+      tuning.gridCoreOpacity + Math.sin(time * 2 + 0.6) * tuning.gridCoreOpacity * 0.1,
+      0,
+      1,
+    );
   }
 
   setGoalTimerArc(goalTimerFraction);
@@ -6792,6 +7036,7 @@ applyLevel(getInitialLevelIndex());
 resetBall(`Level ${state.levelIndex + 1}: ${state.level.name}.`, state.level.summary);
 lockLandscapeIfSupported();
 syncViewportHeight();
+syncDebugTuningPanel();
 resize();
 animate();
 

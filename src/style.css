@@ -947,15 +947,6 @@ h1 {
   transition: opacity 180ms linear 70ms;
 }
 
-.world-map-panel::before {
-  content: '';
-  position: absolute;
-  inset: 11px;
-  border: 1px solid rgba(137, 168, 255, 0.08);
-  border-radius: 26px;
-  pointer-events: none;
-}
-
 .world-map-modal.is-visible .world-map-backdrop {
   opacity: 1;
   backdrop-filter: blur(10px) saturate(1.08);
@@ -1012,6 +1003,7 @@ h1 {
 .world-map-stage {
   position: relative;
   z-index: 1;
+  container-type: size;
   grid-column: 2;
   grid-row: 1 / span 3;
   min-height: 460px;
@@ -1202,6 +1194,14 @@ h1 {
   overflow: visible;
 }
 
+.world-map-path,
+.world-map-nodes {
+  inset: 50% auto auto 50%;
+  width: min(100cqw, 100cqh);
+  height: min(100cqw, 100cqh);
+  transform: translate(-50%, -50%);
+}
+
 .world-map-path polyline {
   fill: none;
   stroke-linecap: round;
@@ -1219,6 +1219,10 @@ h1 {
   filter: drop-shadow(0 0 6px rgba(125, 243, 217, 0.5));
 }
 
+#worldMapDotLayer {
+  filter: drop-shadow(0 0 4px rgba(137, 168, 255, 0.28));
+}
+
 .world-map-nodes {
   z-index: 2;
 }
@@ -1232,38 +1236,26 @@ h1 {
 }
 
 .world-map-dot {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 17px;
-  height: 17px;
-  border-radius: 999px;
-  border: 1px solid rgba(137, 168, 255, 0.45);
-  background: rgba(9, 15, 27, 0.95);
-  box-shadow:
-    0 0 0 6px rgba(137, 168, 255, 0.05),
-    0 0 24px rgba(137, 168, 255, 0.18);
-  transform: translate(-50%, -50%);
+  fill: rgba(9, 15, 27, 0.95);
+  stroke: rgba(137, 168, 255, 0.58);
+  stroke-width: 0.26;
+  vector-effect: non-scaling-stroke;
 }
 
-.world-map-node.is-complete .world-map-dot {
-  border-color: rgba(125, 243, 217, 0.9);
-  background: #7df3d9;
-  box-shadow:
-    0 0 0 8px rgba(125, 243, 217, 0.1),
-    0 0 30px rgba(125, 243, 217, 0.46);
+.world-map-dot.is-complete {
+  fill: #7df3d9;
+  stroke: rgba(210, 255, 246, 0.95);
+  filter: drop-shadow(0 0 5px rgba(125, 243, 217, 0.68));
 }
 
 .world-map-node.is-complete .world-map-label {
   border-color: rgba(125, 243, 217, 0.16);
 }
 
-.world-map-node.is-active .world-map-dot {
-  border-color: rgba(255, 200, 92, 0.9);
-  background: #ffc85c;
-  box-shadow:
-    0 0 0 10px rgba(255, 200, 92, 0.12),
-    0 0 36px rgba(255, 200, 92, 0.44);
+.world-map-dot.is-active {
+  fill: #ffc85c;
+  stroke: rgba(255, 240, 200, 0.96);
+  filter: drop-shadow(0 0 6px rgba(255, 200, 92, 0.72));
 }
 
 .world-map-node.is-active .world-map-label {
@@ -1327,6 +1319,7 @@ h1 {
 .world-map-actions {
   align-self: end;
   justify-self: start;
+  margin-top: 14px;
 }
 
 .world-map-actions .hud-button {
@@ -1382,6 +1375,62 @@ h1 {
 .status-card {
   width: min(430px, 100%);
   pointer-events: none;
+}
+
+.debug-tuning-panel {
+  align-self: flex-end;
+  width: min(274px, 34vw);
+  max-height: min(62vh, 390px);
+  overflow: auto;
+  padding: 11px 12px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(137, 168, 255, 0.2);
+  background:
+    linear-gradient(180deg, rgba(8, 14, 25, 0.86), rgba(5, 10, 19, 0.76));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+  backdrop-filter: blur(16px);
+  pointer-events: auto;
+}
+
+.debug-tuning-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 9px;
+  color: var(--accent);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.58rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.debug-slider {
+  display: block;
+  margin-top: 8px;
+}
+
+.debug-slider span {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  color: rgba(237, 243, 255, 0.72);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.56rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.debug-slider strong {
+  color: var(--text);
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+}
+
+.debug-slider input[type='range'] {
+  width: 100%;
+  margin: 6px 0 0;
+  accent-color: var(--accent);
 }
 
 .perf-panel {
@@ -1502,6 +1551,12 @@ h1 {
     width: 100%;
   }
 
+  .debug-tuning-panel {
+    width: min(100%, 360px);
+    max-height: 34vh;
+    padding: 10px 11px;
+  }
+
   .perf-panel {
     align-self: flex-end;
   }
@@ -1538,11 +1593,6 @@ h1 {
     border-radius: 18px;
   }
 
-  .world-map-panel::before {
-    inset: 7px;
-    border-radius: 13px;
-  }
-
   .world-map-copy {
     align-self: start;
   }
@@ -1566,7 +1616,7 @@ h1 {
 
   .world-map-stats {
     grid-row: 3;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
     gap: 10px 12px;
   }
 
@@ -1589,6 +1639,7 @@ h1 {
   .world-map-actions {
     grid-row: 4;
     align-self: stretch;
+    margin-top: 8px;
   }
 
   .world-map-actions .hud-button {
@@ -1824,6 +1875,16 @@ h1 {
     border-radius: 14px;
   }
 
+  .debug-tuning-panel {
+    grid-column: 2;
+    grid-row: 3;
+    align-self: end;
+    justify-self: end;
+    width: min(330px, 42vw);
+    max-height: 42vh;
+    padding: 9px 10px;
+  }
+
   .perf-label {
     margin-bottom: 3px;
     font-size: 0.5rem;
@@ -1886,9 +1947,9 @@ h1 {
   }
 
   .world-map-panel {
-    grid-template-columns: minmax(170px, 24vw) minmax(300px, 1fr) auto;
+    grid-template-columns: minmax(190px, 28vw) minmax(300px, 1fr);
     grid-template-rows: auto 1fr auto;
-    gap: 10px;
+    gap: 10px 14px;
     min-height: 100%;
     padding: 12px;
     border-radius: 18px;
@@ -1920,12 +1981,15 @@ h1 {
     grid-column: 2;
     grid-row: 1 / span 3;
     min-height: 100%;
+    width: 100%;
     border-radius: 16px;
   }
 
   .world-map-stats {
     grid-column: 1;
     grid-row: 2;
+    grid-template-columns: 1fr;
+    align-self: end;
     gap: 7px;
   }
 
@@ -1947,13 +2011,15 @@ h1 {
   }
 
   .world-map-actions {
-    grid-column: 3;
-    grid-row: 1 / span 3;
-    align-self: center;
+    grid-column: 1;
+    grid-row: 3;
+    align-self: start;
+    margin-top: 16px;
   }
 
   .world-map-actions .hud-button {
-    min-width: 98px;
+    width: 100%;
+    min-width: 0;
   }
 
   .world-map-label {
