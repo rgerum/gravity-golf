@@ -293,6 +293,12 @@ const GOAL_UNLOCK_REVEAL_DURATION = 0.52;
 const METEOR_PLANET_EXPLOSION_SECONDS = 1.15;
 const METEOR_PLANET_BREAK_DELAY_SECONDS = 0.12;
 const MAX_PHYSICS_STEPS_PER_FRAME = 4;
+const VIBE_JAM_PORTAL_URL = 'https://vibej.am/portal/2026';
+const VIBE_JAM_PORTAL_RADIUS = 0.92;
+const VIBE_JAM_PORTAL_ACTIVATION_DELAY = 1.2;
+const VIBE_JAM_PORTAL_ENTRY_SECONDS = 0.58;
+const VIBE_JAM_EXIT_PORTAL_ANGLE_DEG = 140;
+const VIBE_JAM_RETURN_PORTAL_ANGLE_DEG = 126;
 const ballRestY = COURSE.ballRadius - 0.01;
 const BALL_STRETCH_SPEED_THRESHOLD = 1.6;
 const BALL_STRETCH_MAX = 0.18;
@@ -483,6 +489,9 @@ world.add(extraSunsRoot);
 
 const portalsRoot = new THREE.Group();
 world.add(portalsRoot);
+
+const vibeJamPortalsRoot = new THREE.Group();
+world.add(vibeJamPortalsRoot);
 
 const dustCloudsRoot = new THREE.Group();
 world.add(dustCloudsRoot);
@@ -930,6 +939,12 @@ const state = {
     hint: '',
     countReset: true,
   },
+  vibeJam: {
+    incoming: readIncomingVibeJamPortal(),
+    redirecting: false,
+    loadedAt: 0,
+    entry: null,
+  },
   ballTraceParticles: Array.from({ length: BALL_TRACE_PARTICLE_COUNT }, () => ({
     active: false,
     x: 0,
@@ -960,6 +975,7 @@ const state = {
 let planetVisuals = [];
 let extraSunVisuals = [];
 let portalVisuals = [];
+let vibeJamPortalVisuals = [];
 let dustCloudVisuals = [];
 let asteroidVisuals = [];
 let meteorVisuals = [];
@@ -1073,6 +1089,87 @@ function persistLastLevelIndex(levelIndex) {
   } catch {
     // Ignore persistence errors in restricted contexts.
   }
+}
+
+function getCurrentGameRef() {
+  return `${window.location.origin}${window.location.pathname}`;
+}
+
+function readIncomingVibeJamPortal() {
+  const params = new URLSearchParams(window.location.search);
+  return {
+    fromPortal: params.get('portal') === 'true',
+    ref: params.get('ref') || '',
+    username: params.get('username') || '',
+    color: params.get('color') || '',
+    team: params.get('team') || '',
+    avatarUrl: params.get('avatar_url') || '',
+    hp: params.get('hp') || '',
+    rawParams: params.toString(),
+  };
+}
+
+function normalizeVibeJamRef(rawRef) {
+  if (!rawRef) {
+    return null;
+  }
+
+  try {
+    return new URL(rawRef.includes('://') ? rawRef : `https://${rawRef}`);
+  } catch {
+    return null;
+  }
+}
+
+function appendVibeJamPlayerParams(url, params = new URLSearchParams(window.location.search)) {
+  const preservedKeys = [
+    'username',
+    'color',
+    'avatar_url',
+    'team',
+    'hp',
+    'rotation_x',
+    'rotation_y',
+    'rotation_z',
+  ];
+
+  preservedKeys.forEach((key) => {
+    const value = params.get(key);
+    if (value) {
+      url.searchParams.set(key, value);
+    }
+  });
+
+  const speed = length(state.ball.velocity);
+  url.searchParams.set('color', params.get('color') || 'faf7ef');
+  url.searchParams.set('speed', speed.toFixed(2));
+  url.searchParams.set('speed_x', state.ball.velocity.x.toFixed(2));
+  url.searchParams.set('speed_y', state.ball.velocity.y.toFixed(2));
+  url.searchParams.set('speed_z', '0');
+  url.searchParams.set('ref', getCurrentGameRef());
+}
+
+function buildVibeJamExitUrl() {
+  const url = new URL(VIBE_JAM_PORTAL_URL);
+  appendVibeJamPlayerParams(url);
+  return url.toString();
+}
+
+function buildVibeJamReturnUrl() {
+  const target = normalizeVibeJamRef(state.vibeJam.incoming.ref);
+  if (!target) {
+    return '';
+  }
+
+  const params = new URLSearchParams(state.vibeJam.incoming.rawParams);
+  params.forEach((value, key) => {
+    if (key !== 'portal') {
+      target.searchParams.set(key, value);
+    }
+  });
+  appendVibeJamPlayerParams(target, params);
+  target.searchParams.set('portal', 'true');
+  return target.toString();
 }
 
 const WORLD_MAP_POINTS = WORLD_DEFINITIONS.map((_, index) => {
@@ -4845,6 +4942,225 @@ function rebuildPortals() {
   });
 }
 
+function createVibeJamLabelTexture(text) {
+  return createCanvasTexture(512, 128, (ctx, width, height) => {
+    ctx.clearRect(0, 0, width, height);
+    ctx.font = '700 42px Inter, ui-sans-serif, system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineWidth = 8;
+    ctx.strokeStyle = 'rgba(2, 6, 16, 0.9)';
+    ctx.fillStyle = 'rgba(238, 255, 249, 0.96)';
+    ctx.strokeText(text, width / 2, height / 2);
+    ctx.fillText(text, width / 2, height / 2);
+  });
+}
+
+function createVibeJamPortalVisual(portal) {
+  const group = new THREE.Group();
+  const ringColor = new THREE.Color(portal.kind === 'return' ? 0x7df3d1 : 0xffd06a);
+  const glowColor = new THREE.Color(portal.kind === 'return' ? 0x63d6ff : 0xff7d58);
+
+  const aura = new THREE.Mesh(
+    new THREE.CircleGeometry(portal.radius * 2.2, 56),
+    new THREE.MeshBasicMaterial({
+      color: glowColor,
+      transparent: true,
+      opacity: 0.14,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    }),
+  );
+  aura.rotation.x = -Math.PI / 2;
+  aura.position.y = 0.08;
+  aura.renderOrder = 17;
+  group.add(aura);
+
+  const outerRing = new THREE.Mesh(
+    new THREE.RingGeometry(portal.radius * 0.76, portal.radius * 1.1, 80),
+    new THREE.MeshBasicMaterial({
+      color: ringColor,
+      transparent: true,
+      opacity: 0.86,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    }),
+  );
+  outerRing.rotation.x = -Math.PI / 2;
+  outerRing.position.y = 0.11;
+  outerRing.renderOrder = 18;
+  group.add(outerRing);
+
+  const innerRing = new THREE.Mesh(
+    new THREE.RingGeometry(portal.radius * 0.32, portal.radius * 0.52, 64),
+    new THREE.MeshBasicMaterial({
+      color: 0xeafff8,
+      transparent: true,
+      opacity: 0.62,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    }),
+  );
+  innerRing.rotation.x = -Math.PI / 2;
+  innerRing.position.y = 0.12;
+  innerRing.renderOrder = 19;
+  group.add(innerRing);
+
+  const core = new THREE.Mesh(
+    new THREE.CircleGeometry(portal.radius * 0.48, 48),
+    new THREE.MeshBasicMaterial({
+      color: 0x050813,
+      transparent: true,
+      opacity: 0.92,
+      depthWrite: false,
+    }),
+  );
+  core.rotation.x = -Math.PI / 2;
+  core.position.y = 0.1;
+  core.renderOrder = 18;
+  group.add(core);
+
+  const label = new THREE.Sprite(
+    new THREE.SpriteMaterial({
+      map: createVibeJamLabelTexture(portal.label),
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+    }),
+  );
+  label.position.set(0, 1.16, -1.2);
+  label.scale.set(3.3, 0.82, 1);
+  label.renderOrder = 30;
+  group.add(label);
+
+  group.position.set(portal.position.x, 0, portal.position.y);
+  vibeJamPortalsRoot.add(group);
+
+  return { group, aura, outerRing, innerRing, core, label, portal };
+}
+
+function getVibeJamPortalDefinitions() {
+  const portals = [
+    {
+      id: 'vibe-jam-exit',
+      kind: 'exit',
+      label: 'Vibe Jam Portal',
+      position: getVibeJamPortalPosition(VIBE_JAM_EXIT_PORTAL_ANGLE_DEG),
+      radius: VIBE_JAM_PORTAL_RADIUS,
+    },
+  ];
+
+  if (state.vibeJam.incoming.fromPortal && state.vibeJam.incoming.ref) {
+    portals.push({
+      id: 'vibe-jam-return',
+      kind: 'return',
+      label: 'Return Portal',
+      position: getVibeJamPortalPosition(VIBE_JAM_RETURN_PORTAL_ANGLE_DEG),
+      radius: VIBE_JAM_PORTAL_RADIUS,
+    });
+  }
+
+  return portals;
+}
+
+function rebuildVibeJamPortals() {
+  clearGroup(vibeJamPortalsRoot);
+  vibeJamPortalVisuals = getVibeJamPortalDefinitions().map((portal) => createVibeJamPortalVisual(portal));
+}
+
+function getVibeJamPortalPosition(angleDeg) {
+  const sun = state.level.sun ?? { x: 0, y: 0 };
+  const goalRadius = distanceBetween(state.level.goalCenter, sun);
+  const angle = angleDeg * Math.PI / 180;
+  return {
+    x: sun.x + Math.cos(angle) * goalRadius,
+    y: sun.y + Math.sin(angle) * goalRadius,
+  };
+}
+
+function redirectThroughVibeJamPortal(portal) {
+  if (state.vibeJam.redirecting || state.vibeJam.entry) {
+    return true;
+  }
+
+  const redirectUrl = portal.kind === 'return'
+    ? buildVibeJamReturnUrl()
+    : buildVibeJamExitUrl();
+
+  if (!redirectUrl) {
+    return false;
+  }
+
+  state.vibeJam.entry = {
+    portal,
+    redirectUrl,
+    elapsed: 0,
+    startPosition: cloneVec(state.ball.position),
+    targetPosition: cloneVec(portal.position),
+  };
+  state.dragActive = false;
+  state.ball.velocity.x = 0;
+  state.ball.velocity.y = 0;
+  state.ball.anchorPlanetIndex = null;
+  state.ball.anchorNormal = null;
+  state.message = portal.kind === 'return' ? 'Returning through the Vibe Jam portal.' : 'Entering the Vibe Jam portal.';
+  state.hint = 'Carrying your run to the next game.';
+  syncHud();
+  return true;
+}
+
+function updateVibeJamPortalEntry(delta) {
+  const entry = state.vibeJam.entry;
+  if (!entry) {
+    return false;
+  }
+
+  entry.elapsed += delta;
+  const rawT = clamp(entry.elapsed / VIBE_JAM_PORTAL_ENTRY_SECONDS, 0, 1);
+  const easedT = THREE.MathUtils.smootherstep(rawT, 0, 1);
+  state.ball.velocity.x = 0;
+  state.ball.velocity.y = 0;
+  state.ball.position.x = THREE.MathUtils.lerp(entry.startPosition.x, entry.targetPosition.x, easedT);
+  state.ball.position.y = THREE.MathUtils.lerp(entry.startPosition.y, entry.targetPosition.y, easedT);
+
+  if (rawT >= 1 && !state.vibeJam.redirecting) {
+    state.vibeJam.redirecting = true;
+    window.location.assign(entry.redirectUrl);
+  }
+
+  return true;
+}
+
+function maybeEnterVibeJamPortal() {
+  if (
+    state.vibeJam.redirecting
+    || state.vibeJam.entry
+    || state.worldMap.open
+    || state.gameOver.open
+    || state.goalCloseAnimation.active
+    || state.undo.active
+    || state.rewindPlayback.active
+    || state.ball.goaling
+    || state.ball.crashed
+  ) {
+    return false;
+  }
+
+  if (clock.elapsedTime - state.vibeJam.loadedAt < VIBE_JAM_PORTAL_ACTIVATION_DELAY) {
+    return false;
+  }
+
+  for (const visual of vibeJamPortalVisuals) {
+    const portal = visual.portal;
+    if (distanceBetween(state.ball.position, portal.position) <= portal.radius + COURSE.ballRadius * 0.9) {
+      return redirectThroughVibeJamPortal(portal);
+    }
+  }
+
+  return false;
+}
+
 function rebuildDustClouds() {
   clearGroup(dustCloudsRoot);
   dustCloudVisuals = (state.level.dustClouds ?? []).map((cloud, index) => {
@@ -5658,6 +5974,7 @@ function applyLevel(index) {
   lastGravityFieldRefreshTime = state.level.time ?? 0;
   rebuildExtraSuns();
   rebuildPortals();
+  rebuildVibeJamPortals();
   rebuildDustClouds();
   rebuildAsteroids();
   rebuildMeteors();
@@ -5719,6 +6036,9 @@ function syncTutorialOverlay() {
 function resetBall(message, hint, options = {}) {
   hideGameOverModal();
   hideGoalCloseAnimation();
+  if (!state.vibeJam.redirecting) {
+    state.vibeJam.entry = null;
+  }
   if (options.scored) {
     state.score += 1;
   }
@@ -5925,6 +6245,7 @@ function ballIsMoving() {
     lengthSq(state.ball.velocity) > 0.002
     || state.ball.goaling
     || state.ball.crashed
+    || Boolean(state.vibeJam.entry)
     || state.undo.active
     || state.rewindPlayback.active
   );
@@ -5956,6 +6277,23 @@ function updateDragState(worldPoint) {
 
 function updateBallTransforms() {
   ballGroup.position.set(state.ball.position.x, 0, state.ball.position.y);
+
+  if (state.vibeJam.entry) {
+    const rawT = clamp(state.vibeJam.entry.elapsed / VIBE_JAM_PORTAL_ENTRY_SECONDS, 0, 1);
+    const easedT = THREE.MathUtils.smootherstep(rawT, 0, 1);
+    const sinkT = THREE.MathUtils.smootherstep(rawT, 0.15, 1);
+    ballGroup.visible = true;
+    ballGroup.scale.setScalar(THREE.MathUtils.lerp(1, 0.08, easedT));
+    ballMesh.position.y = THREE.MathUtils.lerp(ballRestY, -0.24, sinkT);
+    ballMesh.rotation.y += 0.22 + rawT * 0.38;
+    ballMesh.rotation.z += 0.12 + rawT * 0.24;
+    ballMesh.scale.setScalar(THREE.MathUtils.lerp(1, 0.58, easedT));
+    ballMesh.material.color.copy(palette.ball).lerp(new THREE.Color(0x8fffe3), easedT * 0.75);
+    ballMesh.material.emissive.setHex(0x7df3d1);
+    ballMesh.material.emissiveIntensity = THREE.MathUtils.lerp(0.2, 2.6, easedT);
+    ballShadow.material.opacity = 0.28 * (1 - easedT);
+    return;
+  }
 
   let targetRotationY = 0;
   let targetScaleX = 1;
@@ -6275,6 +6613,10 @@ window.addEventListener('keydown', (event) => {
 });
 
 function updatePhysics(delta) {
+  if (updateVibeJamPortalEntry(delta)) {
+    return;
+  }
+
   if (state.worldMap.open) {
     state.ball.velocity.x = 0;
     state.ball.velocity.y = 0;
@@ -6492,6 +6834,9 @@ function updatePhysics(delta) {
       if (timeSpeed < 0 && nextTime <= minTime + 0.0001) {
         clampTimeSpeedToNonNegative();
       }
+      if (maybeEnterVibeJamPortal()) {
+        return;
+      }
       if (!isGoalLocked(state.level) && !isGoalOpen(state.level, state.ball.time)) {
         beginGoalClosure(describeFailureHint('goal-closed'), { countReset: true });
       }
@@ -6507,6 +6852,9 @@ function updatePhysics(delta) {
   recordFlightHistorySample();
   recordPortalFlightEvent(result.portalEvent ?? null);
   recordAttemptTrailPoint();
+  if (maybeEnterVibeJamPortal()) {
+    return;
+  }
   if (result.type === 'goal') {
     beginGoal(result);
     return;
@@ -6638,6 +6986,15 @@ function updateDecor(time, delta = 0) {
     visual.aura.scale.setScalar(1 + Math.sin(time * (2.6 + index * 0.2) + index) * 0.08);
     visual.aura.material.opacity = 0.09 + Math.sin(time * 2.2 + index) * 0.03;
     visual.ring.material.opacity = 0.72 + Math.sin(time * 3 + index) * 0.08;
+  });
+  vibeJamPortalVisuals.forEach((visual, index) => {
+    visual.group.position.set(visual.portal.position.x, 0, visual.portal.position.y);
+    visual.outerRing.rotation.z = time * (visual.portal.kind === 'return' ? -1 : 1.05);
+    visual.innerRing.rotation.z = -time * (1.6 + index * 0.18);
+    visual.aura.scale.setScalar(1 + Math.sin(time * 2.8 + index) * 0.1);
+    visual.aura.material.opacity = 0.12 + Math.sin(time * 2.3 + index) * 0.04;
+    visual.outerRing.material.opacity = 0.78 + Math.sin(time * 3.4 + index) * 0.08;
+    visual.innerRing.material.opacity = 0.5 + Math.sin(time * 4.1 + index) * 0.12;
   });
   dustCloudVisuals.forEach((visual, index) => {
     const opacity = visual.cloud.opacity ?? 1;
