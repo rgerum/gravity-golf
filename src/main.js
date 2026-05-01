@@ -6432,9 +6432,8 @@ function syncTutorialOverlay() {
 function resetBall(message, hint, options = {}) {
   hideGameOverModal();
   hideGoalCloseAnimation();
-  if (!state.vibeJam.redirecting) {
-    state.vibeJam.entry = null;
-  }
+  state.vibeJam.entry = null;
+  state.vibeJam.redirecting = false;
   if (options.scored) {
     state.score += 1;
   }
