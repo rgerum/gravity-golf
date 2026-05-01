@@ -73,21 +73,18 @@ export const WORLD_SIZE = 10;
 
 export const WORLD_DEFINITIONS = [
   { id: 'starter-belt-v1', name: 'Starter Belt' },
-  { id: 'relay-worlds-v1', name: 'Relay Reach' },
-  { id: 'hazard-worlds-v1', name: 'Hazard Verge' },
-  { id: 'moon-worlds-v1', name: 'Moon Lattice' },
-  { id: 'twin-planets-v1', name: 'Twin Planets' },
-  { id: 'ice-worlds-v1', name: 'Frostline Verge' },
-  { id: 'split-worlds-v1', name: 'Split Worlds' },
-  { id: 'lava-worlds-v1', name: 'Lava Reach' },
   { id: 'asteroid-worlds-v1', name: 'Asteroid Belts' },
+  { id: 'ice-worlds-v1', name: 'Frostline Verge' },
+  { id: 'lava-worlds-v1', name: 'Lava Reach' },
   { id: 'dust-clouds-v1', name: 'Dust Clouds' },
+  { id: 'twin-planets-v1', name: 'Twin Planets' },
   { id: 'portal-worlds-v1', name: 'Aperture Reach' },
   { id: 'ancient-worlds-v1', name: 'Ancient Worlds' },
-  { id: 'flicker-worlds-v1', name: 'Flicker Planets' },
   { id: 'binary-stars-v1', name: 'Binary Crown' },
+  { id: 'split-worlds-v1', name: 'Split Worlds' },
   { id: 'pulsar-worlds-v1', name: 'Pulsars' },
   { id: 'hostile-worlds-v1', name: 'Hostile Planets' },
+  { id: 'flicker-worlds-v1', name: 'Flicker Planets' },
   { id: 'dying-worlds-v1', name: 'Dying Systems' },
   { id: 'supernova-worlds-v1', name: 'Supernova' },
   { id: 'meteor-worlds-v1', name: 'Meteor Shower' },
@@ -1435,6 +1432,7 @@ function variantLevel(themeKey, spec) {
 
 function makeIcyVariant(spec) {
   const level = variantLevel('frostline', spec);
+  level.tutorial = spec.tutorial ?? null;
   level.planets = level.planets.map((planet, index) => (
     planet.landable
       ? {
@@ -1451,6 +1449,7 @@ function makeIcyVariant(spec) {
 
 function makeLavaVariant(spec) {
   const level = variantLevel('ember', spec);
+  level.tutorial = spec.tutorial ?? null;
   level.planets = level.planets.map((planet, index) => {
     if (!planet.landable) {
       return planet;
@@ -1471,6 +1470,7 @@ function makeLavaVariant(spec) {
 
 function makePortalVariant(spec) {
   const level = variantLevel('prism', spec);
+  level.tutorial = spec.tutorial ?? null;
   const pairSeed = spec.id;
   level.portals = [
     {
@@ -1626,6 +1626,7 @@ function normalizePulsarJets(spec) {
 function makePulsarVariant(spec) {
   const level = variantLevel('pulsar', spec);
   level.summary = spec.summary;
+  level.tutorial = spec.tutorial ?? null;
   level.pulsarJets = normalizePulsarJets(spec.pulsarJets ?? spec);
   return level;
 }
@@ -1684,6 +1685,7 @@ function makeDustVariant(spec) {
 
 function makeSplitVariant(spec) {
   const level = variantLevel('prism', spec);
+  level.tutorial = spec.tutorial ?? null;
   const splitPlanets = spec.splitPlanets ?? {};
   level.planets = level.planets.map((planet, index) => {
     const split = splitPlanets[index];
@@ -1821,6 +1823,7 @@ function makeDyingVariant(spec, specIndex) {
   });
   const decayScale = spec.decayScale ?? (1 + specIndex * 0.055);
   level.systemState = 'dying';
+  level.tutorial = spec.tutorial ?? null;
   level.planets = level.planets.map((planet, index) => {
     const isMoon = planet.orbitAround !== undefined;
     const authoredOrbitRadius = planet.position?.radius ?? 4;
@@ -1894,6 +1897,7 @@ function makeSupernovaVariant(spec, specIndex) {
     growSeconds,
     startTimeSeconds: spec.redGiantStartTimeSeconds ?? level.startTimeSeconds ?? 0,
   };
+  level.tutorial = spec.tutorial ?? null;
   level.goalOpenSeconds = spec.goalOpenSeconds
     ?? Math.max(6, Math.min(level.goalOpenSeconds ?? DEFAULT_GOAL_OPEN_SECONDS, growSeconds + 1.6));
   level.planets = level.planets.map((planet, index) => ({
@@ -1907,6 +1911,7 @@ function makeSupernovaVariant(spec, specIndex) {
 
 function makeMeteorVariant(spec) {
   const level = variantLevel('meteor', spec);
+  level.tutorial = spec.tutorial ?? null;
   const authoredImpacts = (spec.meteorImpacts ?? []).map((meteor) => ({
     ...meteor,
     start: meteor.start,
@@ -2028,6 +2033,7 @@ function makeAsteroidBeltLevel(spec) {
     goalPullRadius: spec.goalPullRadius ?? 2.4,
     goalPullStrength: spec.goalPullStrength ?? 5.8,
     sunGravityStrength: spec.sunGravityStrength ?? 0,
+    tutorial: spec.tutorial ?? null,
     launchPresets: spec.launchPresets,
     asteroids: spec.belts.flatMap((belt, index) => makeAsteroidBelt({ ...belt, seed: index + spec.seed })),
     planets: [...spec.planets, ...(spec.outerPlanets ?? defaultOuterPlanet)],
@@ -2035,7 +2041,7 @@ function makeAsteroidBeltLevel(spec) {
 }
 
 const ICY_WORLD_SPECS = [
-  { baseId: 'first-relay', id: 'polar-relay', name: 'Polar Relay', summary: 'Land on a frozen relay, then let the ball drift around the ice before you launch again.', defaultSlideAngularSpeed: 0.8, slideAngularSpeeds: { 0: 0.72, 1: -0.82 } },
+  { baseId: 'first-relay', id: 'polar-relay', name: 'Polar Relay', summary: 'Land on a frozen relay, then let the ball drift around the ice before you launch again.', tutorial: { type: 'ice', copy: 'On ice, the ball keeps sliding around the planet after it lands.' }, defaultSlideAngularSpeed: 0.8, slideAngularSpeeds: { 0: 0.72, 1: -0.82 } },
   { baseId: 'mirror-harbor', id: 'frost-gate', name: 'Frost Gate', summary: 'The two-gate relay only works if you let the icy harbor drift into the correct launch face.', defaultSlideAngularSpeed: 0.82 },
   { baseId: 'guarded-relay', id: 'whiteout-lock', name: 'Whiteout Lock', summary: 'The outward relay is frozen solid, so the safe exit appears only after the ball skids around it.', defaultSlideAngularSpeed: -0.78 },
   { baseId: 'forked-harbor', id: 'aurora-harbor', name: 'Aurora Harbor', summary: 'Both harbors are slick. Pick the right landing because the drift changes the outgoing angle.', defaultSlideAngularSpeed: 0.76 },
@@ -2048,7 +2054,7 @@ const ICY_WORLD_SPECS = [
 ];
 
 const PORTAL_WORLD_SPECS = [
-  { baseId: 'moon-switch', id: 'aperture-switch', name: 'Aperture Switch', summary: 'Use the orbiting portal pair to redirect the shot onto the switch lane.', portalWhite: { position: polar(4.2, 138), orbitAngularSpeed: 0.46 }, portalBlack: { position: polar(7.2, -18), orbitAngularSpeed: -0.16 } },
+  { baseId: 'moon-switch', id: 'aperture-switch', name: 'Aperture Switch', summary: 'Use the orbiting portal pair to redirect the shot onto the switch lane.', tutorial: { type: 'portal', copy: 'White portals send the ball out through the paired black portal.' }, portalWhite: { position: polar(4.2, 138), orbitAngularSpeed: 0.46 }, portalBlack: { position: polar(7.2, -18), orbitAngularSpeed: -0.16 } },
   { baseId: 'long-transfer', id: 'gate-transfer', name: 'Gate Transfer', summary: 'The outer station is too far without a white-hole transfer that preserves your speed.', portalWhite: { position: polar(3.8, 8), orbitAngularSpeed: 0.22 }, portalBlack: { position: polar(6.9, -52), orbitAngularSpeed: -0.12 } },
   { baseId: 'halo-run', id: 'halo-gates', name: 'Halo Gates', summary: 'A portal on the inner lane feeds the long outer relay if you hit it with the right momentum.', portalWhite: { position: polar(4.6, 118), orbitAngularSpeed: 0.32 }, portalBlack: { position: polar(7.4, 6), orbitAngularSpeed: -0.1 } },
   { baseId: 'split-sentinel', id: 'split-port', name: 'Split Port', summary: 'The mirrored routes converge at a portal pair, but only one exit preserves a playable line.', portalWhite: { position: polar(4.9, -18), orbitAngularSpeed: 0.28 }, portalBlack: { position: polar(7.8, 32), orbitAngularSpeed: -0.08 } },
@@ -2111,7 +2117,7 @@ const ANCIENT_WORLD_SPECS = [
 ];
 
 const LAVA_WORLD_SPECS = [
-  { baseId: 'fast-window', id: 'ember-window', name: 'Ember Window', summary: 'The lane still opens and closes on timing, but now the launch world itself is heating the ball while you wait.', lavaSafeSeconds: { 0: 2.8 } },
+  { baseId: 'fast-window', id: 'ember-window', name: 'Ember Window', summary: 'The lane still opens and closes on timing, but now the launch world itself is heating the ball while you wait.', tutorial: { type: 'lava', copy: 'Lava planets heat the ball while it waits. Launch before it burns.' }, lavaSafeSeconds: { 0: 2.8 } },
   { baseId: 'forked-harbor', id: 'melt-harbor', name: 'Melt Harbor', summary: 'Both harbors burn. The choice is not just where to land, but where you can leave before the heat runs out.', lavaSafeSeconds: { 0: 3.3, 1: 2.2, 2: 2.5, 3: 2.2 } },
   { baseId: 'inner-step', id: 'cinder-step', name: 'Cinder Step', summary: 'The outer relay is now a cinder world, so the clean handoff becomes a race against the heat.', lavaSafeSeconds: { 0: 3.2, 1: 2.4, 2: 2.15 } },
   { baseId: 'moon-switch', id: 'basalt-switch', name: 'Basalt Switch', summary: 'The switch route still opens the finish, but the molten worlds force a much faster second shot.', lavaSafeSeconds: { 0: 3.1, 1: 2.35, 2: 2.45 } },
@@ -2124,7 +2130,7 @@ const LAVA_WORLD_SPECS = [
 ];
 
 const SPLIT_WORLD_SPECS = [
-  { baseId: 'inner-step', id: 'split-step', name: 'Split Step', summary: 'The launch world is split, but the route still starts with a clean handoff to the outer relay.', splitPlanets: { 0: { landableAngleDeg: -170 } } },
+  { baseId: 'inner-step', id: 'split-step', name: 'Split Step', summary: 'The launch world is split, but the route still starts with a clean handoff to the outer relay.', tutorial: { type: 'split', copy: 'Split planets only catch the ball on their safe colored side.' }, splitPlanets: { 0: { landableAngleDeg: -170 } } },
   { baseId: 'forked-harbor', id: 'split-harbor', name: 'Split Harbor', summary: 'Both harbor routes are readable because every split world shows exactly which side can catch you.', splitPlanets: { 0: { landableAngleDeg: 143 }, 1: { landableAngleDeg: 300 }, 2: { landableAngleDeg: 15 } } },
   { baseId: 'counterspin-gate', id: 'split-counterspin', name: 'Split Counterspin', summary: 'The split launch face throws you off-angle, so stabilize on a relay before the outward burn.', splitPlanets: { 0: { landableAngleDeg: 128 } } },
   { baseId: 'false-periapsis', id: 'split-periapsis', name: 'Split Periapsis', summary: 'The tempting close pass still starts the route, but a split relay face punishes sloppy contact.', splitPlanets: { 0: { landableAngleDeg: -144 }, 1: { landableAngleDeg: 225 } } },
@@ -2137,7 +2143,7 @@ const SPLIT_WORLD_SPECS = [
 ];
 
 const PULSAR_WORLD_SPECS = [
-  { baseId: 'false-periapsis', id: 'pulse-arc', name: 'Pulse Relay', summary: 'The first safe answer is a relay. Use the periapsis world to wait out the paired jet before the finish.', angleDeg: -50, phaseSeconds: 0.35, periodSeconds: 3.4, activeSeconds: 0.56, width: 0.22 },
+  { baseId: 'false-periapsis', id: 'pulse-arc', name: 'Pulse Relay', summary: 'The first safe answer is a relay. Use the periapsis world to wait out the paired jet before the finish.', tutorial: { type: 'pulsar', copy: 'Pulsar beams turn on and off. Cross only while the beam is dark.' }, angleDeg: -50, phaseSeconds: 0.35, periodSeconds: 3.4, activeSeconds: 0.56, width: 0.22 },
   { baseId: 'inner-step', id: 'strobe-window', name: 'Strobe Step', summary: 'The inside launch is safe, but the finish is easier after stepping out to a relay between pulses.', angleDeg: -40, angularSpeedDeg: 2, phaseSeconds: 0.55, periodSeconds: 3.4, activeSeconds: 0.62, width: 0.28 },
   { baseId: 'mirror-harbor', id: 'beacon-relay', name: 'Beacon Relay', summary: 'The harbor route gives you a place to wait while the beacon cuts through the direct center lane.', angleDeg: -30, phaseSeconds: 0.55, periodSeconds: 3.6, activeSeconds: 0.56, width: 0.22 },
   { baseId: 'forked-harbor', id: 'eclipse-pulse', name: 'Forked Pulse', summary: 'Both harbors offer timing options, but the wrong exit crosses the pulsar cone as it fires.', angleDeg: 32, angularSpeedDeg: -2, phaseSeconds: 0.45, periodSeconds: 3.5, activeSeconds: 0.62, width: 0.28 },
@@ -2151,14 +2157,14 @@ const PULSAR_WORLD_SPECS = [
 
 const HOSTILE_WORLD_SPECS = [
   {
-    baseId: 'first-arc',
+    baseId: 'inner-step',
     id: 'sentry-arc',
-    name: 'Sentry Arc',
-    summary: 'A gun line marks the forbidden shortcut. Bend around the sun without crossing the sentry sight.',
+    name: 'Sentry Relay',
+    summary: 'A gun line watches the lazy exit. Step outward through the relay, then leave around the sentry sight.',
     tutorial: { type: 'turret', copy: 'Cross a turret sight line and the shot is destroyed.' },
-    turrets: { 0: { type: 'tank', angleDeg: 112, range: 4.2 } },
+    turrets: { 1: { type: 'tank', angleDeg: 104, range: 4.6 } },
   },
-  { baseId: 'fast-window', id: 'watch-relay', name: 'Watch Window', summary: 'The launch window still opens and closes while the sentry line watches the direct lane.', turrets: { 0: { type: 'missile', angleDeg: 96, range: 4.4 } } },
+  { baseId: 'forked-harbor', id: 'watch-relay', name: 'Watch Harbor', summary: 'The fork is readable, but the watcher turns one harbor lane into a trap.', turrets: { 1: { type: 'missile', angleDeg: 12, range: 4.4 } } },
   { baseId: 'forked-harbor', id: 'gun-harbor', name: 'Gun Harbor', summary: 'Both harbors are visible, but the armed worlds make one corridor too costly to cross.', turrets: { 1: { type: 'tank', angleDeg: 12, range: 4.5 }, 3: { type: 'missile', angleDeg: 214, range: 5.0 } } },
   { baseId: 'inner-step', id: 'crossfire-step', name: 'Crossfire Step', summary: 'Step outward through the relay while two sight lines divide the middle of the system.', turrets: { 1: { type: 'tank', angleDeg: 236, range: 4.5 }, 2: { type: 'missile', angleDeg: 122, range: 5.2 } } },
   { baseId: 'moon-switch', id: 'launcher-switch', name: 'Launcher Switch', summary: 'The switch route survives, but missile sight lines punish the lazy middle exit.', turrets: { 2: { type: 'missile', angleDeg: 250, range: 5.0 }, 4: { type: 'tank', angleDeg: 180, range: 3.8 } } },
@@ -2194,15 +2200,15 @@ const DUST_WORLD_SPECS = [
     ],
   },
   {
-    baseId: 'first-arc',
+    baseId: 'shielded-arc',
     id: 'veil-relay',
-    name: 'Veil Arc',
-    summary: 'A thin veil crosses the simple solar bend, trimming speed if the shot cuts too deep.',
-    launchAngleDelta: 2,
-    powerScale: 1.05,
+    name: 'Veil Shield',
+    summary: 'The old shield route now has a dusty false lane: clip the veil lightly or lose the bend.',
+    launchAngleDelta: 1,
+    powerScale: 1.04,
     dustClouds: [
-      { position: polar(3.9, -44), radius: 0.94, drag: 0.48, orbitAngularSpeed: 0.05 },
-      { position: polar(6.2, 8), radius: 0.82, drag: 0.34, orbitAngularSpeed: -0.04 },
+      { position: polar(4.2, -26), radius: 1.02, drag: 0.5, orbitAngularSpeed: 0.05 },
+      { position: polar(6.4, 16), radius: 0.9, drag: 0.38, orbitAngularSpeed: -0.04 },
     ],
   },
   {
@@ -2288,7 +2294,7 @@ const DUST_WORLD_SPECS = [
 ];
 
 const DYING_WORLD_SPECS = [
-  { baseId: 'first-arc', id: 'decay-arc', name: 'Decay Arc', summary: 'The launch world is already falling inward, so the clean bend changes every second.', goalOpenSecondsDelta: -1 },
+  { baseId: 'first-arc', id: 'decay-arc', name: 'Decay Arc', summary: 'The launch world is already falling inward, so the clean bend changes every second.', tutorial: { type: 'dying', copy: 'Planets in dying systems spiral inward while you aim and fly.' }, goalOpenSecondsDelta: -1 },
   { baseId: 'fast-window', id: 'sinking-window', name: 'Sinking Window', summary: 'The fast lane is no longer stable; wait too long and the planet has dropped into a tighter spiral.', decayScale: 1.08, goalOpenSecondsDelta: -1 },
   { baseId: 'first-relay', id: 'collapsing-relay', name: 'Collapsing Relay', summary: 'Both relay worlds drift toward the sun, shortening the handoff while you aim.', decayScale: 1.05, goalOpenSecondsDelta: -1 },
   { baseId: 'hot-giant', id: 'falling-giant', name: 'Falling Giant', summary: 'The unsafe giant is spiraling inward, dragging the bend with it instead of holding a stable guard lane.', decayScale: 1.1 },
@@ -2414,6 +2420,7 @@ const ASTEROID_WORLD_SPECS = [
     id: 'belt-gap',
     name: 'Belt Gap',
     summary: 'A circular asteroid belt surrounds the sun. Shoot outward through one of the rotating gaps.',
+    tutorial: { type: 'asteroid', copy: 'Asteroid belts block shots. Use the rotating gaps as lanes.' },
     seed: 1,
     startAnchor: polar(3.06, 28),
     goalCenter: polar(9.2, 28),
@@ -2636,6 +2643,7 @@ const METEOR_WORLD_SPECS = [
     id: 'first-impact',
     name: 'First Impact',
     summary: 'A meteor breaks the far marker world. Watch the strike, then take the open lane.',
+    tutorial: { type: 'meteor', copy: 'Meteors strike on schedule and can destroy planets.' },
     meteorImpacts: [
       { targetPlanetIndex: 0, impactTimeSeconds: 6.2, warningSeconds: 5.2, approachAngleDeg: -84, startDistance: 10, radius: 0.2 },
       { impactTimeSeconds: 8.6, warningSeconds: 4.4, start: polar(11.8, -36), target: polar(11.6, 42), destroysPlanet: false, radius: 0.16 },
@@ -2771,76 +2779,6 @@ const CAMPAIGN_LEVEL_ORDER = [
   'wide-lock',
   'forked-harbor',
   'inner-step',
-  'moon-switch',
-  'long-transfer',
-  'halo-run',
-  'split-sentinel',
-  'mirror-sweep',
-  'moon-catch',
-  'false-periapsis',
-  'crown-window',
-  'final-circuit',
-  'outer-echo',
-  'periapsis-moon',
-  'outer-crown',
-  'hot-giant',
-  'shielded-arc',
-  'sunlocked-relay',
-  'mirror-harbor',
-  'rim-switch',
-  'counterspin-gate',
-  'guarded-relay',
-  'double-slalom',
-  'twin-shepherds',
-  'periapsis-brood',
-  'far-side-switch',
-  'halo-shepherds',
-  'long-brood',
-  'guarded-brood',
-  'countermoon-gate',
-  'crown-lattice',
-  'shepherd-crown',
-  'final-moon-circuit',
-  'twin-lane',
-  'twin-arc',
-  'twin-relay',
-  'eclipse-twins',
-  'swift-twins',
-  'sweep-twins',
-  'hot-twins',
-  'locked-twins',
-  'shield-twins',
-  'guarded-twins',
-  'polar-relay',
-  'frost-gate',
-  'whiteout-lock',
-  'aurora-harbor',
-  'drift-step',
-  'ice-switch',
-  'glacier-transfer',
-  'frost-halo',
-  'rime-sentinel',
-  'moon-glide',
-  'split-step',
-  'split-harbor',
-  'split-counterspin',
-  'split-periapsis',
-  'split-transfer',
-  'split-tide',
-  'split-switch',
-  'split-moon',
-  'split-halo',
-  'split-circuit',
-  'ember-window',
-  'melt-harbor',
-  'cinder-step',
-  'basalt-switch',
-  'scorch-periapsis',
-  'magma-halo',
-  'firebreak',
-  'pyre-moon',
-  'lava-window',
-  'eruption-circuit',
   'belt-gap',
   'drifting-gap',
   'inner-slot',
@@ -2851,6 +2789,26 @@ const CAMPAIGN_LEVEL_ORDER = [
   'sunward-slot',
   'offset-maze',
   'belt-gauntlet',
+  'polar-relay',
+  'frost-gate',
+  'whiteout-lock',
+  'aurora-harbor',
+  'drift-step',
+  'ice-switch',
+  'glacier-transfer',
+  'frost-halo',
+  'rime-sentinel',
+  'moon-glide',
+  'ember-window',
+  'melt-harbor',
+  'cinder-step',
+  'basalt-switch',
+  'scorch-periapsis',
+  'magma-halo',
+  'firebreak',
+  'pyre-moon',
+  'lava-window',
+  'eruption-circuit',
   'dust-drift',
   'silt-window',
   'veil-relay',
@@ -2861,6 +2819,16 @@ const CAMPAIGN_LEVEL_ORDER = [
   'cloud-halo',
   'crown-haze',
   'dust-circuit',
+  'twin-lane',
+  'twin-arc',
+  'twin-relay',
+  'eclipse-twins',
+  'swift-twins',
+  'sweep-twins',
+  'hot-twins',
+  'locked-twins',
+  'shield-twins',
+  'guarded-twins',
   'aperture-switch',
   'gate-transfer',
   'halo-gates',
@@ -2881,16 +2849,6 @@ const CAMPAIGN_LEVEL_ORDER = [
   'sealed-lattice',
   'shepherd-shrine',
   'unlock-circuit',
-  'blink-relay',
-  'phase-step',
-  'stagger-harbor',
-  'blink-switch',
-  'relay-lanterns',
-  'halo-beacons',
-  'phase-moon',
-  'crown-flash',
-  'counterblink-gate',
-  'flicker-circuit',
   'binary-moon',
   'double-crown',
   'binary-giant',
@@ -2901,6 +2859,16 @@ const CAMPAIGN_LEVEL_ORDER = [
   'counterdouble',
   'binary-guard',
   'binary-slalom',
+  'split-step',
+  'split-harbor',
+  'split-counterspin',
+  'split-periapsis',
+  'split-transfer',
+  'split-tide',
+  'split-switch',
+  'split-moon',
+  'split-halo',
+  'split-circuit',
   'pulse-arc',
   'strobe-window',
   'beacon-relay',
@@ -2921,6 +2889,16 @@ const CAMPAIGN_LEVEL_ORDER = [
   'sentry-switch',
   'flak-gate',
   'hostile-circuit',
+  'blink-relay',
+  'phase-step',
+  'stagger-harbor',
+  'blink-switch',
+  'relay-lanterns',
+  'halo-beacons',
+  'phase-moon',
+  'crown-flash',
+  'counterblink-gate',
+  'flicker-circuit',
   'decay-arc',
   'sinking-window',
   'collapsing-relay',
@@ -2957,10 +2935,9 @@ const campaignOrderIndex = new Map(
   CAMPAIGN_LEVEL_ORDER.map((levelId, index) => [levelId, index]),
 );
 
-export const LEVELS = [...LEVEL_DEFINITIONS].sort((left, right) => (
-  (campaignOrderIndex.get(left.id) ?? Number.MAX_SAFE_INTEGER)
-  - (campaignOrderIndex.get(right.id) ?? Number.MAX_SAFE_INTEGER)
-));
+export const LEVELS = LEVEL_DEFINITIONS
+  .filter((level) => campaignOrderIndex.has(level.id))
+  .sort((left, right) => campaignOrderIndex.get(left.id) - campaignOrderIndex.get(right.id));
 
 export function vec(x = 0, y = 0) {
   return { x, y };
