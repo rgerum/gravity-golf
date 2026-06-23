@@ -44,6 +44,33 @@ import {
   stepBall,
   syncBallToAnchor,
 } from './game-core.js';
+import {
+  buildDailyShareText,
+  getLevelBest,
+  getLevelPar,
+  getMedalTally,
+  getParStreak,
+  medalEmoji,
+  medalLabel,
+  recordLevelResult,
+  recordParStreakResult,
+} from './progression.js';
+import { getSettings, onSettingsChange, updateSettings } from './settings.js';
+import { audio } from './audio.js';
+import {
+  considerRun,
+  createGhostPlayer,
+  createRunRecorder,
+  getBestRun,
+} from './ghost.js';
+import {
+  DAILY_HOLE_COUNT,
+  calculateDailyScore,
+  getDailyDateKey,
+  persistDailyProgress,
+  pickDailyLevelIndices,
+  readDailyProgress,
+} from './daily.js';
 
 const app = document.querySelector('#app');
 
@@ -63,6 +90,8 @@ app.innerHTML = `
                   <div class="hud-pills">
                     <span class="status-pill" id="runStatusPill">Shot 1 · Launch Pad</span>
                     <span class="status-pill" id="windowStatusPill">Window live</span>
+                    <span class="status-pill status-pill-par" id="parStatusPill">Par 1</span>
+                    <span class="status-pill status-pill-streak" id="streakPill" hidden>🔥 0</span>
                   </div>
                 </div>
                 <button id="worldMapButton" class="map-button" type="button" aria-label="Open world map" title="Open world map">
@@ -70,6 +99,12 @@ app.innerHTML = `
                     <path d="M9 18l-6 3V6l6-3 6 3 6-3v15l-6 3-6-3z" />
                     <path d="M9 3v15" />
                     <path d="M15 6v15" />
+                  </svg>
+                </button>
+                <button id="settingsButton" class="map-button" type="button" aria-label="Open settings" title="Open settings">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="12" cy="12" r="3.2" />
+                    <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.11-1.56 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.56-1.11 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.09a1.7 1.7 0 0 0 1.03-1.56V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.09a1.7 1.7 0 0 0 1.56 1.03H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1.03z" />
                   </svg>
                 </button>
               </div>
@@ -151,6 +186,100 @@ app.innerHTML = `
             <p class="tutorial-copy" id="tutorialCopy">Drag from the ball. Release to launch.</p>
           </div>
         </div>
+        <div class="slowmo-vignette" id="slowmoVignette" aria-hidden="true"></div>
+        <div class="flair-layer" id="flairLayer" aria-hidden="true"></div>
+        <div class="result-banner" id="resultBanner" hidden aria-live="polite">
+          <p class="result-banner-kicker" id="resultBannerKicker">Hole clear</p>
+          <h2 class="result-banner-title" id="resultBannerTitle">Par</h2>
+          <p class="result-banner-detail" id="resultBannerDetail"></p>
+        </div>
+        <div class="settings-modal" id="settingsModal" hidden>
+          <div class="settings-backdrop" id="settingsBackdrop"></div>
+          <div class="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+            <h2 id="settingsTitle">Mission Settings</h2>
+            <div class="settings-section">
+              <p class="settings-section-label">Audio</p>
+              <label class="settings-slider">
+                <span>Master <strong data-setting-value="masterVolume">80%</strong></span>
+                <input type="range" min="0" max="1" step="0.05" data-setting-range="masterVolume" />
+              </label>
+              <label class="settings-slider">
+                <span>Music <strong data-setting-value="musicVolume">50%</strong></span>
+                <input type="range" min="0" max="1" step="0.05" data-setting-range="musicVolume" />
+              </label>
+              <label class="settings-slider">
+                <span>Effects <strong data-setting-value="sfxVolume">90%</strong></span>
+                <input type="range" min="0" max="1" step="0.05" data-setting-range="sfxVolume" />
+              </label>
+              <div class="settings-choice" role="group" aria-label="Music mood">
+                <span class="settings-choice-label">Music mood</span>
+                <div class="settings-choice-options">
+                  <button type="button" data-setting-choice="musicMood" data-value="drift">Drift</button>
+                  <button type="button" data-setting-choice="musicMood" data-value="pulse">Pulse</button>
+                </div>
+              </div>
+            </div>
+            <div class="settings-section">
+              <p class="settings-section-label">Feel</p>
+              <div class="settings-choice" role="group" aria-label="Screen shake">
+                <span class="settings-choice-label">Screen shake</span>
+                <div class="settings-choice-options">
+                  <button type="button" data-setting-choice="screenShake" data-value="off">Off</button>
+                  <button type="button" data-setting-choice="screenShake" data-value="subtle">Subtle</button>
+                  <button type="button" data-setting-choice="screenShake" data-value="full">Full</button>
+                </div>
+              </div>
+              <div class="settings-choice" role="group" aria-label="Trail style">
+                <span class="settings-choice-label">Trail style</span>
+                <div class="settings-choice-options">
+                  <button type="button" data-setting-choice="trailStyle" data-value="comet">Comet</button>
+                  <button type="button" data-setting-choice="trailStyle" data-value="plasma">Plasma</button>
+                </div>
+              </div>
+              <div class="settings-choice" role="group" aria-label="Aim preview">
+                <span class="settings-choice-label">Aim preview</span>
+                <div class="settings-choice-options">
+                  <button type="button" data-setting-choice="aimPreview" data-value="off">Off</button>
+                  <button type="button" data-setting-choice="aimPreview" data-value="hint">Hint</button>
+                  <button type="button" data-setting-choice="aimPreview" data-value="full">Full</button>
+                </div>
+              </div>
+              <label class="settings-toggle">
+                <input type="checkbox" data-setting-toggle="flairEnabled" />
+                <span>Flair points for trick flying</span>
+              </label>
+              <label class="settings-toggle">
+                <input type="checkbox" data-setting-toggle="slowMoEnabled" />
+                <span>Near-miss slow motion</span>
+              </label>
+              <label class="settings-toggle">
+                <input type="checkbox" data-setting-toggle="ghostEnabled" />
+                <span>Best-run ghost replay</span>
+              </label>
+              <label class="settings-toggle">
+                <input type="checkbox" data-setting-toggle="reducedMotion" />
+                <span>Reduced motion</span>
+              </label>
+            </div>
+            <div class="settings-actions">
+              <button id="settingsCloseButton" class="hud-button hud-button-primary" type="button">Done</button>
+            </div>
+          </div>
+        </div>
+        <div class="settings-modal daily-modal" id="dailyModal" hidden>
+          <div class="settings-backdrop" id="dailyBackdrop"></div>
+          <div class="settings-panel daily-panel" role="dialog" aria-modal="true" aria-labelledby="dailyTitle">
+            <p class="settings-section-label" id="dailyKicker">Daily Orbit</p>
+            <h2 id="dailyTitle">Round complete</h2>
+            <div class="daily-holes" id="dailyHoles"></div>
+            <p class="daily-total" id="dailyTotal"></p>
+            <p class="daily-standings" id="dailyStandings"></p>
+            <div class="settings-actions daily-actions">
+              <button id="dailyShareButton" class="hud-button" type="button">Copy Share Card</button>
+              <button id="dailyCloseButton" class="hud-button hud-button-primary" type="button">Back to Campaign</button>
+            </div>
+          </div>
+        </div>
         <div class="game-over-modal" id="gameOverModal" hidden>
           <div class="game-over-backdrop"></div>
           <div class="game-over-panel" role="dialog" aria-modal="true" aria-labelledby="gameOverTitle">
@@ -186,9 +315,11 @@ app.innerHTML = `
               </svg>
               <div class="world-map-nodes" id="worldMapNodes"></div>
             </div>
+            <div class="world-map-medals" id="worldMapMedals" aria-label="Medals for this world"></div>
             <div class="world-map-actions">
               <button id="worldMapContinueButton" class="hud-button hud-button-primary" type="button">Enter Relay Reach</button>
               <button id="worldMapReplayButton" class="hud-button" type="button" hidden>Replay World</button>
+              <button id="worldMapDailyButton" class="hud-button hud-button-daily" type="button">Daily Orbit</button>
             </div>
           </div>
         </div>
@@ -204,6 +335,33 @@ const statusLine = document.querySelector('#statusLine');
 const statusHint = document.querySelector('#statusHint');
 const statusCard = document.querySelector('.status-card');
 const heatStatusPill = document.querySelector('#heatStatusPill');
+const parStatusPill = document.querySelector('#parStatusPill');
+const streakPill = document.querySelector('#streakPill');
+const slowmoVignette = document.querySelector('#slowmoVignette');
+const flairLayer = document.querySelector('#flairLayer');
+const resultBanner = document.querySelector('#resultBanner');
+const resultBannerKicker = document.querySelector('#resultBannerKicker');
+const resultBannerTitle = document.querySelector('#resultBannerTitle');
+const resultBannerDetail = document.querySelector('#resultBannerDetail');
+const settingsButton = document.querySelector('#settingsButton');
+const settingsModal = document.querySelector('#settingsModal');
+const settingsBackdrop = document.querySelector('#settingsBackdrop');
+const settingsCloseButton = document.querySelector('#settingsCloseButton');
+const settingsRangeInputs = [...document.querySelectorAll('[data-setting-range]')];
+const settingsValueNodes = [...document.querySelectorAll('[data-setting-value]')];
+const settingsChoiceButtons = [...document.querySelectorAll('[data-setting-choice]')];
+const settingsToggleInputs = [...document.querySelectorAll('[data-setting-toggle]')];
+const worldMapMedals = document.querySelector('#worldMapMedals');
+const worldMapDailyButton = document.querySelector('#worldMapDailyButton');
+const dailyModal = document.querySelector('#dailyModal');
+const dailyBackdrop = document.querySelector('#dailyBackdrop');
+const dailyKicker = document.querySelector('#dailyKicker');
+const dailyTitle = document.querySelector('#dailyTitle');
+const dailyHoles = document.querySelector('#dailyHoles');
+const dailyTotal = document.querySelector('#dailyTotal');
+const dailyStandings = document.querySelector('#dailyStandings');
+const dailyShareButton = document.querySelector('#dailyShareButton');
+const dailyCloseButton = document.querySelector('#dailyCloseButton');
 const runStatusPill = document.querySelector('#runStatusPill');
 const windowStatusPill = document.querySelector('#windowStatusPill');
 const timeSpeedSlider = document.querySelector('#timeSpeedSlider');
@@ -844,6 +1002,59 @@ const lastAttemptTrail = new THREE.Line(
 lastAttemptTrail.renderOrder = 8;
 world.add(lastAttemptTrail);
 
+const AIM_PREVIEW_MAX_POINTS = 110;
+const aimPreviewPositions = new Float32Array(AIM_PREVIEW_MAX_POINTS * 3);
+const aimPreviewColors = new Float32Array(AIM_PREVIEW_MAX_POINTS * 3);
+const aimPreviewGeometry = new THREE.BufferGeometry();
+aimPreviewGeometry.setAttribute('position', new THREE.BufferAttribute(aimPreviewPositions, 3));
+aimPreviewGeometry.setAttribute('color', new THREE.BufferAttribute(aimPreviewColors, 3));
+const aimPreviewPoints = new THREE.Points(
+  aimPreviewGeometry,
+  new THREE.PointsMaterial({
+    size: 4.2,
+    transparent: true,
+    opacity: 0.9,
+    vertexColors: true,
+    depthWrite: false,
+    depthTest: false,
+    blending: THREE.AdditiveBlending,
+    sizeAttenuation: false,
+  }),
+);
+aimPreviewPoints.visible = false;
+aimPreviewPoints.renderOrder = 12;
+world.add(aimPreviewPoints);
+let aimPreviewLevel = null;
+
+const ghostGroup = new THREE.Group();
+const ghostMesh = new THREE.Mesh(
+  new THREE.SphereGeometry(0.16, 22, 22),
+  new THREE.MeshBasicMaterial({
+    color: 0x9ed8ff,
+    transparent: true,
+    opacity: 0.34,
+    depthWrite: false,
+  }),
+);
+const ghostHalo = new THREE.Mesh(
+  new THREE.RingGeometry(0.2, 0.27, 36),
+  new THREE.MeshBasicMaterial({
+    color: 0x9ed8ff,
+    transparent: true,
+    opacity: 0.2,
+    side: THREE.DoubleSide,
+    depthTest: false,
+    depthWrite: false,
+  }),
+);
+ghostHalo.rotation.x = -Math.PI / 2;
+ghostHalo.position.y = 0.02;
+ghostGroup.add(ghostMesh);
+ghostGroup.add(ghostHalo);
+ghostGroup.visible = false;
+ghostGroup.renderOrder = 9;
+world.add(ghostGroup);
+
 const initialLevel = createLevelRuntime(0);
 const initialBall = createBallState(initialLevel);
 
@@ -903,6 +1114,36 @@ const state = {
   lastAttemptTrail: [],
   lastAttemptOutcome: '',
   bestApproach: null,
+  lastGoalResult: null,
+  settingsOpen: false,
+  ghost: {
+    recorder: null,
+    player: null,
+  },
+  daily: {
+    active: false,
+    modalOpen: false,
+    dateKey: null,
+    holeIndexes: [],
+    holeResults: [],
+    currentHole: 0,
+    completed: false,
+    standings: null,
+    resumeLevelIndex: null,
+  },
+  juice: {
+    slowMoTimer: 0,
+    slowMoDuration: 0,
+    lastSlowMoTime: -Infinity,
+    nearMissCooldowns: new Map(),
+    shakeAmplitude: 0,
+    warnPlayed: false,
+  },
+  flair: {
+    holePoints: 0,
+  },
+  lastMusicWorldIndex: null,
+  goalBursts: [],
   turretShot: null,
   adminMode: (() => {
     try {
@@ -959,6 +1200,7 @@ const state = {
     flightTime: 0,
   },
   levelStartStats: {
+    levelIndex: null,
     shots: 0,
     resets: 0,
   },
@@ -1396,8 +1638,6 @@ function syncWorldRunForLevel(level) {
       clearPersistedWorldRunStats();
     }
   }
-  state.levelStartStats.shots = state.shots;
-  state.levelStartStats.resets = state.resets;
 }
 
 function recordCompletedWorldLevelStats(completedLevelIndex) {
@@ -1699,6 +1939,30 @@ function syncWorldMap() {
     `;
   }).join('');
 
+  const worldLevelStart = selectedWorldIndex * WORLD_SIZE;
+  const worldLevelIds = LEVELS
+    .slice(worldLevelStart, worldLevelStart + WORLD_SIZE)
+    .map((level) => level.id);
+  if (selectedVisited) {
+    const tally = getMedalTally(worldLevelIds);
+    const slots = worldLevelIds.map((levelId, levelOffset) => {
+      const best = getLevelBest(levelId);
+      const title = best
+        ? `Hole ${levelOffset + 1} · best ${best.launches} (par ${best.par})`
+        : `Hole ${levelOffset + 1} · not cleared`;
+      return `<span class="world-map-medal ${best ? `is-${best.medal}` : 'is-empty'}" title="${title}">${best ? medalEmoji(best.medal) : ''}</span>`;
+    }).join('');
+    const tallyText = tally.cleared > 0
+      ? `${tally.ace > 0 ? `🌟${tally.ace} ` : ''}🥇${tally.gold} 🥈${tally.silver} 🥉${tally.bronze}`
+      : 'No medals yet — clear holes at par for gold.';
+    worldMapMedals.innerHTML = `
+      <div class="world-map-medal-row">${slots}</div>
+      <p class="world-map-medal-tally">${tallyText}</p>
+    `;
+  } else {
+    worldMapMedals.innerHTML = '';
+  }
+
   if (state.worldMap.renderKey !== renderKey) {
     state.worldMap.renderKey = renderKey;
     const animateStats = state.worldMap.animateStatsOnNextRender;
@@ -1754,6 +2018,9 @@ function continueFromWorldMap() {
 }
 
 function openWorldMapFromHud() {
+  if (state.daily.active) {
+    exitDailyRound();
+  }
   if (state.gameOver.open || state.goalCloseAnimation.active || state.vibeJam.entry || state.vibeJam.redirecting) {
     return;
   }
@@ -2639,7 +2906,14 @@ function createAnchoredPlaybackState(checkpoint, targetTime) {
   return cloneBallPlaybackState(anchoredState);
 }
 
-function configureRewindPlayback({
+function configureRewindPlayback(options) {
+  // Any rewind (undo or time slider) invalidates the ghost recording: time
+  // runs backwards, so the sampled run would splice two different attempts.
+  state.ghost.recorder = null;
+  return configureRewindPlaybackInternal(options);
+}
+
+function configureRewindPlaybackInternal({
   phase = 'before-launch',
   consumeHistory = true,
   checkpoint = null,
@@ -2899,6 +3173,7 @@ function finishUndo(checkpoint = state.undo.checkpoint) {
   }
 
   applyCheckpointState(checkpoint);
+  audio.stopLoop('rewind');
   state.undo.active = false;
   state.undo.checkpoint = null;
   state.undo.fromPosition = null;
@@ -2990,6 +3265,10 @@ function startUndo() {
     return;
   }
 
+  audio.stopAllLoops();
+  audio.play('undo');
+  audio.startLoop('rewind');
+  state.ghost.recorder = null;
   state.undo.active = true;
   state.undo.fromPosition = null;
   state.undo.toPosition = null;
@@ -3078,6 +3357,16 @@ function spawnBallTraceParticle(speed, trailDirection, lateral, reverse = false)
   const spread = (Math.random() - 0.5) * 0.22;
   const retreat = 0.1 + Math.random() * 0.26;
   const life = BALL_TRACE_PARTICLE_LIFETIME * (0.8 + Math.min(0.5, speed * 0.03));
+  if (getSettings().trailStyle === 'plasma') {
+    const speedT = clamp(speed / 11.8, 0, 1);
+    particle.r = 0.3 + speedT * 0.7;
+    particle.g = 0.85 - speedT * 0.4;
+    particle.b = 1.0;
+  } else {
+    particle.r = 1.0;
+    particle.g = 0.9;
+    particle.b = 0.66;
+  }
   const virtualDriftSpeed = 0.22 + speed * 0.026;
   const anticipation = reverse
     ? Math.max(PHYSICS_STEP * 2, Math.random() * life)
@@ -3180,15 +3469,18 @@ function updateBallTrace(delta) {
     ballTraceStreakPositions[streakOffset + 4] = 0.08 + (1 - lifeT) * 0.04;
     ballTraceStreakPositions[streakOffset + 5] = particle.y + directionY * streakLength;
     const brightness = 0.72 + lifeT * 0.28;
-    ballTraceColors[colorOffset] = 1.0 * brightness;
-    ballTraceColors[colorOffset + 1] = 0.9 * brightness;
-    ballTraceColors[colorOffset + 2] = 0.66 * brightness;
-    ballTraceStreakColors[streakOffset] = 1.0 * brightness;
-    ballTraceStreakColors[streakOffset + 1] = 0.88 * brightness;
-    ballTraceStreakColors[streakOffset + 2] = 0.64 * brightness;
-    ballTraceStreakColors[streakOffset + 3] = 0.45 * brightness;
-    ballTraceStreakColors[streakOffset + 4] = 0.36 * brightness;
-    ballTraceStreakColors[streakOffset + 5] = 0.2 * brightness;
+    const particleR = particle.r ?? 1.0;
+    const particleG = particle.g ?? 0.9;
+    const particleB = particle.b ?? 0.66;
+    ballTraceColors[colorOffset] = particleR * brightness;
+    ballTraceColors[colorOffset + 1] = particleG * brightness;
+    ballTraceColors[colorOffset + 2] = particleB * brightness;
+    ballTraceStreakColors[streakOffset] = particleR * brightness;
+    ballTraceStreakColors[streakOffset + 1] = particleG * 0.98 * brightness;
+    ballTraceStreakColors[streakOffset + 2] = particleB * 0.97 * brightness;
+    ballTraceStreakColors[streakOffset + 3] = particleR * 0.45 * brightness;
+    ballTraceStreakColors[streakOffset + 4] = particleG * 0.4 * brightness;
+    ballTraceStreakColors[streakOffset + 5] = particleB * 0.3 * brightness;
     anyActive = true;
   }
 
@@ -4640,6 +4932,187 @@ function clearPlanetExplosions() {
     planetExplosionRoot.remove(explosion.group);
   });
   state.planetExplosions = [];
+}
+
+function getShakeStrengthScale() {
+  const settings = getSettings();
+  if (settings.reducedMotion || settings.screenShake === 'off') {
+    return 0;
+  }
+  return settings.screenShake === 'full' ? 1 : 0.45;
+}
+
+function triggerScreenShake(intensity) {
+  const scaled = intensity * getShakeStrengthScale();
+  state.juice.shakeAmplitude = Math.max(state.juice.shakeAmplitude, scaled);
+}
+
+function updateScreenShake(delta) {
+  const amplitude = state.juice.shakeAmplitude;
+  if (amplitude <= 0.001) {
+    state.juice.shakeAmplitude = 0;
+    world.position.x = 0;
+    world.position.z = 0;
+    return;
+  }
+  world.position.x = (Math.random() - 0.5) * amplitude * 0.34;
+  world.position.z = (Math.random() - 0.5) * amplitude * 0.34;
+  state.juice.shakeAmplitude = amplitude * Math.exp(-7.5 * delta);
+}
+
+const SHAKE_BY_CRASH_KIND = {
+  sun: 1.0,
+  pulsar: 0.9,
+  turret: 0.8,
+  asteroid: 0.8,
+  lava: 0.7,
+  planet: 0.5,
+  bounds: 0.2,
+};
+
+function spawnGoalBurst() {
+  if (getSettings().reducedMotion) {
+    return;
+  }
+  const center = state.level.goalCenter;
+  const rings = [];
+  for (let ringIndex = 0; ringIndex < 3; ringIndex += 1) {
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(0.34, 0.4, 56),
+      new THREE.MeshBasicMaterial({
+        color: ringIndex === 1 ? 0x7df3d9 : 0xbfe8ff,
+        transparent: true,
+        opacity: 0,
+        side: THREE.DoubleSide,
+        depthTest: false,
+        depthWrite: false,
+      }),
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(center.x, 0.2 + ringIndex * 0.004, center.y);
+    ring.renderOrder = 14;
+    world.add(ring);
+    rings.push({ mesh: ring, delay: ringIndex * 0.12 });
+  }
+  state.goalBursts.push({ rings, age: 0, life: 1.05 });
+}
+
+function updateGoalBursts(delta) {
+  for (let index = state.goalBursts.length - 1; index >= 0; index -= 1) {
+    const burst = state.goalBursts[index];
+    burst.age += delta;
+    burst.rings.forEach((ring) => {
+      const t = clamp((burst.age - ring.delay) / (burst.life - ring.delay * 0.5), 0, 1);
+      ring.mesh.scale.setScalar(1 + t * 7.5);
+      ring.mesh.material.opacity = t <= 0 ? 0 : 0.66 * (1 - t);
+    });
+    if (burst.age >= burst.life) {
+      burst.rings.forEach((ring) => {
+        world.remove(ring.mesh);
+        ring.mesh.geometry.dispose();
+        ring.mesh.material.dispose();
+      });
+      state.goalBursts.splice(index, 1);
+    }
+  }
+}
+
+const NEAR_MISS_SURFACE_DISTANCE = 0.42;
+const NEAR_MISS_MIN_SPEED = 4.2;
+const NEAR_MISS_COOLDOWN_SECONDS = 1.6;
+const SLOW_MO_GLOBAL_COOLDOWN_SECONDS = 2.4;
+const SLOW_MO_DURATION_SECONDS = 0.72;
+
+// 0..1 — how deep into bullet time we are. Eases in fast, holds, eases out,
+// so the time dip reads as deliberate instead of a frame hitch.
+function getSlowMoDepth() {
+  const remaining = state.juice.slowMoTimer;
+  if (remaining <= 0 || state.juice.slowMoDuration <= 0) {
+    return 0;
+  }
+  const elapsed = state.juice.slowMoDuration - remaining;
+  const easeIn = clamp(elapsed / 0.09, 0, 1);
+  const easeOut = clamp(remaining / 0.22, 0, 1);
+  const edge = Math.min(easeIn, easeOut);
+  return edge * edge * (3 - 2 * edge);
+}
+
+function getSlowMoTimeScale() {
+  return 1 - getSlowMoDepth() * 0.66;
+}
+
+function maybeTriggerNearMiss() {
+  const settings = getSettings();
+  if (state.adminReplay.active) {
+    return;
+  }
+  const speed = length(state.ball.velocity);
+  if (speed < NEAR_MISS_MIN_SPEED) {
+    return;
+  }
+  const now = state.ball.time ?? state.level.time ?? 0;
+  for (let planetIndex = 0; planetIndex < state.level.planets.length; planetIndex += 1) {
+    if (planetIndex === state.ball.launchGracePlanetIndex) {
+      continue;
+    }
+    const planet = state.level.planets[planetIndex];
+    if (planet.collapseState === 'consumed' || planet.active === false) {
+      continue;
+    }
+    const surfaceDistance = distanceBetween(state.ball.position, planet.position)
+      - planet.radius - COURSE.ballRadius;
+    if (surfaceDistance > NEAR_MISS_SURFACE_DISTANCE) {
+      continue;
+    }
+    const lastTrigger = state.juice.nearMissCooldowns.get(planetIndex) ?? -Infinity;
+    if (now - lastTrigger < NEAR_MISS_COOLDOWN_SECONDS) {
+      continue;
+    }
+    state.juice.nearMissCooldowns.set(planetIndex, now);
+    addFlair(15, 'Gravity Kiss');
+    audio.play('nearmiss', { speed: clamp(speed / 11.8, 0, 1) });
+    if (
+      settings.slowMoEnabled
+      && !settings.reducedMotion
+      && now - state.juice.lastSlowMoTime >= SLOW_MO_GLOBAL_COOLDOWN_SECONDS
+    ) {
+      state.juice.lastSlowMoTime = now;
+      state.juice.slowMoTimer = SLOW_MO_DURATION_SECONDS;
+      state.juice.slowMoDuration = SLOW_MO_DURATION_SECONDS;
+      audio.play('slowmo');
+    }
+    return;
+  }
+}
+
+function worldToScreenPoint(x, y) {
+  const projected = new THREE.Vector3(x, 0.2, y);
+  world.localToWorld(projected);
+  projected.project(camera);
+  const rect = renderer.domElement.getBoundingClientRect();
+  return {
+    left: (projected.x * 0.5 + 0.5) * rect.width,
+    top: (-projected.y * 0.5 + 0.5) * rect.height,
+  };
+}
+
+function spawnFlairPopup(text) {
+  const point = worldToScreenPoint(state.ball.position.x, state.ball.position.y);
+  const popup = document.createElement('span');
+  popup.className = 'flair-popup';
+  popup.textContent = text;
+  popup.style.left = `${point.left}px`;
+  popup.style.top = `${point.top}px`;
+  flairLayer.appendChild(popup);
+  window.setTimeout(() => popup.remove(), 1300);
+}
+
+function addFlair(points, label) {
+  if (!getSettings().flairEnabled) {
+    return;
+  }
+  state.flair.holePoints += points;
+  spawnFlairPopup(`${label} +${points}`);
 }
 
 function spawnSunShockwave(strength = 1) {
@@ -6344,10 +6817,19 @@ function applyLevel(index) {
   hideGameOverModal();
   hideGoalCloseAnimation();
   state.levelIndex = index % LEVELS.length;
-  persistLastLevelIndex(state.levelIndex);
+  if (!state.daily.active) {
+    persistLastLevelIndex(state.levelIndex);
+  }
   state.level = createLevelRuntime(state.levelIndex);
   state.controlShots = createControlShots(state.level);
-  syncWorldRunForLevel(state.level);
+  if (!state.daily.active) {
+    syncWorldRunForLevel(state.level);
+  }
+  if (state.levelStartStats.levelIndex !== state.levelIndex) {
+    state.levelStartStats.levelIndex = state.levelIndex;
+    state.levelStartStats.shots = state.shots;
+    state.levelStartStats.resets = state.resets;
+  }
   state.adminSolutionIndex = 0;
   clearAttemptMemory();
   clearUndoCheckpoints();
@@ -6359,11 +6841,18 @@ function applyLevel(index) {
   updateSunVisual();
   goalGroup.position.set(state.level.goalCenter.x, 0.06, state.level.goalCenter.y);
 
-  syncLevelQueryParam(state.levelIndex);
+  if (!state.daily.active) {
+    syncLevelQueryParam(state.levelIndex);
+  }
   syncActionButtons();
 
-  levelKicker.textContent = `World ${state.level.worldNumber} · ${state.level.worldName}`;
-  levelLabel.textContent = `Level ${state.levelIndex + 1} / ${LEVELS.length}`;
+  if (state.daily.active) {
+    levelKicker.textContent = `Daily Orbit · ${state.daily.dateKey}`;
+    levelLabel.textContent = `Hole ${state.daily.currentHole + 1} / ${DAILY_HOLE_COUNT}`;
+  } else {
+    levelKicker.textContent = `World ${state.level.worldNumber} · ${state.level.worldName}`;
+    levelLabel.textContent = `Level ${state.levelIndex + 1} / ${LEVELS.length}`;
+  }
   levelName.textContent = state.level.name;
   rebuildGravityField();
   lastGravityFieldRefreshTime = state.level.time ?? 0;
@@ -6374,6 +6863,15 @@ function applyLevel(index) {
   rebuildAsteroids();
   rebuildMeteors();
   rebuildPlanets();
+
+  // Independent runtime clone for aim-preview simulation: stepBall mutates
+  // level time and hazard flags, so the live level can't be reused.
+  aimPreviewLevel = createLevelRuntime(state.levelIndex);
+
+  if (audio.isUnlocked() && state.lastMusicWorldIndex !== state.level.worldIndex) {
+    state.lastMusicWorldIndex = state.level.worldIndex;
+    audio.startMusic(state.level.worldIndex);
+  }
 }
 
 function syncHud() {
@@ -6392,6 +6890,15 @@ function syncHud() {
   );
   const shownPower = state.dragActive ? state.dragPower : getControlShot().power;
   powerFill.style.transform = `scaleX(${Math.max(0.04, shownPower / MAX_DRAG_DISTANCE)})`;
+  const levelPar = getLevelPar(state.level);
+  const levelBest = getLevelBest(state.level.id);
+  parStatusPill.textContent = levelBest
+    ? `Par ${levelPar} · Best ${levelBest.launches} ${medalEmoji(levelBest.medal)}`
+    : `Par ${levelPar}`;
+  parStatusPill.classList.toggle('is-medal', Boolean(levelBest));
+  const parStreak = getParStreak();
+  streakPill.hidden = parStreak.current < 2;
+  streakPill.textContent = `🔥 ${parStreak.current}`;
   heatStatusPill.textContent = getHeatStatusText();
   heatStatusPill.classList.toggle('is-hot', getBallHeatRatio(state.ball) > 0.18);
   heatStatusPill.classList.toggle('is-danger', Boolean(getAnchoredLavaPlanet()));
@@ -6401,6 +6908,46 @@ function syncHud() {
   syncTutorialOverlay();
   syncGameOverModal();
   syncWorldMap();
+}
+
+let resultBannerTimeout = 0;
+let resultBannerHideTimeout = 0;
+
+function showResultBanner(result) {
+  window.clearTimeout(resultBannerTimeout);
+  window.clearTimeout(resultBannerHideTimeout);
+  resultBanner.className = `result-banner is-${result.medal}`;
+  resultBanner.hidden = false;
+  resultBannerKicker.textContent = `${state.level.worldName} · Hole ${state.level.worldLevelNumber}`;
+  resultBannerTitle.textContent = result.golfName;
+  const detailParts = [
+    `${medalEmoji(result.medal)} ${medalLabel(result.medal)}`,
+    `Par ${result.par}`,
+    `${result.launches} launch${result.launches === 1 ? '' : 'es'}`,
+  ];
+  if (result.firstClear) {
+    detailParts.push('First clear');
+  } else if (result.improved) {
+    detailParts.push('New best');
+  }
+  if (result.flairPoints > 0) {
+    detailParts.push(`Flair +${result.flairPoints}`);
+  }
+  if (result.streak >= 2) {
+    detailParts.push(`🔥 ${result.streak} streak`);
+  }
+  resultBannerDetail.textContent = detailParts.join(' · ');
+  window.requestAnimationFrame(() => resultBanner.classList.add('is-visible'));
+  resultBannerTimeout = window.setTimeout(hideResultBanner, 3400);
+}
+
+function hideResultBanner() {
+  window.clearTimeout(resultBannerTimeout);
+  window.clearTimeout(resultBannerHideTimeout);
+  resultBanner.classList.remove('is-visible');
+  resultBannerHideTimeout = window.setTimeout(() => {
+    resultBanner.hidden = true;
+  }, 420);
 }
 
 function getActiveTutorial() {
@@ -6427,6 +6974,118 @@ function syncTutorialOverlay() {
   }
 
   tutorialCopy.textContent = tutorial.copy;
+}
+
+function updateAimPreview() {
+  const mode = getSettings().aimPreview;
+  const active = mode !== 'off'
+    && state.dragActive
+    && state.dragPower > 0.14
+    && !ballIsMoving()
+    && !state.adminReplay.active
+    && aimPreviewLevel;
+  if (!active) {
+    aimPreviewPoints.visible = false;
+    return;
+  }
+
+  const startTime = state.ball.time ?? state.level.time ?? 0;
+  setLevelTime(aimPreviewLevel, startTime);
+  const launchPlanetIndex = state.ball.anchorPlanetIndex;
+  const direction = constrainLaunchDirection(state.aimDirection, state.dragPower);
+  const relativeVelocity = launchVelocity(direction, state.dragPower);
+  const bodyVelocity = launchPlanetIndex !== null
+    ? getPlanetVelocity(aimPreviewLevel, launchPlanetIndex, startTime)
+    : { x: 0, y: 0 };
+  const surfaceVelocity = launchPlanetIndex !== null
+    ? getPlanetSurfaceVelocity(aimPreviewLevel, launchPlanetIndex, state.ball.anchorNormal, state.ball)
+    : { x: 0, y: 0 };
+  const previewBall = {
+    position: cloneVec(state.ball.position),
+    velocity: {
+      x: relativeVelocity.x + bodyVelocity.x + surfaceVelocity.x,
+      y: relativeVelocity.y + bodyVelocity.y + surfaceVelocity.y,
+    },
+    time: startTime,
+    landingCount: state.ball.landingCount ?? 0,
+    launchGracePlanetIndex: launchPlanetIndex,
+    anchorPlanetIndex: null,
+    anchorNormal: null,
+    anchorSinceTime: startTime,
+    portalCooldown: 0,
+    heat: state.ball.heat ?? 0,
+  };
+
+  const horizonSeconds = mode === 'full' ? 3.0 : 1.05;
+  const step = 1 / 60;
+  const totalSteps = Math.floor(horizonSeconds / step);
+  let pointCount = 0;
+  for (let stepIndex = 0; stepIndex < totalSteps && pointCount < AIM_PREVIEW_MAX_POINTS; stepIndex += 1) {
+    const result = stepBall(aimPreviewLevel, previewBall, step);
+    if (stepIndex % 2 === 0) {
+      const offset = pointCount * 3;
+      aimPreviewPositions[offset] = previewBall.position.x;
+      aimPreviewPositions[offset + 1] = 0.1;
+      aimPreviewPositions[offset + 2] = previewBall.position.y;
+      pointCount += 1;
+    }
+    if (result.type === 'goal' || result.type === 'landed' || result.type === 'crash' || result.type === 'settled') {
+      break;
+    }
+  }
+
+  for (let pointIndex = 0; pointIndex < pointCount; pointIndex += 1) {
+    const offset = pointIndex * 3;
+    const progress = pointIndex / Math.max(1, pointCount - 1);
+    // Additive blending: fading to black fades the dot out.
+    const fade = mode === 'full'
+      ? 1 - progress * 0.72
+      : Math.max(0, 1 - progress * 1.25);
+    aimPreviewColors[offset] = 0.5 * fade;
+    aimPreviewColors[offset + 1] = 0.82 * fade;
+    aimPreviewColors[offset + 2] = 1.0 * fade;
+  }
+
+  aimPreviewGeometry.setDrawRange(0, pointCount);
+  aimPreviewGeometry.attributes.position.needsUpdate = true;
+  aimPreviewGeometry.attributes.color.needsUpdate = true;
+  aimPreviewPoints.visible = pointCount > 1;
+}
+
+function getGhostTime() {
+  return (state.ball.time ?? state.level.time ?? 0) - (state.level.startTimeSeconds ?? 0);
+}
+
+function recordGhostSample() {
+  state.ghost.recorder?.addSample(getGhostTime(), state.ball.position.x, state.ball.position.y);
+}
+
+function refreshGhostPlayer() {
+  const best = getSettings().ghostEnabled ? getBestRun(state.level.id) : null;
+  state.ghost.player = best ? createGhostPlayer(best) : null;
+  if (!state.ghost.player) {
+    ghostGroup.visible = false;
+  }
+}
+
+function updateGhostVisual() {
+  const player = state.ghost.player;
+  if (!player || state.worldMap.open || state.ball.goaling) {
+    ghostGroup.visible = false;
+    return;
+  }
+  const ghostTime = getGhostTime();
+  if (ghostTime <= 0.01 || ghostTime > player.duration) {
+    ghostGroup.visible = false;
+    return;
+  }
+  const position = player.positionAt(ghostTime);
+  if (!position) {
+    ghostGroup.visible = false;
+    return;
+  }
+  ghostGroup.visible = true;
+  ghostGroup.position.set(position.x, ballRestY, position.y);
 }
 
 function resetBall(message, hint, options = {}) {
@@ -6487,11 +7146,22 @@ function resetBall(message, hint, options = {}) {
   state.roundSettled = true;
   state.relayPulse = 0;
   state.turretShot = null;
+  state.juice.slowMoTimer = 0;
+  state.juice.slowMoDuration = 0;
+  state.juice.lastSlowMoTime = -Infinity;
+  state.juice.warnPlayed = false;
+  state.juice.nearMissCooldowns.clear();
+  state.flair.holePoints = 0;
+  audio.stopAllLoops();
+  audio.setMusicIntensity(0.35);
   resetBallTrace();
   clearSunShockwaves();
   clearPlanetExplosions();
   resetBallRenderState();
   seedFlightHistoryFromCurrentState();
+  state.ghost.recorder = createRunRecorder(state.level.id);
+  state.ghost.recorder.addSample(0, state.ball.position.x, state.ball.position.y);
+  refreshGhostPlayer();
   state.message = message;
   state.hint = hint;
   lastGoalTimerFraction = Number.NaN;
@@ -6499,6 +7169,7 @@ function resetBall(message, hint, options = {}) {
 }
 
 function beginGoal(result = null) {
+  const goalEntrySpeed = length(state.ball.velocity);
   hideGameOverModal();
   hideGoalCloseAnimation();
   finalizeFlightHistory('goal', result?.eventState ?? null, result?.displayEventState ?? null);
@@ -6511,7 +7182,44 @@ function beginGoal(result = null) {
   state.ball.velocity.y = 0;
   state.relayPulse = 0;
   state.turretShot = null;
-  state.message = 'Event horizon captured.';
+  const par = getLevelPar(state.level);
+  const launches = Math.max(1, state.shots - state.levelStartStats.shots);
+  const retries = Math.max(0, state.resets - state.levelStartStats.resets);
+  const flightTime = Math.max(
+    0,
+    (state.ball.time ?? state.level.time ?? 0) - (state.level.startTimeSeconds ?? 0),
+  );
+  if (goalEntrySpeed > 6.4) {
+    addFlair(30, 'Hot Finish');
+  }
+  const golfResult = recordLevelResult(state.level.id, { par, launches, retries, flightTime });
+  const streak = recordParStreakResult(golfResult.diff);
+  if (state.ghost.recorder) {
+    recordGhostSample();
+    const ghostRun = state.ghost.recorder.finalize({ launches, flightTime });
+    considerRun(state.level.id, ghostRun);
+    state.ghost.recorder = null;
+  }
+  state.lastGoalResult = {
+    ...golfResult,
+    par,
+    launches,
+    retries,
+    flightTime,
+    levelId: state.level.id,
+    levelIndex: state.levelIndex,
+    flairPoints: getSettings().flairEnabled ? state.flair.holePoints : 0,
+    streak: streak.current,
+  };
+  showResultBanner(state.lastGoalResult);
+  spawnGoalBurst();
+  triggerScreenShake(0.22);
+  audio.stopAllLoops();
+  audio.play('goal');
+  const medalTier = state.lastGoalResult.medal;
+  window.setTimeout(() => audio.play('medal', { tier: medalTier }), 420);
+  audio.setMusicIntensity(0.35);
+  state.message = `${golfResult.golfName}! Event horizon captured.`;
   state.hint = 'Course clear. Loading the next route.';
   syncHud();
 }
@@ -6557,6 +7265,20 @@ function beginCrash(
   state.ball.velocity.x = 0;
   state.ball.velocity.y = 0;
   state.relayPulse = 0;
+  triggerScreenShake(SHAKE_BY_CRASH_KIND[crashKind] ?? 0.35);
+  audio.stopAllLoops();
+  audio.play(
+    crashKind === 'sun' || crashKind === 'lava'
+      ? 'crash-sun'
+      : crashKind === 'pulsar'
+        ? 'crash-pulsar'
+        : crashKind === 'turret'
+          ? 'crash-turret'
+          : crashKind === 'asteroid'
+            ? 'crash-meteor'
+            : 'crash-planet',
+  );
+  audio.setMusicIntensity(0.2);
   if (crashKind === 'turret' && crashDetails?.turret && crashPlanet) {
     const lineState = getTurretLineState(crashPlanet, crashDetails.turret, state.ball.time ?? state.level.time ?? 0);
     state.turretShot = {
@@ -6594,11 +7316,19 @@ function beginLanding(result) {
   state.roundSettled = true;
   state.relayPulse = 1;
   resetBallRenderState();
+  audio.stopLoop('flight');
+  audio.play('land', { speed: 0.6 });
+  audio.setMusicIntensity(0.5);
   const landedPlanet = result.planetIndex !== null && result.planetIndex !== undefined
     ? state.level.planets[result.planetIndex]
     : null;
   const iceLockRemaining = landedPlanet ? getIceLaunchLockRemaining(landedPlanet, state.ball) : 0;
   const lavaPlanet = landedPlanet?.surfaceType === 'lava' ? landedPlanet : null;
+  if (lavaPlanet) {
+    audio.startLoop('lava');
+  } else if (landedPlanet?.surfaceType === 'ice') {
+    audio.startLoop('ice');
+  }
   if (result.goalUnlocked) {
     state.message = 'Monolith awakened.';
     state.hint = `Black hole open for ${state.level.goalOpenSeconds.toFixed(1)}s.`;
@@ -6806,6 +7536,12 @@ function launchShot(direction, power, anchor) {
   state.ball.landedPlanetName = '';
   state.currentFlightLaunchState = cloneBallPlaybackState(state.ball);
   state.shots += 1;
+  audio.stopLoop('drag');
+  audio.stopLoop('lava');
+  audio.stopLoop('ice');
+  audio.play('launch', { power: Math.min(1, power / MAX_DRAG_DISTANCE) });
+  audio.startLoop('flight', { speed: 0.4, gravity: 0 });
+  audio.setMusicIntensity(1);
   beginAttemptTrail();
   state.dragActive = false;
   state.dragPower = 0;
@@ -6821,6 +7557,8 @@ function launchShot(direction, power, anchor) {
 function onPointerDown(event) {
   if (
     state.worldMap.open
+    || state.settingsOpen
+    || state.daily.modalOpen
     || state.gameOver.open
     || state.goalCloseAnimation.active
     || ballIsMoving()
@@ -6835,6 +7573,7 @@ function onPointerDown(event) {
   setVec(state.dragStartWorld, point);
   setVec(state.dragPointerWorld, point);
   renderer.domElement.setPointerCapture(event.pointerId);
+  audio.startLoop('drag', { power: 0 });
   updateDragState(point);
   const slidingIcePlanet = getAnchoredIcePlanet();
   if (slidingIcePlanet && isLaunchLockedByIce()) {
@@ -6856,6 +7595,7 @@ function onPointerMove(event) {
   const point = getWorldPointFromEvent(event);
   setVec(state.dragPointerWorld, point);
   updateDragState(point);
+  audio.setLoopParams('drag', { power: Math.min(1, state.dragPower / MAX_DRAG_DISTANCE) });
   if (isLaunchLockedByIce()) {
     const remaining = getIceLaunchLockRemaining(getAnchoredIcePlanet());
     state.message = 'Aim while the ball settles.';
@@ -6879,6 +7619,7 @@ function onPointerUp(event) {
       const remaining = getIceLaunchLockRemaining(getAnchoredIcePlanet());
       state.dragActive = false;
       state.dragPower = 0;
+      audio.stopLoop('drag');
       setVec(state.dragAnchor, state.ball.position);
       setVec(state.dragStartWorld, state.ball.position);
       state.message = 'Ball still sliding.';
@@ -6892,6 +7633,7 @@ function onPointerUp(event) {
 
   state.dragActive = false;
   state.dragPower = 0;
+  audio.stopLoop('drag');
   setVec(state.dragAnchor, state.ball.position);
   setVec(state.dragStartWorld, state.ball.position);
   state.message = 'Launch cancelled.';
@@ -6963,6 +7705,298 @@ debugTuningInputs.forEach((input) => {
   });
 });
 
+function getDailyProgressSnapshot() {
+  return {
+    dateKey: state.daily.dateKey,
+    holeIndexes: state.daily.holeIndexes,
+    holeResults: state.daily.holeResults,
+    currentHole: state.daily.currentHole,
+    completed: state.daily.completed,
+  };
+}
+
+function getDailyTotals() {
+  return state.daily.holeResults.reduce((totals, hole) => ({
+    launches: totals.launches + (hole?.launches ?? 0),
+    retries: totals.retries + (hole?.retries ?? 0),
+    relays: totals.relays + (hole?.relays ?? 0),
+    flightTime: totals.flightTime + (hole?.flightTime ?? 0),
+    par: totals.par + (hole?.par ?? 0),
+  }), { launches: 0, retries: 0, relays: 0, flightTime: 0, par: 0 });
+}
+
+function startDailyRound() {
+  const dateKey = getDailyDateKey();
+  const stored = readDailyProgress(dateKey);
+  const storedIndexesValid = Array.isArray(stored?.holeIndexes)
+    && stored.holeIndexes.length === DAILY_HOLE_COUNT
+    && stored.holeIndexes.every((levelIndex) => (
+      Number.isInteger(levelIndex) && levelIndex >= 0 && levelIndex < LEVELS.length
+    ));
+  state.daily.dateKey = dateKey;
+  state.daily.holeIndexes = storedIndexesValid
+    ? stored.holeIndexes
+    : pickDailyLevelIndices(dateKey, LEVELS.length, WORLD_SIZE);
+  state.daily.holeResults = storedIndexesValid ? (stored?.holeResults ?? []) : [];
+  state.daily.currentHole = storedIndexesValid
+    ? Math.min(stored?.currentHole ?? 0, DAILY_HOLE_COUNT - 1)
+    : 0;
+  state.daily.completed = storedIndexesValid && Boolean(stored?.completed);
+  state.daily.standings = null;
+  state.daily.resumeLevelIndex = clamp(
+    state.worldMap.open ? state.worldMap.nextLevelIndex : state.levelIndex,
+    0,
+    LEVELS.length - 1,
+  );
+  state.daily.active = true;
+  hideWorldMap();
+  if (state.daily.completed) {
+    openDailyResults(false);
+    return;
+  }
+  state.daily.modalOpen = false;
+  state.levelIndex = state.daily.holeIndexes[state.daily.currentHole];
+  resetBall(
+    `Daily Orbit: hole ${state.daily.currentHole + 1} of ${DAILY_HOLE_COUNT}.`,
+    'Three holes, one scorecard. Lowest score wins.',
+  );
+}
+
+function handleDailyHoleComplete() {
+  const result = state.lastGoalResult ?? {};
+  state.daily.holeResults[state.daily.currentHole] = {
+    levelIndex: state.levelIndex,
+    name: state.level.name,
+    par: result.par ?? getLevelPar(state.level),
+    launches: result.launches ?? 1,
+    retries: result.retries ?? 0,
+    relays: Math.max(0, state.ball.landingCount ?? 0),
+    flightTime: result.flightTime ?? 0,
+  };
+  if (state.daily.currentHole + 1 < DAILY_HOLE_COUNT) {
+    state.daily.currentHole += 1;
+    persistDailyProgress(getDailyProgressSnapshot());
+    state.levelIndex = state.daily.holeIndexes[state.daily.currentHole];
+    resetBall(
+      `Daily Orbit: hole ${state.daily.currentHole + 1} of ${DAILY_HOLE_COUNT}.`,
+      'Keep the card clean.',
+    );
+    return;
+  }
+  state.daily.completed = true;
+  persistDailyProgress(getDailyProgressSnapshot());
+  openDailyResults(true);
+}
+
+function renderDailyResults(standingsText) {
+  const totals = getDailyTotals();
+  const diff = totals.launches - totals.par;
+  dailyKicker.textContent = `Daily Orbit · ${state.daily.dateKey}`;
+  dailyTitle.textContent = diff === 0
+    ? 'Even par round'
+    : diff < 0
+      ? `${-diff} under par`
+      : `${diff} over par`;
+  dailyHoles.innerHTML = state.daily.holeResults.map((hole, holeIndex) => `
+    <div class="daily-hole-row">
+      <span>Hole ${holeIndex + 1} · ${hole?.name ?? '—'}</span>
+      <span>par ${hole?.par ?? '—'} · ${hole?.launches ?? '—'} launch${(hole?.launches ?? 0) === 1 ? '' : 'es'}</span>
+    </div>
+  `).join('');
+  dailyTotal.textContent = `${totals.launches} launches (par ${totals.par}) · ${totals.retries} retries · ${totals.flightTime.toFixed(1)}s flight · score ${calculateDailyScore(totals)}`;
+  dailyStandings.textContent = standingsText;
+}
+
+function openDailyResults(justFinished) {
+  state.daily.modalOpen = true;
+  renderDailyResults('Checking community standings…');
+  dailyModal.hidden = false;
+  window.requestAnimationFrame(() => dailyModal.classList.add('is-visible'));
+  syncDailyStandings(justFinished);
+}
+
+async function syncDailyStandings(submit) {
+  const client = getCommunityStatsClient();
+  const totals = getDailyTotals();
+  if (!client) {
+    dailyStandings.textContent = 'Community standings unavailable offline.';
+    return;
+  }
+  try {
+    const standings = submit
+      ? await client.mutation('dailyStats:submitDailyResult', {
+        dateKey: state.daily.dateKey,
+        clientRunId: getCommunityRunId(),
+        launches: totals.launches,
+        retries: totals.retries,
+        relays: totals.relays,
+        flightTime: totals.flightTime,
+      })
+      : await client.query('dailyStats:getDailyStandings', {
+        dateKey: state.daily.dateKey,
+        score: calculateDailyScore(totals),
+      });
+    state.daily.standings = standings;
+    if (!state.daily.modalOpen) {
+      return;
+    }
+    if (standings?.rank !== null && standings?.rank !== undefined) {
+      const beatText = standings.percentile !== null && standings.percentile !== undefined
+        ? ` · beat ${standings.percentile}% of pilots`
+        : '';
+      dailyStandings.textContent = `Rank #${standings.rank} of ${standings.sampleCount} today${beatText}`;
+    } else {
+      dailyStandings.textContent = `Recorded. Standings unlock at ${standings?.minSampleCount ?? 5} pilots (${standings?.sampleCount ?? 0} so far today).`;
+    }
+  } catch {
+    if (state.daily.modalOpen) {
+      dailyStandings.textContent = 'Standings unavailable right now.';
+    }
+  }
+}
+
+function exitDailyRound() {
+  if (!state.daily.active) {
+    return;
+  }
+  state.daily.active = false;
+  state.daily.modalOpen = false;
+  dailyModal.classList.remove('is-visible');
+  dailyModal.hidden = true;
+  const resumeIndex = state.daily.resumeLevelIndex ?? readLastLevelIndex();
+  state.levelIndex = resumeIndex;
+  resetBall(
+    `Level ${resumeIndex + 1}: ${LEVELS[resumeIndex].name}.`,
+    LEVELS[resumeIndex].summary,
+  );
+}
+
+async function copyDailyShareCard() {
+  const totals = getDailyTotals();
+  const shareText = buildDailyShareText({
+    dateKey: state.daily.dateKey,
+    holes: state.daily.holeResults.map((hole) => ({
+      par: hole?.par ?? 0,
+      launches: hole?.launches ?? 0,
+    })),
+    totalLaunches: totals.launches,
+    totalPar: totals.par,
+    percentile: state.daily.standings?.percentile ?? null,
+    rank: state.daily.standings?.rank ?? null,
+  });
+  try {
+    await navigator.clipboard.writeText(shareText);
+    dailyShareButton.textContent = 'Copied!';
+  } catch {
+    window.prompt('Copy your share card:', shareText);
+  }
+  window.setTimeout(() => {
+    dailyShareButton.textContent = 'Copy Share Card';
+  }, 1600);
+}
+
+worldMapDailyButton.addEventListener('click', startDailyRound);
+dailyCloseButton.addEventListener('click', exitDailyRound);
+dailyBackdrop.addEventListener('click', exitDailyRound);
+dailyShareButton.addEventListener('click', copyDailyShareCard);
+
+function syncAudioSettings() {
+  const settings = getSettings();
+  audio.setLevels({
+    master: settings.masterVolume,
+    music: settings.musicVolume,
+    sfx: settings.sfxVolume,
+  });
+  audio.setMusicMood(settings.musicMood);
+}
+
+function unlockAudio() {
+  if (audio.isUnlocked()) {
+    return;
+  }
+  audio.unlock();
+  syncAudioSettings();
+  audio.startMusic(state.level.worldIndex);
+  audio.setMusicIntensity(0.35);
+}
+
+window.addEventListener('pointerdown', unlockAudio, { capture: true });
+window.addEventListener('keydown', unlockAudio, { capture: true });
+onSettingsChange(syncAudioSettings);
+onSettingsChange(() => refreshGhostPlayer());
+
+function syncSettingsUi() {
+  const settings = getSettings();
+  settingsRangeInputs.forEach((input) => {
+    input.value = String(settings[input.dataset.settingRange] ?? 0);
+  });
+  settingsValueNodes.forEach((node) => {
+    const value = settings[node.dataset.settingValue] ?? 0;
+    node.textContent = `${Math.round(value * 100)}%`;
+  });
+  settingsChoiceButtons.forEach((button) => {
+    button.classList.toggle(
+      'is-selected',
+      settings[button.dataset.settingChoice] === button.dataset.value,
+    );
+  });
+  settingsToggleInputs.forEach((input) => {
+    input.checked = Boolean(settings[input.dataset.settingToggle]);
+  });
+}
+
+function openSettings() {
+  state.settingsOpen = true;
+  settingsModal.hidden = false;
+  syncSettingsUi();
+  window.requestAnimationFrame(() => settingsModal.classList.add('is-visible'));
+}
+
+function closeSettings() {
+  state.settingsOpen = false;
+  settingsModal.classList.remove('is-visible');
+  settingsModal.hidden = true;
+}
+
+settingsButton.addEventListener('click', () => {
+  if (state.settingsOpen) {
+    closeSettings();
+  } else {
+    openSettings();
+  }
+});
+settingsBackdrop.addEventListener('click', closeSettings);
+settingsCloseButton.addEventListener('click', closeSettings);
+settingsRangeInputs.forEach((input) => {
+  input.addEventListener('input', (event) => {
+    const key = event.target.dataset.settingRange;
+    updateSettings({ [key]: Number.parseFloat(event.target.value) });
+    syncSettingsUi();
+  });
+});
+settingsChoiceButtons.forEach((button) => {
+  button.addEventListener('click', () => {
+    updateSettings({ [button.dataset.settingChoice]: button.dataset.value });
+    syncSettingsUi();
+  });
+});
+settingsToggleInputs.forEach((input) => {
+  input.addEventListener('change', (event) => {
+    updateSettings({ [event.target.dataset.settingToggle]: event.target.checked });
+    syncSettingsUi();
+  });
+});
+window.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && state.settingsOpen) {
+    closeSettings();
+  }
+});
+document.addEventListener('click', (event) => {
+  if (event.target instanceof Element && event.target.closest('button')) {
+    audio.play('click');
+  }
+});
+
 function isEditableShortcutTarget(target) {
   return target instanceof HTMLInputElement
     || target instanceof HTMLTextAreaElement
@@ -6972,6 +8006,10 @@ function isEditableShortcutTarget(target) {
 
 window.addEventListener('keydown', (event) => {
   if (isEditableShortcutTarget(event.target)) {
+    return;
+  }
+
+  if (state.settingsOpen || state.daily.modalOpen) {
     return;
   }
 
@@ -7048,6 +8086,10 @@ window.addEventListener('keydown', (event) => {
 });
 
 function updatePhysics(delta) {
+  if (state.settingsOpen || state.daily.modalOpen) {
+    return;
+  }
+
   if (updateVibeJamPortalEntry(delta)) {
     return;
   }
@@ -7104,6 +8146,10 @@ function updatePhysics(delta) {
 
     if (t >= 1) {
       ballGroup.visible = false;
+      if (state.daily.active) {
+        handleDailyHoleComplete();
+        return;
+      }
       const completedLevelIndex = state.levelIndex;
       const nextIndex = (state.levelIndex + 1) % LEVELS.length;
       const nextLevel = LEVELS[nextIndex];
@@ -7265,6 +8311,7 @@ function updatePhysics(delta) {
       }
       if (Math.abs(appliedDelta) > 0.000001) {
         recordFlightHistorySample();
+        recordGhostSample();
       }
       if (timeSpeed < 0 && nextTime <= minTime + 0.0001) {
         clampTimeSpeedToNonNegative();
@@ -7283,10 +8330,17 @@ function updatePhysics(delta) {
     return;
   }
 
-  const result = stepBall(state.level, state.ball, delta);
+  const slowMoScale = getSlowMoTimeScale();
+  const result = stepBall(state.level, state.ball, delta * slowMoScale);
   recordFlightHistorySample();
+  recordGhostSample();
   recordPortalFlightEvent(result.portalEvent ?? null);
+  if (result.portalEvent) {
+    audio.play('portal');
+    addFlair(25, 'Portal Hop');
+  }
   recordAttemptTrailPoint();
+  maybeTriggerNearMiss();
   if (maybeEnterVibeJamPortal()) {
     return;
   }
@@ -7821,6 +8875,52 @@ function animate() {
     physicsAccumulator -= PHYSICS_STEP;
   }
 
+  if (state.juice.slowMoTimer > 0) {
+    state.juice.slowMoTimer = Math.max(0, state.juice.slowMoTimer - delta);
+  }
+  const slowMoDepth = getSlowMoDepth();
+  slowmoVignette.style.opacity = (slowMoDepth * 0.85).toFixed(3);
+  const zoomPunch = getSettings().reducedMotion ? 0 : slowMoDepth * 0.024;
+  world.scale.setScalar(1 + zoomPunch);
+  updateScreenShake(delta);
+  updateGoalBursts(delta);
+  updateAimPreview();
+
+  const flightSpeed = length(state.ball.velocity);
+  const inFreeFlight = state.ball.anchorPlanetIndex === null
+    && !state.ball.goaling
+    && !state.ball.crashed
+    && !state.undo.active
+    && !state.rewindPlayback.active
+    && flightSpeed > 0.4;
+  if (inFreeFlight) {
+    let minSurfaceDistance = Infinity;
+    for (let planetIndex = 0; planetIndex < state.level.planets.length; planetIndex += 1) {
+      const planet = state.level.planets[planetIndex];
+      const surfaceDistance = distanceBetween(state.ball.position, planet.position) - planet.radius;
+      if (surfaceDistance < minSurfaceDistance) {
+        minSurfaceDistance = surfaceDistance;
+      }
+    }
+    audio.setLoopParams('flight', {
+      speed: clamp(flightSpeed / 11.8, 0, 1),
+      gravity: clamp(1 - minSurfaceDistance / 2.4, 0, 1),
+    });
+    const goalTimeLeft = getGoalRemainingTime(state.level, state.ball.time ?? state.level.time ?? 0);
+    if (
+      !state.juice.warnPlayed
+      && Number.isFinite(goalTimeLeft)
+      && goalTimeLeft > 0
+      && goalTimeLeft < 2.6
+      && !isGoalLocked(state.level)
+    ) {
+      state.juice.warnPlayed = true;
+      audio.play('warn');
+    }
+  } else {
+    audio.stopLoop('flight');
+  }
+  updateGhostVisual();
   updateBallTrace(delta);
   updateTurretShotVisual(delta);
   updateSunShockwaves(delta);
