@@ -3,5 +3,6 @@ import aggregate from "@convex-dev/aggregate/convex.config.js";
 
 const app = defineApp();
 app.use(aggregate, { name: "worldScores" });
+app.use(aggregate, { name: "dailyScores" });
 
 export default app;

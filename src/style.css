@@ -2487,3 +2487,334 @@ h1 {
     display: none;
   }
 }
+
+/* ---------- Golf layer: par pill, result banner, medals ---------- */
+
+.status-pill-par.is-medal {
+  border-color: rgba(255, 214, 130, 0.45);
+  color: #ffe2a8;
+}
+
+.result-banner {
+  position: absolute;
+  top: 18%;
+  left: 50%;
+  transform: translate(-50%, -14px) scale(0.96);
+  text-align: center;
+  padding: 18px 34px;
+  border-radius: 18px;
+  background: var(--surface-strong);
+  border: 1px solid var(--line-strong);
+  box-shadow: var(--shadow);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 320ms ease, transform 420ms cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 30;
+}
+
+.result-banner.is-visible {
+  opacity: 1;
+  transform: translate(-50%, 0) scale(1);
+}
+
+.result-banner-kicker {
+  margin: 0 0 2px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.result-banner-title {
+  margin: 0;
+  font-size: 30px;
+  letter-spacing: 0.02em;
+}
+
+.result-banner-detail {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.result-banner.is-gold .result-banner-title { color: #ffd982; }
+.result-banner.is-ace .result-banner-title {
+  color: #8dffe9;
+  text-shadow: 0 0 18px rgba(125, 243, 217, 0.55);
+}
+.result-banner.is-silver .result-banner-title { color: #d9e4ff; }
+.result-banner.is-bronze .result-banner-title { color: #f0b48d; }
+
+.world-map-medals {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-height: 40px;
+}
+
+.world-map-medal-row {
+  display: flex;
+  gap: 6px;
+}
+
+.world-map-medal {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+}
+
+.world-map-medal.is-empty {
+  opacity: 0.4;
+}
+
+.world-map-medal.is-ace {
+  border-color: rgba(125, 243, 217, 0.6);
+  box-shadow: 0 0 10px rgba(125, 243, 217, 0.35);
+}
+
+.world-map-medal-tally {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.hud-button-daily {
+  border-color: rgba(125, 243, 217, 0.4);
+}
+
+/* ---------- Settings modal ---------- */
+
+.settings-modal {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 60;
+  opacity: 0;
+  transition: opacity 220ms ease;
+}
+
+.settings-modal[hidden] {
+  display: none;
+}
+
+.settings-modal.is-visible {
+  opacity: 1;
+}
+
+.settings-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(2, 4, 10, 0.66);
+  backdrop-filter: blur(6px);
+}
+
+.settings-panel {
+  position: relative;
+  width: min(460px, calc(100% - 32px));
+  max-height: min(82vh, 640px);
+  overflow-y: auto;
+  padding: 22px 26px;
+  border-radius: 20px;
+  background: var(--surface-strong);
+  border: 1px solid var(--line-strong);
+  box-shadow: var(--shadow);
+}
+
+.settings-panel h2 {
+  margin: 0 0 14px;
+  font-size: 20px;
+}
+
+.settings-section {
+  margin-bottom: 16px;
+}
+
+.settings-section-label {
+  margin: 0 0 8px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.settings-slider {
+  display: block;
+  margin-bottom: 10px;
+}
+
+.settings-slider span {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.settings-slider strong {
+  color: var(--text);
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+.settings-slider input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent-strong);
+}
+
+.settings-choice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.settings-choice-label {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.settings-choice-options {
+  display: flex;
+  gap: 6px;
+}
+
+.settings-choice-options button {
+  padding: 6px 12px;
+  font-size: 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+  color: var(--muted);
+  cursor: pointer;
+  transition: border-color 160ms ease, color 160ms ease, background 160ms ease;
+}
+
+.settings-choice-options button.is-selected {
+  border-color: var(--accent-strong);
+  color: var(--text);
+  background: rgba(125, 243, 217, 0.12);
+}
+
+.settings-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text);
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+
+.settings-toggle input {
+  accent-color: var(--accent-strong);
+  width: 16px;
+  height: 16px;
+}
+
+.settings-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 6px;
+}
+
+/* ---------- Daily Orbit ---------- */
+
+.daily-panel {
+  width: min(420px, calc(100% - 32px));
+}
+
+.daily-holes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 12px 0;
+}
+
+.daily-hole-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+  font-size: 13px;
+}
+
+.daily-hole-row span:last-child {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.daily-total {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.daily-standings {
+  margin: 6px 0 10px;
+  font-size: 13px;
+  color: var(--accent-strong);
+  min-height: 18px;
+}
+
+.daily-actions {
+  justify-content: space-between;
+}
+
+/* ---------- Bullet time, flair, streak ---------- */
+
+.slowmo-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 24;
+  background: radial-gradient(ellipse at center, transparent 46%, rgba(6, 12, 34, 0.36) 74%, rgba(3, 6, 20, 0.72) 100%);
+  box-shadow: inset 0 0 90px rgba(60, 130, 255, 0.18);
+}
+
+.flair-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 26;
+}
+
+.flair-popup {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: #8dffe9;
+  text-shadow: 0 0 12px rgba(125, 243, 217, 0.65), 0 1px 2px rgba(0, 0, 0, 0.8);
+  animation: flair-float 1.25s ease-out forwards;
+  white-space: nowrap;
+}
+
+@keyframes flair-float {
+  0% { opacity: 0; transform: translate(-50%, -100%) scale(0.8); }
+  14% { opacity: 1; transform: translate(-50%, -130%) scale(1.06); }
+  72% { opacity: 1; transform: translate(-50%, -190%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -230%) scale(0.98); }
+}
+
+.status-pill-streak {
+  border-color: rgba(255, 170, 90, 0.5);
+  color: #ffce96;
+}

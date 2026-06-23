@@ -17,4 +17,17 @@ export default defineSchema({
   })
     .index("by_submission_key", ["submissionKey"])
     .index("by_world", ["worldId"]),
+  dailyResults: defineTable({
+    dateKey: v.string(),
+    submissionKey: v.string(),
+    clientRunId: v.string(),
+    launches: v.number(),
+    retries: v.number(),
+    relays: v.number(),
+    flightTime: v.number(),
+    score: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_submission_key", ["submissionKey"])
+    .index("by_date", ["dateKey"]),
 });
