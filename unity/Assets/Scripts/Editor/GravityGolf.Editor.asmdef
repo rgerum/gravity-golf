@@ -1,0 +1,19 @@
+{
+    "name": "GravityGolf.Editor",
+    "rootNamespace": "GravityGolf.EditorTools",
+    "references": [
+        "GravityGolf.Core",
+        "GravityGolf.Game"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
