@@ -4,18 +4,22 @@ using UnityEngine;
 namespace GravityGolf.Game
 {
     /// <summary>
-    /// World-origin-centered orthographic camera. The web game uses a fixed landscape
-    /// view (spec §11), but on portrait phones the fixed height clips content that sits
-    /// at radius > height/2 * aspect, so this rig instead fits each level's content
-    /// circle (goal, orbit apoapses, start anchor) into both screen axes.
+    /// Content-fitting orthographic camera. The web game uses a fixed landscape view
+    /// (spec §11), but on portrait phones a fixed frame either clips off-center content
+    /// or wastes huge vertical bands when the layout is asymmetric. So this rig computes
+    /// an axis-aligned bounds box over each level's content (goal, orbits, planets, start
+    /// anchor), centers on it, and fits that box into both screen axes.
     /// </summary>
     public sealed class CameraRig : MonoBehaviour
     {
         private const float BaseViewHeight = 19.4f;
         private const float ContentMargin = 1.08f;
+        private const float MinOrthoSize = 9.7f;
 
         private Camera _camera;
-        private float _contentRadius = BaseViewHeight / 2f;
+        private Vector2 _boundsCenter = Vector2.zero;
+        private float _halfWidth = BaseViewHeight / 2f;
+        private float _halfHeight = BaseViewHeight / 2f;
 
         public void Setup()
         {
@@ -32,22 +36,46 @@ namespace GravityGolf.Game
 
         private void LateUpdate() => Apply();
 
-        /// <summary>Fit the view to a level's content circle. Call on level load.</summary>
+        /// <summary>Fit the view to a level's content bounds box. Call on level load.</summary>
         public void SetLevel(LevelRuntime level)
         {
-            var radius = (double)BaseViewHeight / 2.0 / ContentMargin;
-            radius = System.Math.Max(radius, VecMath.Length(level.GoalCenter) + level.GoalRadius);
-            radius = System.Math.Max(radius, VecMath.Length(level.StartAnchor) + 1.0);
-            foreach (var planet in level.Planets)
+            var minX = double.PositiveInfinity;
+            var maxX = double.NegativeInfinity;
+            var minY = double.PositiveInfinity;
+            var maxY = double.NegativeInfinity;
+
+            void Include(Vec2 center, double reach)
             {
-                var orbitReach = VecMath.Length(planet.OrbitCenter)
-                    + planet.OrbitSemiMajor * (1.0 + planet.OrbitEccentricity);
-                var reach = System.Math.Max(VecMath.Length(planet.BasePosition), orbitReach)
-                    + planet.Radius * 2.2; // include the landing ring
-                radius = System.Math.Max(radius, reach);
+                if (center.X - reach < minX) minX = center.X - reach;
+                if (center.X + reach > maxX) maxX = center.X + reach;
+                if (center.Y - reach < minY) minY = center.Y - reach;
+                if (center.Y + reach > maxY) maxY = center.Y + reach;
             }
 
-            _contentRadius = (float)radius * ContentMargin;
+            Include(level.GoalCenter, level.GoalRadius + 0.6);
+            Include(level.StartAnchor, 1.0);
+            foreach (var planet in level.Planets)
+            {
+                Include(planet.BasePosition, planet.Radius * 2.2); // include the landing ring
+                if (planet.OrbitSpeed != 0 && planet.OrbitSemiMajor > 0)
+                {
+                    var orbitReach = planet.OrbitSemiMajor * (1.0 + planet.OrbitEccentricity);
+                    Include(planet.OrbitCenter, orbitReach);
+                }
+            }
+
+            if (double.IsInfinity(minX))
+            {
+                // No content (shouldn't happen): fall back to the default framing.
+                minX = -BaseViewHeight / 2.0;
+                maxX = BaseViewHeight / 2.0;
+                minY = -BaseViewHeight / 2.0;
+                maxY = BaseViewHeight / 2.0;
+            }
+
+            _boundsCenter = new Vector2((float)((minX + maxX) * 0.5), (float)((minY + maxY) * 0.5));
+            _halfWidth = (float)((maxX - minX) * 0.5);
+            _halfHeight = (float)((maxY - minY) * 0.5);
             Apply();
         }
 
@@ -59,8 +87,11 @@ namespace GravityGolf.Game
             }
 
             var aspect = (float)Screen.width / Mathf.Max(1, Screen.height);
-            // Content is a circle around the origin: fit it against both axes.
-            _camera.orthographicSize = Mathf.Max(_contentRadius, _contentRadius / aspect);
+            // Fit the bounds box against both axes, then re-center the camera on it.
+            var size = Mathf.Max(_halfHeight, _halfWidth / aspect) * ContentMargin;
+            _camera.orthographicSize = Mathf.Max(size, MinOrthoSize);
+            var z = _camera.transform.position.z;
+            _camera.transform.position = new Vector3(_boundsCenter.x, _boundsCenter.y, z);
         }
 
         /// <summary>Screen pixel → 2D world point on the gameplay plane (spec §1.2).</summary>

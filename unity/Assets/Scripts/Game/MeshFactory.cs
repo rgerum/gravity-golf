@@ -83,6 +83,46 @@ namespace GravityGolf.Game
             return mesh;
         }
 
+        /// <summary>
+        /// Disc whose center vertex carries <paramref name="innerAlpha"/> and every rim
+        /// vertex <paramref name="outerAlpha"/>, giving a smooth radial alpha falloff.
+        /// Sprites/Default multiplies vertex color * material color * texture, so pair
+        /// this with a solid-alpha material color to get a tinted radial glow.
+        /// </summary>
+        public static Mesh GradientDisc(int segments, float innerAlpha, float outerAlpha)
+        {
+            segments = Mathf.Max(3, segments);
+            var vertices = new Vector3[segments + 1];
+            var uvs = new Vector2[segments + 1];
+            var colors = new Color[segments + 1];
+            vertices[0] = Vector3.zero;
+            uvs[0] = new Vector2(0.5f, 0.5f);
+            colors[0] = new Color(1f, 1f, 1f, innerAlpha);
+            for (var i = 0; i < segments; i += 1)
+            {
+                var angle = (float)i / segments * Mathf.PI * 2f;
+                vertices[i + 1] = new Vector3(Mathf.Cos(angle), Mathf.Sin(angle), 0f);
+                uvs[i + 1] = new Vector2(0.5f, 0.5f);
+                colors[i + 1] = new Color(1f, 1f, 1f, outerAlpha);
+            }
+
+            var triangles = new int[segments * 3];
+            for (var i = 0; i < segments; i += 1)
+            {
+                triangles[i * 3] = 0;
+                triangles[i * 3 + 1] = i + 1;
+                triangles[i * 3 + 2] = (i + 1) % segments + 1;
+            }
+
+            var mesh = new Mesh { name = "GradientDisc" };
+            mesh.vertices = vertices;
+            mesh.uv = uvs;
+            mesh.colors = colors;
+            mesh.triangles = triangles;
+            mesh.RecalculateBounds();
+            return mesh;
+        }
+
         public static Mesh Ring(float inner, float outer, int segments)
         {
             segments = Mathf.Max(3, segments);
