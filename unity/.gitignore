@@ -1,0 +1,17 @@
+# Unity
+Library/
+Temp/
+Obj/
+Logs/
+UserSettings/
+MemoryCaptures/
+*.csproj.user
+*.sln
+!tests/**/*.csproj
+
+# dotnet (parity runner)
+bin/
+obj/
+
+# screenshot tour output
+Screenshots/
