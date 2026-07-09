@@ -27,6 +27,11 @@ namespace GravityGolf.Game
             var coreColor = ColorUtil.FromInt(ReadColor(planet, "core", 0x8899AA));
             var glowColor = ColorUtil.FromInt(ReadColor(planet, "glow", 0xBBCCDD));
 
+            // Deterministic per-planet character (stable across reloads): keyed on the
+            // planet's identity so decoration is fixed, never random per frame.
+            var rng = new System.Random(StableHash(planet.Index, planet.Name));
+            var ringAlpha = 0.20f + (float)rng.NextDouble() * 0.08f; // 0.20–0.28, stays readable
+
             // Orbit path (cosmetic, static ring around the origin) for moving planets.
             if (planet.OrbitSpeed != 0 && planet.OrbitSemiMajor > 0)
             {
@@ -53,7 +58,7 @@ namespace GravityGolf.Game
                 var ring = MeshFactory.Spawn(
                     "LandingRing",
                     MeshFactory.Ring(inner, outer, 64),
-                    ColorUtil.FromInt(0x75F3D9, 0.22f),
+                    ColorUtil.FromInt(0x75F3D9, ringAlpha),
                     transform,
                     Depth.LandingRing);
                 ring.transform.localScale = Vector3.one;
@@ -73,10 +78,71 @@ namespace GravityGolf.Game
                 Depth.PlanetAccent);
             rim.transform.localScale = Vector3.one;
 
-            // Spin marker so rotation is visible.
-            var marker = MeshFactory.Spawn("SpinMarker", MeshFactory.UnitDisc, glowColor, _body, Depth.PlanetAccent - 0.05f);
-            marker.transform.localPosition = new Vector3(_radius * 0.55f, 0f, Depth.PlanetAccent - 0.05f);
-            marker.transform.localScale = new Vector3(_radius * 0.22f, _radius * 0.22f, 1f);
+            // Optional interior decoration (inside the disc only — the physics silhouette
+            // stays accurate). Some planets get a shaded limb, some a banded equator, some
+            // stay plain, chosen deterministically.
+            switch (rng.Next(3))
+            {
+                case 0:
+                {
+                    // Slightly darker rim over the outer edge, reading as a shaded limb.
+                    var limb = MeshFactory.Spawn(
+                        "Limb",
+                        MeshFactory.Ring(_radius * 0.88f, _radius, 48),
+                        Shade(coreColor, 0.45f, 0.45f),
+                        _body,
+                        Depth.PlanetAccent - 0.02f);
+                    limb.transform.localScale = Vector3.one;
+                    break;
+                }
+
+                case 1:
+                {
+                    // Thin darker equatorial band across the disc (rotates with spin).
+                    var band = MeshFactory.Spawn(
+                        "Band",
+                        MeshFactory.UnitDisc,
+                        Shade(coreColor, 0.60f, 0.5f),
+                        _body,
+                        Depth.Planet - 0.02f);
+                    band.transform.localScale = new Vector3(_radius * 0.92f, _radius * 0.14f, 1f);
+                    break;
+                }
+            }
+
+            // Spin marker so rotation is visible — position, offset and size vary per planet.
+            var markerAngle = (float)(rng.NextDouble() * Mathf.PI * 2f);
+            var markerDist = _radius * (0.45f + (float)rng.NextDouble() * 0.15f);
+            var markerSize = _radius * (0.18f + (float)rng.NextDouble() * 0.08f);
+            var markerZ = Depth.PlanetAccent - 0.05f;
+            var marker = MeshFactory.Spawn("SpinMarker", MeshFactory.UnitDisc, glowColor, _body, markerZ);
+            marker.transform.localPosition = new Vector3(Mathf.Cos(markerAngle) * markerDist, Mathf.Sin(markerAngle) * markerDist, markerZ);
+            marker.transform.localScale = new Vector3(markerSize, markerSize, 1f);
+        }
+
+        /// <summary>Multiplies RGB toward black by <paramref name="factor"/> and sets an
+        /// explicit <paramref name="alpha"/>, for darkened decoration tints.</summary>
+        private static Color Shade(Color c, float factor, float alpha) =>
+            new Color(c.r * factor, c.g * factor, c.b * factor, alpha);
+
+        /// <summary>Stable FNV-1a hash of a planet's identity, so per-planet decoration is
+        /// deterministic across reloads and independent of frame timing.</summary>
+        private static int StableHash(int index, string name)
+        {
+            unchecked
+            {
+                var h = 2166136261u;
+                h = (h ^ (uint)index) * 16777619u;
+                if (name != null)
+                {
+                    for (var i = 0; i < name.Length; i += 1)
+                    {
+                        h = (h ^ name[i]) * 16777619u;
+                    }
+                }
+
+                return (int)(h & 0x7FFFFFFF);
+            }
         }
 
         private void LateUpdate()

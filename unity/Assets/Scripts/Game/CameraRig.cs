@@ -21,6 +21,21 @@ namespace GravityGolf.Game
         private float _halfWidth = BaseViewHeight / 2f;
         private float _halfHeight = BaseViewHeight / 2f;
 
+        /// <summary>World-space center of the currently fitted view.</summary>
+        public Vector2 ViewCenter => _boundsCenter;
+
+        /// <summary>Half-size (world units) of the currently visible area, mirroring
+        /// <see cref="Apply"/>'s fit math, so background layers can be sized to cover it.</summary>
+        public Vector2 ViewHalfSize
+        {
+            get
+            {
+                var aspect = (float)Screen.width / Mathf.Max(1, Screen.height);
+                var size = Mathf.Max(MinOrthoSize, Mathf.Max(_halfHeight, _halfWidth / aspect) * ContentMargin);
+                return new Vector2(size * aspect, size);
+            }
+        }
+
         public void Setup()
         {
             _camera = GetComponent<Camera>();

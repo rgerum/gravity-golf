@@ -16,7 +16,7 @@ namespace GravityGolf.EditorTools
         {
             try
             {
-                PlayModeWindow.SetCustomRenderingResolution(1080, 1920, "TourPortrait");
+                PlayModeWindow.SetCustomRenderingResolution(1920, 1080, "TourLandscape");
             }
             catch (System.Exception e)
             {

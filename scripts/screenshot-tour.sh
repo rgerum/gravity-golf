@@ -20,7 +20,7 @@ rm -rf "$OUT_DIR"
 mkdir -p "$OUT_DIR"
 
 echo "==> running screenshot tour (log: $LOG)"
-LIBGL_ALWAYS_SOFTWARE="${LIBGL_ALWAYS_SOFTWARE:-1}" timeout "${TOUR_TIMEOUT:-540}" xvfb-run -a -s "-screen 0 1200x2000x24" \
+LIBGL_ALWAYS_SOFTWARE="${LIBGL_ALWAYS_SOFTWARE:-1}" timeout "${TOUR_TIMEOUT:-540}" xvfb-run -a -s "-screen 0 2000x1200x24" \
     "$UNITY" -projectPath "$(pwd)/unity" \
     -executeMethod GravityGolf.EditorTools.TourLauncher.Run \
     -gg-tour -gg-tour-out "$OUT_DIR" \

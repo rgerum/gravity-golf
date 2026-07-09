@@ -3,13 +3,18 @@ using UnityEngine;
 
 namespace GravityGolf.Game
 {
-    /// <summary>Static goal: a warm amber "black hole" target — a faint pull-radius halo,
-    /// a dark event-horizon interior warmed by a subtle translucent fill, and a bright
-    /// luminous ring that gently pulses to draw the eye. No countdown arc — the goal is
-    /// always open in scope (spec §5.3, §10.4).</summary>
+    /// <summary>Static goal: a violet "black hole" target — a faint pull-radius halo,
+    /// a near-black event-horizon interior tinted by a subtle translucent fill, and a
+    /// bright luminous ring that gently pulses to draw the eye. The cool violet palette
+    /// keeps it instantly distinct from the warm sun and the teal landing rings. No
+    /// countdown arc — the goal is always open in scope (spec §5.3, §10.4).</summary>
     public sealed class GoalView : MonoBehaviour
     {
-        private const long Gold = 0xFFC24B;
+        // Bright luminous ring vs. a deeper violet for the soft fill/halo, over a
+        // near-black interior with just a hint of deep violet.
+        private const long Ring = 0xA78BFA;
+        private const long Glow = 0x8B5CF6;
+        private const long Interior = 0x0B0716;
 
         private Transform _ring;
 
@@ -25,21 +30,21 @@ namespace GravityGolf.Game
                 var pull = MeshFactory.Spawn(
                     "PullRadius",
                     MeshFactory.GradientDisc(72, 0.06f, 0f),
-                    ColorUtil.FromInt(Gold),
+                    ColorUtil.FromInt(Glow),
                     transform,
                     Depth.GoalGlow + 0.2f);
                 pull.transform.localScale = new Vector3(pullRadius, pullRadius, 1f);
             }
 
-            // Dark event-horizon interior.
-            var disc = MeshFactory.Spawn("Disc", MeshFactory.UnitDisc, ColorUtil.FromInt(0x090512), transform, Depth.Goal);
+            // Near-black event-horizon interior with a hint of deep violet.
+            var disc = MeshFactory.Spawn("Disc", MeshFactory.UnitDisc, ColorUtil.FromInt(Interior), transform, Depth.Goal);
             disc.transform.localScale = new Vector3(radius, radius, 1f);
 
-            // Subtle warm translucent fill inside the ring.
+            // Subtle violet translucent fill inside the ring.
             var fill = MeshFactory.Spawn(
                 "Fill",
                 MeshFactory.GradientDisc(64, 0.22f, 0.05f),
-                ColorUtil.FromInt(Gold),
+                ColorUtil.FromInt(Glow),
                 transform,
                 Depth.Goal - 0.05f);
             fill.transform.localScale = new Vector3(radius * 0.96f, radius * 0.96f, 1f);
@@ -48,7 +53,7 @@ namespace GravityGolf.Game
             var ringGo = MeshFactory.Spawn(
                 "Ring",
                 MeshFactory.Ring(radius + 0.06f, radius + 0.30f, 72),
-                ColorUtil.FromInt(Gold, 0.92f),
+                ColorUtil.FromInt(Ring, 0.92f),
                 transform,
                 Depth.Goal - 0.1f);
             _ring = ringGo.transform;

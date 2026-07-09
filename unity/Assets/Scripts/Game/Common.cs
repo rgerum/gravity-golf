@@ -22,6 +22,7 @@ namespace GravityGolf.Game
     /// </summary>
     public static class Depth
     {
+        public const float Starfield = 9f;
         public const float OrbitPath = 6f;
         public const float Corona = 5f;
         public const float GoalGlow = 4.6f;

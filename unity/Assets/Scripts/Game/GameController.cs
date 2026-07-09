@@ -319,6 +319,14 @@ namespace GravityGolf.Game
 
             _levelRoot = new GameObject("Level").transform;
 
+            // Subtle static starfield behind everything, overspread to cover the fitted
+            // view (the camera is already positioned by SetLevel above).
+            var starfield = new GameObject("Starfield").AddComponent<StarfieldView>();
+            starfield.transform.SetParent(_levelRoot, false);
+            var viewHalf = _cameraRig.ViewHalfSize;
+            const float coverage = 1.8f;
+            starfield.Init(_cameraRig.ViewCenter, viewHalf.x * 2f * coverage, viewHalf.y * 2f * coverage);
+
             var sun = new GameObject("Sun").AddComponent<SunView>();
             sun.transform.SetParent(_levelRoot, false);
             sun.Init(_level);
