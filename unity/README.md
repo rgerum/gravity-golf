@@ -107,3 +107,24 @@ the editor is open.
 runs the real game under a virtual display and captures a settled still plus a
 mid-flight preset shot for every level to `unity/Screenshots/` (portrait
 1080x1920). Use it to review visual tweaks without opening the editor.
+
+## iOS build (must run on macOS)
+
+iOS cannot be built on Linux — the whole flow runs on a Mac with Unity + iOS
+Build Support and Xcode. The code is portable (the Android IL2CPP build is the
+proof: iOS shares IL2CPP + managed stripping + AOT), so this is toolchain setup,
+not code work.
+
+1. On the Mac: install Unity 6000.0.79f1 via Hub with **iOS Build Support**, and
+   install **Xcode**.
+2. Open this project, then generate the Xcode project headlessly:
+   `Unity -batchmode -quit -buildTarget iOS -executeMethod BuildScript.BuildIOS`
+   (or File > Build Settings > iOS > Build). Output: `unity/Build/iOS`.
+3. Open `unity/Build/iOS/Unity-iPhone.xcodeproj` in Xcode.
+4. Select the target > Signing & Capabilities > enable **Automatic signing** and
+   pick your Apple ID team. A free personal team runs on your own device
+   (re-sign weekly); a paid account ($99/yr) enables TestFlight/App Store.
+5. Plug in the iPhone, select it, and press **Run**.
+
+`Assets/link.xml` preserves `GravityGolf.Core` + Newtonsoft against IL2CPP
+stripping on both Android and iOS.

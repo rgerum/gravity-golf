@@ -69,6 +69,42 @@ public static class BuildScript
         EditorApplication.Exit(0);
     }
 
+    // iOS builds MUST run on macOS (Unity with iOS Build Support). This emits an Xcode
+    // project to unity/Build/iOS; open it in Xcode, set the signing team, and Run.
+    //   Unity -batchmode -quit -buildTarget iOS -executeMethod BuildScript.BuildIOS
+    public static void BuildIOS()
+    {
+        PlayerSettings.productName = "Gravity Golf";
+        PlayerSettings.companyName = "rgerum";
+        PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.iOS, "com.rgerum.gravitygolf");
+        PlayerSettings.SetScriptingBackend(NamedBuildTarget.iOS, ScriptingImplementation.IL2CPP);
+
+        var home = Environment.GetEnvironmentVariable("HOME");
+        var outPath = Path.Combine(home, "WebstormProjects/gravity-golf/unity/Build/iOS");
+        Directory.CreateDirectory(outPath);
+
+        var options = new BuildPlayerOptions
+        {
+            scenes = new[] { "Assets/Scenes/Main.unity" },
+            locationPathName = outPath,
+            target = BuildTarget.iOS,
+            targetGroup = BuildTargetGroup.iOS,
+            options = BuildOptions.None,
+        };
+
+        var report = BuildPipeline.BuildPlayer(options);
+        var summary = report.summary;
+        if (summary.result != BuildResult.Succeeded)
+        {
+            Debug.LogError($"[Build] iOS FAILED result={summary.result} errors={summary.totalErrors}");
+            EditorApplication.Exit(1);
+            return;
+        }
+
+        Debug.Log($"[Build] iOS Xcode project -> {summary.outputPath}");
+        EditorApplication.Exit(0);
+    }
+
     private static void SetTool(Action set, string label, string path)
     {
         try

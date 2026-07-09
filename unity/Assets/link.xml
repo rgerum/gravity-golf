@@ -1,0 +1,7 @@
+<!-- Preserve reflection-accessed types against IL2CPP managed-code stripping
+     (Android + iOS). Newtonsoft.Json deserializes the level JSON by reflecting
+     over the POCOs in GravityGolf.Core, which stripping could otherwise remove. -->
+<linker>
+  <assembly fullname="GravityGolf.Core" preserve="all"/>
+  <assembly fullname="Newtonsoft.Json" preserve="all"/>
+</linker>
