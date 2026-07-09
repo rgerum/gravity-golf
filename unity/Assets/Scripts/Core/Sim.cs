@@ -157,6 +157,47 @@ namespace GravityGolf.Core
             return new StepResult { Type = "flying" };
         }
 
+        public static StepResult ReverseStepBall(LevelRuntime level, BallState ball, double delta, int? launchPlanetIndex = null)
+        {
+            var currentTime = ball.Time;
+            var friction = Math.Pow(Constants.BallFrictionBase, delta * 60);
+            var velocityBeforeFriction = new Vec2(
+                ball.Velocity.X / friction,
+                ball.Velocity.Y / friction);
+            var previousPosition = new Vec2(
+                ball.Position.X - velocityBeforeFriction.X * delta,
+                ball.Position.Y - velocityBeforeFriction.Y * delta);
+            var acceleration = Gravity.SampleBallAcceleration(level, previousPosition);
+            var previousVelocity = new Vec2(
+                velocityBeforeFriction.X - acceleration.X * delta,
+                velocityBeforeFriction.Y - acceleration.Y * delta);
+            var previousTime = currentTime - delta;
+
+            Orbits.SetLevelTime(level, previousTime);
+            ball.Time = previousTime;
+            ball.Position = previousPosition;
+            ball.Velocity = previousVelocity;
+            ball.AnchorPlanetIndex = null;
+            ball.AnchorNormal = ball.AnchorNormal is not null ? VecMath.Clone(ball.AnchorNormal.Value) : null;
+            UpdateBallHeat(level, ball, -delta);
+
+            if (launchPlanetIndex is not null)
+            {
+                var launchPlanetIndexValue = launchPlanetIndex.Value;
+                if (launchPlanetIndexValue >= 0 && launchPlanetIndexValue < level.Planets.Count)
+                {
+                    var launchPlanet = level.Planets[launchPlanetIndexValue];
+                    var clearanceRadius = (launchPlanet.LandingRadius ?? GetBallSurfaceRadius(launchPlanet))
+                        + Constants.PlanetLandingPadding;
+                    ball.LaunchGracePlanetIndex = VecMath.Distance(ball.Position, launchPlanet.Position) <= clearanceRadius
+                        ? launchPlanetIndex
+                        : null;
+                }
+            }
+
+            return new StepResult { Type = "flying" };
+        }
+
         /// <summary>
         /// Mutates <paramref name="level"/> in place while replaying the shot, matching game-core.js:5074.
         /// Use <see cref="SimulateShotPreview"/> when the input level must remain unchanged.

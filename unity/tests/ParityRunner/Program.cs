@@ -8,6 +8,10 @@ var repoRoot = FindRepoRoot(AppContext.BaseDirectory);
 var worldPath = Path.Combine(repoRoot, "unity/Assets/StreamingAssets/levels/world-1.json");
 var fixtureDir = Path.Combine(repoRoot, "unity/tests/fixtures");
 var fixtureFiles = Directory.GetFiles(fixtureDir, "level-*.json").OrderBy(path => path).ToList();
+var reverseFixtureDir = Path.Combine(fixtureDir, "reverse");
+var reverseFixtureFiles = Directory.Exists(reverseFixtureDir)
+    ? Directory.GetFiles(reverseFixtureDir, "*.reverse.json").OrderBy(path => path).ToList()
+    : new List<string>();
 
 var failures = new List<string>();
 var summaries = new List<LevelSummary>();
@@ -66,6 +70,30 @@ foreach (var fixtureFile in fixtureFiles)
     }
 
     summaries.Add(levelSummary);
+}
+
+var summariesByLevel = summaries.ToDictionary(summary => summary.LevelIndex);
+foreach (var reverseFixtureFile in reverseFixtureFiles)
+{
+    var fixture = JsonConvert.DeserializeObject<ReverseFixtureFile>(File.ReadAllText(reverseFixtureFile))
+        ?? throw new InvalidDataException($"Could not parse {reverseFixtureFile}");
+    if (fixture.SchemaVersion != 1)
+    {
+        failures.Add($"{Path.GetFileName(reverseFixtureFile)}: schemaVersion expected 1, got {fixture.SchemaVersion}");
+        continue;
+    }
+
+    if (!summariesByLevel.TryGetValue(fixture.LevelIndex, out var levelSummary))
+    {
+        levelSummary = new LevelSummary(fixture.LevelIndex, fixture.LevelId);
+        summariesByLevel[fixture.LevelIndex] = levelSummary;
+        summaries.Add(levelSummary);
+    }
+
+    foreach (var sequence in fixture.Sequences)
+    {
+        RunReverseSequence(world.Levels[fixture.LevelIndex], fixture, sequence, levelSummary, failures);
+    }
 }
 
 PrintSummary(summaries);
@@ -188,13 +216,57 @@ static void CompareShot(string label, FixtureShot expected, SimulateShotResult a
     }
 }
 
+static void RunReverseSequence(LevelRuntime sourceLevel, ReverseFixtureFile fixture, ReverseSequence sequence, LevelSummary summary, List<string> failures)
+{
+    var level = sourceLevel.Clone();
+    Orbits.SetLevelTime(level, sequence.StartFrame.Time);
+    var ball = new BallState
+    {
+        Position = sequence.StartFrame.Position,
+        Velocity = sequence.StartFrame.Velocity,
+        Time = sequence.StartFrame.Time,
+        LandingCount = 0,
+        LaunchGracePlanetIndex = null,
+        AnchorPlanetIndex = null,
+        AnchorNormal = null,
+        AnchorSinceTime = 0,
+        PortalCooldown = 0,
+        Heat = 0,
+    };
+
+    foreach (var expectedFrame in sequence.Frames)
+    {
+        var result = Sim.ReverseStepBall(level, ball, fixture.Delta, sequence.LaunchPlanetIndex);
+        if (result.Type != "flying")
+        {
+            failures.Add($"{fixture.LevelId}/{sequence.ShotKind}: reverse step {expectedFrame.Step} expected flying, got {result.Type}");
+        }
+
+        var px = Math.Abs(ball.Position.X - expectedFrame.Position.X);
+        var py = Math.Abs(ball.Position.Y - expectedFrame.Position.Y);
+        var vx = Math.Abs(ball.Velocity.X - expectedFrame.Velocity.X);
+        var vy = Math.Abs(ball.Velocity.Y - expectedFrame.Velocity.Y);
+        var timeDelta = Math.Abs(ball.Time - expectedFrame.Time);
+        summary.ReverseMaxPositionDelta = Math.Max(summary.ReverseMaxPositionDelta, Math.Max(px, py));
+        summary.ReverseMaxVelocityDelta = Math.Max(summary.ReverseMaxVelocityDelta, Math.Max(vx, vy));
+
+        if (timeDelta > AbsTol || px > AbsTol || py > AbsTol || vx > AbsTol || vy > AbsTol)
+        {
+            failures.Add($"{fixture.LevelId}/{sequence.ShotKind}: reverse step {expectedFrame.Step} delta time={timeDelta:G17} pos=({px:G17},{py:G17}) vel=({vx:G17},{vy:G17})");
+        }
+    }
+
+    summary.ReverseSequences += 1;
+    summary.ReverseFrames += sequence.Frames.Count;
+}
+
 static void PrintSummary(IEnumerable<LevelSummary> summaries)
 {
-    Console.WriteLine("Level | Shots | Seq | Max |dPos| | Max |dVel|");
-    Console.WriteLine("----- | ----- | --- | ---------- | ----------");
-    foreach (var s in summaries)
+    Console.WriteLine("Level | Shots | Seq | RevSeq | RevFrames | Fwd Max |dPos| | Fwd Max |dVel| | Rev Max |dPos| | Rev Max |dVel|");
+    Console.WriteLine("----- | ----- | --- | ------ | --------- | -------------- | -------------- | -------------- | --------------");
+    foreach (var s in summaries.OrderBy(summary => summary.LevelIndex))
     {
-        Console.WriteLine($"{s.LevelIndex:00} {s.LevelId,-15} {s.Shots,5} {s.Sequences,3} {s.MaxPositionDelta,12:G6} {s.MaxVelocityDelta,12:G6}");
+        Console.WriteLine($"{s.LevelIndex:00} {s.LevelId,-15} {s.Shots,5} {s.Sequences,3} {s.ReverseSequences,6} {s.ReverseFrames,9} {s.MaxPositionDelta,16:G6} {s.MaxVelocityDelta,16:G6} {s.ReverseMaxPositionDelta,16:G6} {s.ReverseMaxVelocityDelta,16:G6}");
     }
 }
 
@@ -217,8 +289,12 @@ sealed record LevelSummary(int LevelIndex, string LevelId)
 {
     public int Shots { get; set; }
     public int Sequences { get; set; }
+    public int ReverseSequences { get; set; }
+    public int ReverseFrames { get; set; }
     public double MaxPositionDelta { get; set; }
     public double MaxVelocityDelta { get; set; }
+    public double ReverseMaxPositionDelta { get; set; }
+    public double ReverseMaxVelocityDelta { get; set; }
 }
 
 sealed class FixtureFile
@@ -310,6 +386,9 @@ sealed class FixtureFrame
     [JsonProperty("index")]
     public int Index { get; set; }
 
+    [JsonProperty("step")]
+    public int Step { get; set; }
+
     [JsonProperty("time")]
     public double Time { get; set; }
 
@@ -318,4 +397,43 @@ sealed class FixtureFrame
 
     [JsonProperty("velocity")]
     public Vec2 Velocity { get; set; }
+}
+
+sealed class ReverseFixtureFile
+{
+    [JsonProperty("schemaVersion")]
+    public int SchemaVersion { get; set; }
+
+    [JsonProperty("levelIndex")]
+    public int LevelIndex { get; set; }
+
+    [JsonProperty("levelId")]
+    public string LevelId { get; set; } = "";
+
+    [JsonProperty("delta")]
+    public double Delta { get; set; }
+
+    [JsonProperty("steps")]
+    public int Steps { get; set; }
+
+    [JsonProperty("sequences")]
+    public List<ReverseSequence> Sequences { get; set; } = [];
+}
+
+sealed class ReverseSequence
+{
+    [JsonProperty("source")]
+    public string Source { get; set; } = "";
+
+    [JsonProperty("shotKind")]
+    public string ShotKind { get; set; } = "";
+
+    [JsonProperty("launchPlanetIndex")]
+    public int? LaunchPlanetIndex { get; set; }
+
+    [JsonProperty("startFrame")]
+    public FixtureFrame StartFrame { get; set; } = new();
+
+    [JsonProperty("frames")]
+    public List<FixtureFrame> Frames { get; set; } = [];
 }

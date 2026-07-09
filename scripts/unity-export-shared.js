@@ -6,6 +6,8 @@ import {
   WORLD_SIZE,
   createLevelRuntime,
   directionFromAngleDeg,
+  reverseStepBall,
+  setLevelTime,
   simulateShot,
 } from '../src/game-core.js';
 
@@ -15,8 +17,13 @@ export const WORLD_NUMBER = WORLD_INDEX + 1;
 export const WORLD_DEFINITION = WORLD_DEFINITIONS[WORLD_INDEX];
 export const WORLD_FILE_PATH = 'unity/Assets/StreamingAssets/levels/world-1.json';
 export const FIXTURE_DIR = 'unity/tests/fixtures';
+export const REVERSE_FIXTURE_DIR = 'unity/tests/fixtures/reverse';
 export const FIXTURE_SAMPLE_EVERY_N_FRAMES = 15;
 export const FIXTURE_DELTA = 1 / 60;
+export const REVERSE_FIXTURE_DELTA = 1 / 120;
+export const REVERSE_FIXTURE_STEPS = 30;
+export const REVERSE_FIXTURE_MIN_FLYING_STEPS = 40;
+export const REVERSE_FIXTURE_SHOT_LIMIT = 3;
 export const FIXTURE_MAX_TIME = 20;
 export const SUN_COLLISION_RADIUS = 0.42;
 export const DEFAULT_COVERAGE_POWER_GRID = [1.4, 2.4, 3.2];
@@ -160,6 +167,23 @@ export function buildFixtureExport(level, levelIndex) {
   };
 }
 
+export function buildReverseFixtureExport(level, levelIndex) {
+  const sequences = buildReverseSequences(levelIndex);
+  if (sequences.length === 0) {
+    throw new Error(`Level ${levelIndex} (${level.id}): no reverse fixture shots found`);
+  }
+
+  return {
+    schemaVersion: 1,
+    levelIndex,
+    levelId: level.id,
+    delta: REVERSE_FIXTURE_DELTA,
+    steps: REVERSE_FIXTURE_STEPS,
+    minForwardFlyingSteps: REVERSE_FIXTURE_MIN_FLYING_STEPS,
+    sequences,
+  };
+}
+
 export function buildFixtureShots(level, levelIndex, coveragePowerGrid = DEFAULT_COVERAGE_POWER_GRID) {
   const presetShots = level.launchPresets.map((preset, index) => ({
     source: 'preset',
@@ -267,6 +291,122 @@ function buildCoverageShots(levelIndex, powerGrid) {
     power: shot.power,
     waitTime: shot.waitTime,
   }));
+}
+
+function buildReverseSequences(levelIndex) {
+  const candidates = [];
+  let selectionIndex = 0;
+
+  for (let angleIndex = 0; angleIndex < COVERAGE_ANGLE_STEPS; angleIndex += 1) {
+    const angle = angleIndex * 2 * Math.PI / COVERAGE_ANGLE_STEPS;
+    const angleDeg = angle * 180 / Math.PI;
+    for (const power of WIDE_COVERAGE_POWER_GRID) {
+      for (const waitTime of COVERAGE_WAIT_GRID) {
+        const sequence = tryBuildReverseSequence(levelIndex, {
+          source: 'reverse-coverage',
+          shotKind: `reverse${selectionIndex}`,
+          angleDeg,
+          power,
+          waitTime,
+        });
+        if (sequence) {
+          candidates.push({ ...sequence, selectionIndex });
+        }
+        selectionIndex += 1;
+      }
+    }
+  }
+
+  candidates.sort((left, right) => {
+    if (right.forwardFlyingSteps !== left.forwardFlyingSteps) {
+      return right.forwardFlyingSteps - left.forwardFlyingSteps;
+    }
+    return left.selectionIndex - right.selectionIndex;
+  });
+
+  return candidates.slice(0, REVERSE_FIXTURE_SHOT_LIMIT).map((candidate, index) => ({
+    source: candidate.source,
+    shotKind: `reverse${index}`,
+    input: candidate.input,
+    launchPlanetIndex: candidate.launchPlanetIndex,
+    forwardCaptureFrameIndex: candidate.forwardCaptureFrameIndex,
+    forwardFlyingSteps: candidate.forwardFlyingSteps,
+    startFrame: candidate.startFrame,
+    frames: candidate.frames,
+  }));
+}
+
+function tryBuildReverseSequence(levelIndex, shot) {
+  const forwardLevel = createUnityLevel(levelIndex);
+  const result = simulateShot(forwardLevel, toSimShot(shot), {
+    captureFrames: true,
+    delta: REVERSE_FIXTURE_DELTA,
+    maxTime: FIXTURE_MAX_TIME,
+  });
+
+  const frames = result.frames ?? [];
+  const launchFrameIndex = frames.findIndex((frame) => frame.anchorPlanetIndex === null);
+  if (launchFrameIndex < 0) {
+    return null;
+  }
+
+  let forwardFlyingSteps = 0;
+  for (let index = launchFrameIndex + 1; index < frames.length; index += 1) {
+    if (frames[index].anchorPlanetIndex !== null) {
+      break;
+    }
+    forwardFlyingSteps += 1;
+  }
+
+  if (forwardFlyingSteps < REVERSE_FIXTURE_MIN_FLYING_STEPS) {
+    return null;
+  }
+
+  const captureOffset = Math.max(
+    REVERSE_FIXTURE_STEPS,
+    Math.floor(forwardFlyingSteps / 2),
+  );
+  const forwardCaptureFrameIndex = launchFrameIndex + captureOffset;
+  const startFrame = frames[forwardCaptureFrameIndex];
+  if (!startFrame || startFrame.anchorPlanetIndex !== null) {
+    return null;
+  }
+
+  const reverseLevel = createUnityLevel(levelIndex);
+  setLevelTime(reverseLevel, startFrame.time);
+  const reverseBall = {
+    position: { ...startFrame.position },
+    velocity: { ...startFrame.velocity },
+    time: startFrame.time,
+    landingCount: startFrame.landingCount ?? 0,
+    launchGracePlanetIndex: startFrame.launchGracePlanetIndex ?? null,
+    anchorPlanetIndex: null,
+    anchorNormal: startFrame.anchorNormal ? { ...startFrame.anchorNormal } : null,
+    anchorSinceTime: startFrame.anchorSinceTime ?? 0,
+    portalCooldown: startFrame.portalCooldown ?? 0,
+    heat: startFrame.heat ?? 0,
+  };
+
+  const reversedFrames = [];
+  const launchPlanetIndex = reverseLevel.startPlanetIndex ?? null;
+  for (let step = 1; step <= REVERSE_FIXTURE_STEPS; step += 1) {
+    reverseStepBall(reverseLevel, reverseBall, REVERSE_FIXTURE_DELTA, { launchPlanetIndex });
+    reversedFrames.push(serializeReverseFrame(step, reverseBall));
+  }
+
+  return {
+    source: shot.source,
+    input: {
+      angleDeg: shot.angleDeg,
+      power: shot.power,
+      waitTime: shot.waitTime,
+    },
+    launchPlanetIndex,
+    forwardCaptureFrameIndex,
+    forwardFlyingSteps,
+    startFrame: serializeReverseFrame(0, startFrame),
+    frames: reversedFrames,
+  };
 }
 
 function outcomeReasonKey(result) {
@@ -395,6 +535,15 @@ function sampleFrames(frames) {
   });
 }
 
+function serializeReverseFrame(step, frame) {
+  return {
+    step,
+    time: frame.time,
+    position: serializeVec2(frame.position),
+    velocity: serializeVec2(frame.velocity),
+  };
+}
+
 export function summarizeFixture(fixture) {
   const outcomes = {};
   const sources = {};
@@ -449,6 +598,11 @@ export async function readJsonFile(filePath) {
 export function getFixturePath(level, levelIndex) {
   const levelNumber = String(levelIndex).padStart(2, '0');
   return path.join(FIXTURE_DIR, `level-${levelNumber}-${level.id}.json`);
+}
+
+export function getReverseFixturePath(level, levelIndex) {
+  const levelNumber = String(levelIndex).padStart(2, '0');
+  return path.join(REVERSE_FIXTURE_DIR, `level-${levelNumber}-${level.id}.reverse.json`);
 }
 
 function validateRuntimeLevel(level, index) {
