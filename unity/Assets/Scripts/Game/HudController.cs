@@ -6,14 +6,15 @@ using UnityEngine.UI;
 namespace GravityGolf.Game
 {
     /// <summary>
-    /// uGUI HUD built entirely in code (spec §8): level kicker/label/name, par pill,
-    /// power bar, status line, retry button, level-select strip, result banner, and a
-    /// game-over modal. Safe-area aware via Screen.safeArea.
+    /// uGUI HUD built entirely in code (spec §8), restyled to match the web game: level
+    /// title + PAR chip (top-left, transparent), a translucent status card (top-center),
+    /// pill buttons, a rounded level-select strip, a result banner, and a game-over modal.
+    /// Chrome uses the web palette (periwinkle hairline borders, teal accent) and IBM Plex
+    /// fonts. Safe-area aware via Screen.safeArea. Purely visual over the prior wiring.
     /// </summary>
     public sealed class HudController : MonoBehaviour
     {
         private GameController _controller;
-        private Font _font;
 
         private RectTransform _safeArea;
         private Text _kicker;
@@ -34,34 +35,40 @@ namespace GravityGolf.Game
         private Text _modalTitle;
         private Text _modalHint;
 
-        private Button _undoButton;
-        private Text _undoLabel;
-        private Button _modalUndoButton;
-        private Text _modalUndoLabel;
+        private Pill _undoPill;
+        private Pill _modalUndoPill;
 
-        private readonly Button[] _levelButtons = new Button[10];
-        private readonly Text[] _levelLabels = new Text[10];
+        private readonly Pill[] _levelPills = new Pill[10];
         private readonly Outline[] _levelOutlines = new Outline[10];
 
-        private static readonly Color PanelColor = new Color(0.03f, 0.05f, 0.10f, 0.72f);
-        private static readonly Color ButtonColor = new Color(0.16f, 0.20f, 0.32f, 0.95f);
-        private static readonly Color ActiveLevelColor = new Color(0.30f, 0.42f, 0.66f, 1f);
-        private static readonly Color ActiveLevelGlow = new Color(0.55f, 0.68f, 0.98f, 0.9f);
-        private static readonly Color ActiveLevelLabel = Color.white;
-        private static readonly Color InactiveLevelLabel = new Color(0.72f, 0.78f, 0.90f, 1f);
-        private static readonly Color AccentColor = ColorUtil.FromInt(0xFF7D58);
-        private static readonly Color UndoAccentColor = new Color(0.36f, 0.55f, 0.92f, 1f);
-        private static readonly Color DisabledButtonColor = new Color(0.10f, 0.12f, 0.18f, 0.55f);
-        private static readonly Color DisabledLabelColor = new Color(0.48f, 0.54f, 0.66f, 0.7f);
+        // ---- Web palette (src/style.css :root). ----
+        private static readonly Color SurfaceFill = new Color(0.031f, 0.055f, 0.102f, 0.78f);   // rgba(8,14,26,0.78)
+        private static readonly Color StatusCardFill = new Color(0.035f, 0.059f, 0.106f, 0.75f); // status-card gradient mid
+        private static readonly Color ModalFill = new Color(0.035f, 0.059f, 0.106f, 0.93f);      // modal gradient mid
+        private static readonly Color PrimaryFill = new Color(0.071f, 0.157f, 0.176f, 0.9f);     // dark-teal gradient mid
+        private static readonly Color ChipFill = new Color(1f, 1f, 1f, 0.03f);                   // rgba(255,255,255,0.03)
+        private static readonly Color TileFill = new Color(0.031f, 0.055f, 0.102f, 0.6f);
+
+        private static readonly Color LineBorder = new Color(0.537f, 0.659f, 1f, 0.18f);   // rgba(137,168,255,0.18)
+        private static readonly Color PrimaryBorder = new Color(0.49f, 0.953f, 0.851f, 0.42f); // teal
+        private static readonly Color InnerRing = new Color(0.537f, 0.659f, 1f, 0.09f);
+
+        private static readonly Color TextColor = new Color(0.929f, 0.953f, 1f, 1f);       // #edf3ff
+        private static readonly Color MutedColor = new Color(0.929f, 0.953f, 1f, 0.68f);   // rgba(237,243,255,0.68)
+        private static readonly Color AccentBlue = new Color(0.62f, 0.847f, 1f, 1f);       // #9ed8ff
+        private static readonly Color AccentTeal = new Color(0.49f, 0.953f, 0.851f, 1f);   // #7df3d9
+        private static readonly Color WarningColor = new Color(1f, 0.733f, 0.486f, 1f);    // #ffbb7c
+        private static readonly Color DangerColor = new Color(1f, 0.427f, 0.227f, 1f);     // #ff6d3a
+        private static readonly Color GoldColor = ColorUtil.FromInt(0xFFC85C);
+        private static readonly Color PowerFillColor = ColorUtil.FromInt(0xFF7D58);
+
+        private static readonly Color ActiveTileFill = new Color(0.49f, 0.953f, 0.851f, 0.16f);
+        private static readonly Color ActiveTileBorder = new Color(0.49f, 0.953f, 0.851f, 0.55f);
+        private static readonly Color ActiveTileGlow = new Color(0.49f, 0.953f, 0.851f, 0.6f);
 
         public void Build(GameController controller)
         {
             _controller = controller;
-            _font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            if (_font == null)
-            {
-                _font = Font.CreateDynamicFontFromOSFont(new[] { "Arial", "Liberation Sans", "DejaVu Sans" }, 16);
-            }
 
             var canvasGo = new GameObject("HudCanvas", typeof(RectTransform));
             var canvas = canvasGo.AddComponent<Canvas>();
@@ -81,42 +88,48 @@ namespace GravityGolf.Game
             BuildTopLeft();
             BuildStatus();
             BuildPowerBar();
-            BuildRetry();
+            BuildBottomBar();
             BuildLevelStrip();
             BuildBanner();
             BuildModal();
         }
 
+        // Top-left level block: no background box (like web) — a mono kicker, the hole title
+        // in Plex Sans, a muted subtitle, and a small mono "PAR n" chip on the space bg.
         private void BuildTopLeft()
         {
-            var panel = MakePanel(_safeArea, "InfoPanel", PanelColor);
-            Anchor(panel.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f));
-            panel.rectTransform.anchoredPosition = new Vector2(18f, -18f);
-            panel.rectTransform.sizeDelta = new Vector2(430f, 150f);
+            var block = new GameObject("LevelBlock", typeof(RectTransform));
+            block.transform.SetParent(_safeArea, false);
+            var rect = (RectTransform)block.transform;
+            Anchor(rect, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f));
+            rect.anchoredPosition = new Vector2(22f, -20f);
+            rect.sizeDelta = new Vector2(440f, 150f);
 
-            _kicker = MakeText(panel.transform, "Kicker", 22, TextAnchor.UpperLeft, new Color(0.75f, 0.82f, 0.95f, 1f));
-            Place(_kicker.rectTransform, 16f, -12f, 400f, 26f);
+            _kicker = MakeText(block.transform, "Kicker", 15, TextAnchor.UpperLeft, AccentBlue, FontLibrary.MonoSemiBold);
+            Place(_kicker.rectTransform, 0f, 0f, 430f, 20f);
 
-            _levelLabel = MakeText(panel.transform, "LevelLabel", 20, TextAnchor.UpperLeft, new Color(0.6f, 0.68f, 0.85f, 1f));
-            Place(_levelLabel.rectTransform, 16f, -40f, 400f, 24f);
+            _levelName = MakeText(block.transform, "LevelName", 30, TextAnchor.UpperLeft, TextColor, FontLibrary.SansSemiBold);
+            Place(_levelName.rectTransform, 0f, -26f, 430f, 40f);
 
-            _levelName = MakeText(panel.transform, "LevelName", 34, TextAnchor.UpperLeft, Color.white);
-            Place(_levelName.rectTransform, 16f, -66f, 400f, 44f);
+            _levelLabel = MakeText(block.transform, "LevelLabel", 16, TextAnchor.UpperLeft, MutedColor, FontLibrary.SansRegular);
+            Place(_levelLabel.rectTransform, 1f, -68f, 430f, 22f);
 
-            _parPill = MakeText(panel.transform, "ParPill", 22, TextAnchor.UpperLeft, ColorUtil.FromInt(0xFFC85C));
-            Place(_parPill.rectTransform, 16f, -114f, 400f, 28f);
+            _parPill = MakeChip(block.transform, "ParPill", 1f, -98f, 96f, 30f, ChipFill, LineBorder, MutedColor, 14);
         }
 
+        // Top-center status line, now wrapped in a translucent rounded status-card. The aim
+        // hint stays low and subtle just above the power bar (existing behavior).
         private void BuildStatus()
         {
-            _status = MakeText(_safeArea, "Status", 26, TextAnchor.UpperCenter, Color.white);
-            Anchor(_status.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
-            _status.rectTransform.anchoredPosition = new Vector2(0f, -22f);
-            _status.rectTransform.sizeDelta = new Vector2(900f, 32f);
+            var card = MakeCard(_safeArea, "StatusCard", StatusCardFill, LineBorder, 22f);
+            Anchor(card.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
+            card.rectTransform.anchoredPosition = new Vector2(0f, -22f);
+            card.rectTransform.sizeDelta = new Vector2(440f, 46f);
 
-            // Aim hint reads as a subtle helper, not a headline: small, dim, and anchored
-            // low (just above the power bar) so it stays clear of the top status/title zone.
-            _hint = MakeText(_safeArea, "Hint", 18, TextAnchor.LowerCenter, new Color(0.62f, 0.70f, 0.86f, 0.6f));
+            _status = MakeText(card.transform, "Status", 20, TextAnchor.MiddleCenter, TextColor, FontLibrary.SansSemiBold);
+            Stretch(_status.rectTransform);
+
+            _hint = MakeText(_safeArea, "Hint", 17, TextAnchor.LowerCenter, MutedColor, FontLibrary.SansRegular);
             Anchor(_hint.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
             _hint.rectTransform.anchoredPosition = new Vector2(0f, 58f);
             _hint.rectTransform.sizeDelta = new Vector2(760f, 26f);
@@ -129,7 +142,7 @@ namespace GravityGolf.Game
             back.rectTransform.anchoredPosition = new Vector2(0f, 30f);
             back.rectTransform.sizeDelta = new Vector2(360f, 18f);
 
-            var fill = MakePanel(back.transform, "PowerFill", AccentColor);
+            var fill = MakePanel(back.transform, "PowerFill", PowerFillColor);
             _powerFill = fill.rectTransform;
             Anchor(_powerFill, new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0.5f));
             _powerFill.anchoredPosition = Vector2.zero;
@@ -137,77 +150,79 @@ namespace GravityGolf.Game
             _powerFill.localScale = new Vector3(0.04f, 1f, 1f);
         }
 
-        // Two persistent thumb-reachable primaries in the lower-left corner: Retry (full
-        // restart) and Undo (rewind one shot), sized as generous >=64px touch targets and
-        // kept well clear of the centered power bar and the bottom-right level strip. Undo
-        // starts disabled and is toggled by SetUndoEnabled from the controller each frame.
-        private void BuildRetry()
+        // Bottom-left action row: Retry (full restart) and Undo (rewind one shot) pills.
+        // Undo starts disabled and is toggled by SetUndoEnabled each frame. Both are kept
+        // clear of the centered power bar and the bottom-right level strip.
+        private void BuildBottomBar()
         {
-            const float height = 64f;
+            const float height = 54f;
             const float retryWidth = 128f;
             const float undoWidth = 128f;
-            const float margin = 18f;
-            const float gap = 14f;
+            const float margin = 20f;
+            const float gap = 10f;
 
-            var retry = MakeButton(_safeArea, "RetryButton", "Retry", () => _controller.RestartLevel());
-            Anchor(retry.image.rectTransform, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(0f, 0f));
-            retry.image.rectTransform.anchoredPosition = new Vector2(margin, 22f);
-            retry.image.rectTransform.sizeDelta = new Vector2(retryWidth, height);
+            var retry = MakePill(_safeArea, "RetryButton", "Retry", () => _controller.RestartLevel(), SurfaceFill, LineBorder, TextColor, 16);
+            Anchor(retry.Rect, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(0f, 0f));
+            retry.Rect.anchoredPosition = new Vector2(margin, 22f);
+            retry.Rect.sizeDelta = new Vector2(retryWidth, height);
+            SetCorner(retry, height * 0.5f);
 
-            _undoButton = MakeButton(_safeArea, "UndoButton", "Undo", () => _controller.RequestRewind());
-            Anchor(_undoButton.image.rectTransform, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(0f, 0f));
-            _undoButton.image.rectTransform.anchoredPosition = new Vector2(margin + retryWidth + gap, 22f);
-            _undoButton.image.rectTransform.sizeDelta = new Vector2(undoWidth, height);
-            _undoLabel = _undoButton.GetComponentInChildren<Text>();
+            _undoPill = MakePill(_safeArea, "UndoButton", "Undo", () => _controller.RequestRewind(), SurfaceFill, LineBorder, TextColor, 16);
+            Anchor(_undoPill.Rect, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(0f, 0f));
+            _undoPill.Rect.anchoredPosition = new Vector2(margin + retryWidth + gap, 22f);
+            _undoPill.Rect.sizeDelta = new Vector2(undoWidth, height);
+            SetCorner(_undoPill, height * 0.5f);
             SetUndoEnabled(false);
         }
 
         private void BuildLevelStrip()
         {
-            const float pad = 14f;
-            const float spacing = 44f;
-            const float button = 36f;
-            var strip = MakePanel(_safeArea, "LevelStrip", PanelColor);
-            Anchor(strip.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(1f, 0f));
-            strip.rectTransform.anchoredPosition = new Vector2(-18f, 26f);
-            strip.rectTransform.sizeDelta = new Vector2(pad + 9f * spacing + button + pad, 54f);
+            const float pad = 12f;
+            const float spacing = 42f;
+            const float tile = 36f;
+            const float radius = 12f;
+
+            var strip = new GameObject("LevelStrip", typeof(RectTransform));
+            strip.transform.SetParent(_safeArea, false);
+            var stripRect = (RectTransform)strip.transform;
+            Anchor(stripRect, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(1f, 0f));
+            stripRect.anchoredPosition = new Vector2(-18f, 26f);
+            stripRect.sizeDelta = new Vector2(pad + 9f * spacing + tile + pad, 54f);
 
             for (var i = 0; i < 10; i += 1)
             {
                 var index = i;
-                var levelButton = MakeButton(strip.transform, $"Level{i + 1}", (i + 1).ToString(), () => _controller.LoadLevel(index));
-                Anchor(levelButton.image.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f));
-                levelButton.image.rectTransform.anchoredPosition = new Vector2(pad + i * spacing, 0f);
-                levelButton.image.rectTransform.sizeDelta = new Vector2(button, button);
-                _levelButtons[i] = levelButton;
-                _levelLabels[i] = levelButton.GetComponentInChildren<Text>();
+                var pill = MakePill(strip.transform, $"Level{i + 1}", (i + 1).ToString(), () => _controller.LoadLevel(index), TileFill, LineBorder, MutedColor, 16);
+                Anchor(pill.Rect, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f));
+                pill.Rect.anchoredPosition = new Vector2(pad + i * spacing, 0f);
+                pill.Rect.sizeDelta = new Vector2(tile, tile);
+                SetCorner(pill, radius);
+                _levelPills[i] = pill;
 
-                var outline = levelButton.image.gameObject.AddComponent<Outline>();
-                outline.effectColor = ActiveLevelGlow;
+                var outline = pill.Fill.gameObject.AddComponent<Outline>();
+                outline.effectColor = ActiveTileGlow;
                 outline.effectDistance = new Vector2(2f, -2f);
                 outline.enabled = false;
                 _levelOutlines[i] = outline;
             }
         }
 
-        // Brightens the current level's tile (fill + label + glow outline) and dims the
-        // rest so the active hole is unmistakable.
+        // Brightens the current level's tile (teal fill + border + label + glow) and returns
+        // the rest to the muted surface look so the active hole is unmistakable.
         private void HighlightLevel(int levelIndex)
         {
-            for (var i = 0; i < _levelButtons.Length; i += 1)
+            for (var i = 0; i < _levelPills.Length; i += 1)
             {
-                if (_levelButtons[i] == null)
+                var pill = _levelPills[i];
+                if (pill == null)
                 {
                     continue;
                 }
 
                 var active = i == levelIndex;
-                _levelButtons[i].image.color = active ? ActiveLevelColor : ButtonColor;
-                if (_levelLabels[i] != null)
-                {
-                    _levelLabels[i].color = active ? ActiveLevelLabel : InactiveLevelLabel;
-                }
-
+                pill.Fill.color = active ? ActiveTileFill : TileFill;
+                pill.Border.color = active ? ActiveTileBorder : LineBorder;
+                pill.Label.color = active ? AccentTeal : MutedColor;
                 if (_levelOutlines[i] != null)
                 {
                     _levelOutlines[i].enabled = active;
@@ -217,56 +232,62 @@ namespace GravityGolf.Game
 
         private void BuildBanner()
         {
-            var panel = MakePanel(_safeArea, "ResultBanner", new Color(0.05f, 0.07f, 0.14f, 0.92f));
-            _banner = panel.gameObject;
-            Anchor(panel.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-            panel.rectTransform.anchoredPosition = new Vector2(0f, 120f);
-            panel.rectTransform.sizeDelta = new Vector2(520f, 180f);
+            var card = MakeCard(_safeArea, "ResultBanner", ModalFill, LineBorder, 24f);
+            _banner = card.gameObject;
+            Anchor(card.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            card.rectTransform.anchoredPosition = new Vector2(0f, 120f);
+            card.rectTransform.sizeDelta = new Vector2(520f, 180f);
 
-            _bannerKicker = MakeText(panel.transform, "BannerKicker", 22, TextAnchor.UpperCenter, new Color(0.75f, 0.82f, 0.95f, 1f));
-            Place(_bannerKicker.rectTransform, 20f, -16f, 480f, 28f);
+            _bannerKicker = MakeText(card.transform, "BannerKicker", 15, TextAnchor.UpperCenter, AccentBlue, FontLibrary.MonoSemiBold);
+            Place(_bannerKicker.rectTransform, 20f, -18f, 480f, 22f);
 
-            _bannerTitle = MakeText(panel.transform, "BannerTitle", 44, TextAnchor.MiddleCenter, ColorUtil.FromInt(0xFFC85C));
-            Place(_bannerTitle.rectTransform, 20f, -48f, 480f, 60f);
+            _bannerTitle = MakeText(card.transform, "BannerTitle", 44, TextAnchor.MiddleCenter, GoldColor, FontLibrary.SansSemiBold);
+            Place(_bannerTitle.rectTransform, 20f, -50f, 480f, 64f);
 
-            _bannerDetail = MakeText(panel.transform, "BannerDetail", 24, TextAnchor.LowerCenter, Color.white);
-            Place(_bannerDetail.rectTransform, 20f, -120f, 480f, 40f);
+            _bannerDetail = MakeText(card.transform, "BannerDetail", 16, TextAnchor.LowerCenter, MutedColor, FontLibrary.MonoSemiBold);
+            Place(_bannerDetail.rectTransform, 20f, -128f, 480f, 36f);
 
             _banner.SetActive(false);
         }
 
-        // Recovery modal after a crash/drift: Undo (rewind the losing shot) is the primary
-        // action — big, accented, on top — and Retry (full restart) is the muted secondary
-        // beneath it. Undo dims out when there's no shot to return to.
+        // Recovery modal after a crash/drift: a rounded surface-strong panel with a hairline
+        // border + inner ring, a mono kicker, a Plex Sans danger title, a muted hint, and two
+        // stacked pills — teal primary "Undo Shot" over the muted "Retry Hole". Undo dims out
+        // when there's no shot to return to.
         private void BuildModal()
         {
-            var panel = MakePanel(_safeArea, "GameOverModal", new Color(0.06f, 0.03f, 0.06f, 0.95f));
-            _modal = panel.gameObject;
-            Anchor(panel.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-            panel.rectTransform.anchoredPosition = Vector2.zero;
-            panel.rectTransform.sizeDelta = new Vector2(520f, 292f);
+            var card = MakeCard(_safeArea, "GameOverModal", ModalFill, LineBorder, 28f);
+            _modal = card.gameObject;
+            Anchor(card.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            card.rectTransform.anchoredPosition = Vector2.zero;
+            card.rectTransform.sizeDelta = new Vector2(460f, 300f);
 
-            _modalTitle = MakeText(panel.transform, "ModalTitle", 34, TextAnchor.UpperCenter, ColorUtil.FromInt(0xFF7D58));
-            Place(_modalTitle.rectTransform, 20f, -26f, 480f, 44f);
+            var ring = MakeBorder(card.transform, InnerRing);
+            ring.rectTransform.offsetMin = new Vector2(10f, 10f);
+            ring.rectTransform.offsetMax = new Vector2(-10f, -10f);
+            ring.pixelsPerUnitMultiplier = RoundedSprite.CornerRadius / 20f;
 
-            _modalHint = MakeText(panel.transform, "ModalHint", 22, TextAnchor.UpperCenter, new Color(0.82f, 0.85f, 0.92f, 1f));
-            Place(_modalHint.rectTransform, 20f, -74f, 480f, 34f);
+            var kicker = MakeText(card.transform, "ModalKicker", 14, TextAnchor.UpperCenter, WarningColor, FontLibrary.MonoSemiBold);
+            Place(kicker.rectTransform, 20f, -26f, 420f, 20f);
+            kicker.text = "RECOVERY";
 
-            _modalUndoButton = MakeButton(panel.transform, "ModalUndo", "Undo Shot", () => _controller.RequestRewind());
-            _modalUndoButton.image.color = UndoAccentColor;
-            Anchor(_modalUndoButton.image.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
-            _modalUndoButton.image.rectTransform.anchoredPosition = new Vector2(0f, 96f);
-            _modalUndoButton.image.rectTransform.sizeDelta = new Vector2(240f, 66f);
-            _modalUndoLabel = _modalUndoButton.GetComponentInChildren<Text>();
-            if (_modalUndoLabel != null)
-            {
-                _modalUndoLabel.fontSize = 26;
-            }
+            _modalTitle = MakeText(card.transform, "ModalTitle", 34, TextAnchor.MiddleCenter, DangerColor, FontLibrary.SansSemiBold);
+            Place(_modalTitle.rectTransform, 20f, -52f, 420f, 46f);
 
-            var retry = MakeButton(panel.transform, "ModalRetry", "Retry Hole", () => _controller.RestartLevel());
-            Anchor(retry.image.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
-            retry.image.rectTransform.anchoredPosition = new Vector2(0f, 24f);
-            retry.image.rectTransform.sizeDelta = new Vector2(180f, 52f);
+            _modalHint = MakeText(card.transform, "ModalHint", 18, TextAnchor.MiddleCenter, MutedColor, FontLibrary.SansRegular);
+            Place(_modalHint.rectTransform, 20f, -108f, 420f, 44f);
+
+            _modalUndoPill = MakePill(card.transform, "ModalUndo", "Undo Shot", () => _controller.RequestRewind(), PrimaryFill, PrimaryBorder, TextColor, 17);
+            Anchor(_modalUndoPill.Rect, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
+            _modalUndoPill.Rect.anchoredPosition = new Vector2(0f, 94f);
+            _modalUndoPill.Rect.sizeDelta = new Vector2(260f, 52f);
+            SetCorner(_modalUndoPill, 26f);
+
+            var retry = MakePill(card.transform, "ModalRetry", "Retry Hole", () => _controller.RestartLevel(), SurfaceFill, LineBorder, TextColor, 16);
+            Anchor(retry.Rect, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
+            retry.Rect.anchoredPosition = new Vector2(0f, 34f);
+            retry.Rect.sizeDelta = new Vector2(210f, 48f);
+            SetCorner(retry, 24f);
 
             _modal.SetActive(false);
         }
@@ -293,10 +314,10 @@ namespace GravityGolf.Game
 
         public void OnLevelLoaded(WorldDefinition world, LevelRuntime level, int levelIndex, int par)
         {
-            _kicker.text = $"World {world.WorldNumber} · {world.WorldName}";
-            _levelLabel.text = $"Level {levelIndex + 1} / {world.Levels.Count}";
+            _kicker.text = $"WORLD {world.WorldNumber} · {world.WorldName}".ToUpperInvariant();
             _levelName.text = level.Name;
-            _parPill.text = $"Par {par}";
+            _levelLabel.text = $"Level {levelIndex + 1} / {world.Levels.Count}";
+            _parPill.text = $"PAR {par}";
             HighlightLevel(levelIndex);
         }
 
@@ -314,10 +335,10 @@ namespace GravityGolf.Game
 
         public void ShowResult(WorldDefinition world, LevelRuntime level, string medalLabel, string resultName, int par, int launches)
         {
-            _bannerKicker.text = $"{world.WorldName} · Hole {level.WorldLevelNumber}";
+            _bannerKicker.text = $"{world.WorldName} · HOLE {level.WorldLevelNumber}".ToUpperInvariant();
             _bannerTitle.text = resultName;
             var launchWord = launches == 1 ? "launch" : "launches";
-            _bannerDetail.text = $"{medalLabel} · Par {par} · {launches} {launchWord}";
+            _bannerDetail.text = $"{medalLabel} · PAR {par} · {launches} {launchWord}".ToUpperInvariant();
             _banner.SetActive(true);
             _bannerTimer = 3.4f;
         }
@@ -326,7 +347,7 @@ namespace GravityGolf.Game
         {
             _modalTitle.text = title;
             _modalHint.text = hint;
-            ApplyButtonEnabled(_modalUndoButton, _modalUndoLabel, canUndo, UndoAccentColor);
+            ApplyPillEnabled(_modalUndoPill, canUndo);
             _modal.SetActive(true);
         }
 
@@ -337,32 +358,28 @@ namespace GravityGolf.Game
         // false during GameState.Rewinding).
         public void SetUndoEnabled(bool enabled)
         {
-            ApplyButtonEnabled(_undoButton, _undoLabel, enabled, ButtonColor);
+            ApplyPillEnabled(_undoPill, enabled);
         }
 
-        private static void ApplyButtonEnabled(Button button, Text label, bool enabled, Color enabledColor)
+        private static void ApplyPillEnabled(Pill pill, bool enabled)
         {
-            if (button == null)
+            if (pill == null)
             {
                 return;
             }
 
-            button.interactable = enabled;
-            button.image.color = enabled ? enabledColor : DisabledButtonColor;
-            if (label != null)
-            {
-                label.color = enabled ? Color.white : DisabledLabelColor;
-            }
+            pill.Button.interactable = enabled;
+            pill.Group.alpha = enabled ? 1f : 0.42f;
         }
 
         // ---- uGUI construction helpers ----
 
-        private Text MakeText(Transform parent, string name, int size, TextAnchor anchor, Color color)
+        private Text MakeText(Transform parent, string name, int size, TextAnchor anchor, Color color, Font font)
         {
             var go = new GameObject(name, typeof(RectTransform));
             go.transform.SetParent(parent, false);
             var text = go.AddComponent<Text>();
-            text.font = _font;
+            text.font = font;
             text.fontSize = size;
             text.alignment = anchor;
             text.color = color;
@@ -372,6 +389,7 @@ namespace GravityGolf.Game
             return text;
         }
 
+        // Plain-quad Image (default sprite) for the power bar and its fill.
         private Image MakePanel(Transform parent, string name, Color color)
         {
             var go = new GameObject(name, typeof(RectTransform));
@@ -381,16 +399,84 @@ namespace GravityGolf.Game
             return image;
         }
 
-        private Button MakeButton(Transform parent, string name, string label, UnityAction onClick)
+        // A decorative rounded surface = fill Image + hairline border child. Non-interactive.
+        private Image MakeCard(Transform parent, string name, Color fillColor, Color borderColor, float radius)
         {
-            var image = MakePanel(parent, name, ButtonColor);
-            var button = image.gameObject.AddComponent<Button>();
-            button.targetGraphic = image;
-            button.onClick.AddListener(onClick);
-            var text = MakeText(image.transform, "Label", 20, TextAnchor.MiddleCenter, Color.white);
+            var go = new GameObject(name, typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var fill = go.AddComponent<Image>();
+            fill.sprite = RoundedSprite.Fill;
+            fill.type = Image.Type.Sliced;
+            fill.color = fillColor;
+            fill.pixelsPerUnitMultiplier = RoundedSprite.CornerRadius / Mathf.Max(1f, radius);
+            fill.raycastTarget = false;
+
+            var border = MakeBorder(go.transform, borderColor);
+            border.pixelsPerUnitMultiplier = RoundedSprite.CornerRadius / Mathf.Max(1f, radius);
+            return fill;
+        }
+
+        private Image MakeBorder(Transform parent, Color color)
+        {
+            var go = new GameObject("Border", typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var image = go.AddComponent<Image>();
+            image.sprite = RoundedSprite.Border;
+            image.type = Image.Type.Sliced;
+            image.color = color;
+            image.raycastTarget = false;
+            Stretch(image.rectTransform);
+            return image;
+        }
+
+        // A small rounded chip (status-pill): fill + border + centered mono label. Positioned
+        // relative to the parent's top-left like Place. Returns the label for later updates.
+        private Text MakeChip(Transform parent, string name, float x, float y, float width, float height, Color fillColor, Color borderColor, Color textColor, int fontSize)
+        {
+            var card = MakeCard(parent, name, fillColor, borderColor, height * 0.5f);
+            Place(card.rectTransform, x, y, width, height);
+            var label = MakeText(card.transform, "Label", fontSize, TextAnchor.MiddleCenter, textColor, FontLibrary.MonoSemiBold);
+            Stretch(label.rectTransform);
+            return label;
+        }
+
+        // A rounded translucent pill button: fill + hairline border + centered mono UPPERCASE
+        // label, wrapped in a CanvasGroup so a disabled state dims the whole control.
+        private Pill MakePill(Transform parent, string name, string label, UnityAction onClick, Color fillColor, Color borderColor, Color textColor, int fontSize)
+        {
+            var go = new GameObject(name, typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var fill = go.AddComponent<Image>();
+            fill.sprite = RoundedSprite.Fill;
+            fill.type = Image.Type.Sliced;
+            fill.color = fillColor;
+
+            var group = go.AddComponent<CanvasGroup>();
+
+            var button = go.AddComponent<Button>();
+            button.transition = Selectable.Transition.None;
+            button.targetGraphic = fill;
+            if (onClick != null)
+            {
+                button.onClick.AddListener(onClick);
+            }
+
+            var border = MakeBorder(go.transform, borderColor);
+
+            var text = MakeText(go.transform, "Label", fontSize, TextAnchor.MiddleCenter, textColor, FontLibrary.MonoSemiBold);
             Stretch(text.rectTransform);
-            text.text = label;
-            return button;
+            text.text = label.ToUpperInvariant();
+
+            return new Pill { Button = button, Fill = fill, Border = border, Label = text, Group = group };
+        }
+
+        // Tunes a rounded element's visual corner radius (in UI units) via the sliced border
+        // multiplier, so one shared sprite serves both full pills and the smaller tiles.
+        private static void SetCorner(Pill pill, float radius)
+        {
+            var mult = RoundedSprite.CornerRadius / Mathf.Max(1f, radius);
+            pill.Fill.pixelsPerUnitMultiplier = mult;
+            pill.Border.pixelsPerUnitMultiplier = mult;
         }
 
         private static void Stretch(RectTransform rect)
@@ -408,7 +494,7 @@ namespace GravityGolf.Game
             rect.pivot = pivot;
         }
 
-        // Places a child relative to the top-left of its parent panel.
+        // Places a child relative to the top-left of its parent.
         private static void Place(RectTransform rect, float x, float y, float width, float height)
         {
             rect.anchorMin = new Vector2(0f, 1f);
@@ -416,6 +502,123 @@ namespace GravityGolf.Game
             rect.pivot = new Vector2(0f, 1f);
             rect.anchoredPosition = new Vector2(x, y);
             rect.sizeDelta = new Vector2(width, height);
+        }
+
+        // Bundles the parts of a pill button so its fill, border, label, and group can be
+        // recolored (active-level highlight) or dimmed (disabled) together.
+        private sealed class Pill
+        {
+            public Button Button;
+            public Image Fill;
+            public Image Border;
+            public Text Label;
+            public CanvasGroup Group;
+            public RectTransform Rect => (RectTransform)Button.transform;
+        }
+    }
+
+    /// <summary>
+    /// Loads the IBM Plex TTFs from Resources/Fonts once, falling back to the built-in
+    /// LegacyRuntime font (or an OS dynamic font) if a load fails so the HUD always renders.
+    /// </summary>
+    internal static class FontLibrary
+    {
+        private static Font _monoSemiBold;
+        private static Font _sansSemiBold;
+        private static Font _sansRegular;
+        private static Font _fallback;
+
+        public static Font MonoSemiBold => _monoSemiBold != null ? _monoSemiBold : (_monoSemiBold = Load("IBMPlexMono-SemiBold"));
+        public static Font SansSemiBold => _sansSemiBold != null ? _sansSemiBold : (_sansSemiBold = Load("IBMPlexSans-SemiBold"));
+        public static Font SansRegular => _sansRegular != null ? _sansRegular : (_sansRegular = Load("IBMPlexSans-Regular"));
+
+        private static Font Fallback => _fallback != null ? _fallback : (_fallback = LoadFallback());
+
+        private static Font Load(string fileName)
+        {
+            var font = Resources.Load<Font>("Fonts/" + fileName);
+            return font != null ? font : Fallback;
+        }
+
+        private static Font LoadFallback()
+        {
+            var builtin = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            if (builtin != null)
+            {
+                return builtin;
+            }
+
+            return Font.CreateDynamicFontFromOSFont(new[] { "Arial", "Liberation Sans", "DejaVu Sans" }, 16);
+        }
+    }
+
+    /// <summary>
+    /// Generates two white 9-slice sprites once — a filled rounded-rect and a matching 1px
+    /// stroke ring — anti-aliased via a signed-distance field. Both share a fixed corner
+    /// region so a single sprite serves any element size; callers tint them with Image.color
+    /// and tune the visual radius with Image.pixelsPerUnitMultiplier. Uses the always-present
+    /// Sprites/Default (straight-alpha) shader like the rest of the project.
+    /// </summary>
+    internal static class RoundedSprite
+    {
+        public const float CornerRadius = 28f;
+        private const int Radius = 28;
+        private const int Mid = 4;
+        private const int Size = Radius * 2 + Mid; // 60
+        private const float Stroke = 2f;
+
+        private static Sprite _fill;
+        private static Sprite _border;
+
+        public static Sprite Fill => _fill != null ? _fill : (_fill = Build(false));
+        public static Sprite Border => _border != null ? _border : (_border = Build(true));
+
+        private static Sprite Build(bool stroke)
+        {
+            var texture = new Texture2D(Size, Size, TextureFormat.RGBA32, false)
+            {
+                wrapMode = TextureWrapMode.Clamp,
+                filterMode = FilterMode.Bilinear,
+                hideFlags = HideFlags.HideAndDontSave
+            };
+
+            var pixels = new Color32[Size * Size];
+            const float half = Size / 2f;
+            for (var y = 0; y < Size; y += 1)
+            {
+                for (var x = 0; x < Size; x += 1)
+                {
+                    // Signed distance to a rounded rectangle (iq's sdRoundBox), centered.
+                    var qx = Mathf.Abs(x + 0.5f - half) - (half - Radius);
+                    var qy = Mathf.Abs(y + 0.5f - half) - (half - Radius);
+                    var outside = Mathf.Sqrt(Mathf.Max(qx, 0f) * Mathf.Max(qx, 0f) + Mathf.Max(qy, 0f) * Mathf.Max(qy, 0f));
+                    var inside = Mathf.Min(Mathf.Max(qx, qy), 0f);
+                    var sdf = outside + inside - Radius;
+
+                    float alpha;
+                    if (stroke)
+                    {
+                        var outer = Mathf.Clamp01(0.5f - sdf);
+                        var inner = Mathf.Clamp01(0.5f - (sdf + Stroke));
+                        alpha = outer - inner;
+                    }
+                    else
+                    {
+                        alpha = Mathf.Clamp01(0.5f - sdf);
+                    }
+
+                    var a = (byte)Mathf.RoundToInt(Mathf.Clamp01(alpha) * 255f);
+                    pixels[y * Size + x] = new Color32(255, 255, 255, a);
+                }
+            }
+
+            texture.SetPixels32(pixels);
+            texture.Apply();
+
+            var border = new Vector4(Radius, Radius, Radius, Radius);
+            var sprite = Sprite.Create(texture, new Rect(0f, 0f, Size, Size), new Vector2(0.5f, 0.5f), 100f, 0u, SpriteMeshType.FullRect, border);
+            sprite.hideFlags = HideFlags.HideAndDontSave;
+            return sprite;
         }
     }
 }
