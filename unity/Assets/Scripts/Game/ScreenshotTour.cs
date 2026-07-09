@@ -67,6 +67,21 @@ namespace GravityGolf.Game
                     _controller.Launch(direction, preset.Power);
                     yield return new WaitForSeconds(FlightSeconds);
                     yield return Capture($"flight-{i:00}.png");
+
+                    // If this preset scores, hold for the goal-capture burst and grab a
+                    // frame mid-transition so capture VFX are verifiable headlessly.
+                    var waited = 0f;
+                    while (_controller.State == GameState.Flying && waited < 4f)
+                    {
+                        waited += Time.deltaTime;
+                        yield return null;
+                    }
+
+                    if (_controller.State == GameState.Goal)
+                    {
+                        yield return null;
+                        yield return Capture($"capture-{i:00}.png");
+                    }
                 }
             }
 

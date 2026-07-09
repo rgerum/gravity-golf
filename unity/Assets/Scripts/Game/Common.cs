@@ -27,11 +27,13 @@ namespace GravityGolf.Game
         public const float Corona = 5f;
         public const float GoalGlow = 4.6f;
         public const float Goal = 4.4f;
+        public const float GoalBurst = 4.2f;
         public const float Sun = 4f;
         public const float LandingRing = 3.6f;
         public const float Planet = 3f;
         public const float PlanetAccent = 2.9f;
         public const float Ball = 1f;
+        public const float BallTrail = 1.05f;
         public const float AimBand = 0.6f;
         public const float Handle = 0.55f;
         public const float Preview = 0.5f;

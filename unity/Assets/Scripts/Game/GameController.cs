@@ -46,12 +46,16 @@ namespace GravityGolf.Game
         private AimController _aim;
         private Transform _levelRoot;
         private BallView _ballView;
+        private GoalView _goalView;
+        private TrailView _ballTrail;
 
         public bool Ready { get; private set; }
 
         internal WorldDefinition World => _world;
 
         internal LevelRuntime CurrentLevel => _level;
+
+        internal GameState State => _state;
         public LevelRuntime Level => _level;
         public BallState Ball => _ball;
         public bool CanAim => Ready && (_state == GameState.Aiming || _state == GameState.Landed);
@@ -121,6 +125,23 @@ namespace GravityGolf.Game
             if (_ballView != null)
             {
                 _ballView.CaptureScale = _state == GameState.Goal ? (float)Math.Max(0.0, 1.0 - _goalTransition) : 1f;
+            }
+
+            if (_ballTrail != null)
+            {
+                if (_state == GameState.Flying)
+                {
+                    _ballTrail.Sample(Depth.ToWorld(_ball.Position, Depth.BallTrail));
+                }
+                else
+                {
+                    _ballTrail.Clear();
+                }
+            }
+
+            if (_goalView != null)
+            {
+                _goalView.SetCaptureProgress(_state == GameState.Goal ? (float)_goalTransition : 0f);
             }
 
             _hud.SetPower((float)(ShownPower / Constants.MaxDragDistance));
@@ -341,6 +362,12 @@ namespace GravityGolf.Game
             var goal = new GameObject("Goal").AddComponent<GoalView>();
             goal.transform.SetParent(_levelRoot, false);
             goal.Init(_level);
+            _goalView = goal;
+
+            var trailGo = new GameObject("BallTrail");
+            trailGo.transform.SetParent(_levelRoot, false);
+            _ballTrail = trailGo.AddComponent<TrailView>();
+            _ballTrail.Init((float)Constants.BallRadius);
 
             var ballGo = new GameObject("Ball");
             ballGo.transform.SetParent(_levelRoot, false);

@@ -35,9 +35,15 @@ namespace GravityGolf.Game
         private Text _modalHint;
 
         private readonly Button[] _levelButtons = new Button[10];
+        private readonly Text[] _levelLabels = new Text[10];
+        private readonly Outline[] _levelOutlines = new Outline[10];
 
         private static readonly Color PanelColor = new Color(0.03f, 0.05f, 0.10f, 0.72f);
         private static readonly Color ButtonColor = new Color(0.16f, 0.20f, 0.32f, 0.95f);
+        private static readonly Color ActiveLevelColor = new Color(0.30f, 0.42f, 0.66f, 1f);
+        private static readonly Color ActiveLevelGlow = new Color(0.55f, 0.68f, 0.98f, 0.9f);
+        private static readonly Color ActiveLevelLabel = Color.white;
+        private static readonly Color InactiveLevelLabel = new Color(0.72f, 0.78f, 0.90f, 1f);
         private static readonly Color AccentColor = ColorUtil.FromInt(0xFF7D58);
 
         public void Build(GameController controller)
@@ -100,10 +106,12 @@ namespace GravityGolf.Game
             _status.rectTransform.anchoredPosition = new Vector2(0f, -22f);
             _status.rectTransform.sizeDelta = new Vector2(900f, 32f);
 
-            _hint = MakeText(_safeArea, "Hint", 20, TextAnchor.UpperCenter, new Color(0.7f, 0.78f, 0.92f, 1f));
-            Anchor(_hint.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
-            _hint.rectTransform.anchoredPosition = new Vector2(0f, -54f);
-            _hint.rectTransform.sizeDelta = new Vector2(900f, 28f);
+            // Aim hint reads as a subtle helper, not a headline: small, dim, and anchored
+            // low (just above the power bar) so it stays clear of the top status/title zone.
+            _hint = MakeText(_safeArea, "Hint", 18, TextAnchor.LowerCenter, new Color(0.62f, 0.70f, 0.86f, 0.6f));
+            Anchor(_hint.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
+            _hint.rectTransform.anchoredPosition = new Vector2(0f, 58f);
+            _hint.rectTransform.sizeDelta = new Vector2(760f, 26f);
         }
 
         private void BuildPowerBar()
@@ -131,19 +139,54 @@ namespace GravityGolf.Game
 
         private void BuildLevelStrip()
         {
+            const float pad = 14f;
+            const float spacing = 44f;
+            const float button = 36f;
             var strip = MakePanel(_safeArea, "LevelStrip", PanelColor);
             Anchor(strip.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(1f, 0f));
-            strip.rectTransform.anchoredPosition = new Vector2(-18f, 22f);
-            strip.rectTransform.sizeDelta = new Vector2(10 * 40f + 12f, 46f);
+            strip.rectTransform.anchoredPosition = new Vector2(-18f, 26f);
+            strip.rectTransform.sizeDelta = new Vector2(pad + 9f * spacing + button + pad, 54f);
 
             for (var i = 0; i < 10; i += 1)
             {
                 var index = i;
-                var button = MakeButton(strip.transform, $"Level{i + 1}", (i + 1).ToString(), () => _controller.LoadLevel(index));
-                Anchor(button.image.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f));
-                button.image.rectTransform.anchoredPosition = new Vector2(8f + i * 40f + 18f, 0f);
-                button.image.rectTransform.sizeDelta = new Vector2(36f, 36f);
-                _levelButtons[i] = button;
+                var levelButton = MakeButton(strip.transform, $"Level{i + 1}", (i + 1).ToString(), () => _controller.LoadLevel(index));
+                Anchor(levelButton.image.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f));
+                levelButton.image.rectTransform.anchoredPosition = new Vector2(pad + i * spacing, 0f);
+                levelButton.image.rectTransform.sizeDelta = new Vector2(button, button);
+                _levelButtons[i] = levelButton;
+                _levelLabels[i] = levelButton.GetComponentInChildren<Text>();
+
+                var outline = levelButton.image.gameObject.AddComponent<Outline>();
+                outline.effectColor = ActiveLevelGlow;
+                outline.effectDistance = new Vector2(2f, -2f);
+                outline.enabled = false;
+                _levelOutlines[i] = outline;
+            }
+        }
+
+        // Brightens the current level's tile (fill + label + glow outline) and dims the
+        // rest so the active hole is unmistakable.
+        private void HighlightLevel(int levelIndex)
+        {
+            for (var i = 0; i < _levelButtons.Length; i += 1)
+            {
+                if (_levelButtons[i] == null)
+                {
+                    continue;
+                }
+
+                var active = i == levelIndex;
+                _levelButtons[i].image.color = active ? ActiveLevelColor : ButtonColor;
+                if (_levelLabels[i] != null)
+                {
+                    _levelLabels[i].color = active ? ActiveLevelLabel : InactiveLevelLabel;
+                }
+
+                if (_levelOutlines[i] != null)
+                {
+                    _levelOutlines[i].enabled = active;
+                }
             }
         }
 
@@ -215,6 +258,7 @@ namespace GravityGolf.Game
             _levelLabel.text = $"Level {levelIndex + 1} / {world.Levels.Count}";
             _levelName.text = level.Name;
             _parPill.text = $"Par {par}";
+            HighlightLevel(levelIndex);
         }
 
         public void SetStatus(string message, string hint)
