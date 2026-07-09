@@ -14,16 +14,18 @@ namespace GravityGolf.EditorTools
     {
         public static void Run()
         {
-            var portrait = System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-gg-portrait") >= 0;
+            // Portrait is the shipping orientation, so it's the tour default.
+            // Pass -gg-landscape to render the old landscape framing for comparison.
+            var landscape = System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-gg-landscape") >= 0;
             try
             {
-                if (portrait)
+                if (landscape)
                 {
-                    PlayModeWindow.SetCustomRenderingResolution(1080, 1920, "TourPortrait");
+                    PlayModeWindow.SetCustomRenderingResolution(1920, 1080, "TourLandscape");
                 }
                 else
                 {
-                    PlayModeWindow.SetCustomRenderingResolution(1920, 1080, "TourLandscape");
+                    PlayModeWindow.SetCustomRenderingResolution(1080, 1920, "TourPortrait");
                 }
             }
             catch (System.Exception e)

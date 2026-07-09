@@ -117,8 +117,9 @@ namespace GravityGolf.Game
             _parPill = MakeChip(block.transform, "ParPill", 1f, -98f, 96f, 30f, ChipFill, LineBorder, MutedColor, 14);
         }
 
-        // Top-center status line, now wrapped in a translucent rounded status-card. The aim
-        // hint stays low and subtle just above the power bar (existing behavior).
+        // Top-center status line, wrapped in a translucent rounded status-card. The aim hint
+        // is part of the bottom control stack (portrait): it sits centered just above the
+        // power bar, which sits above the Retry/Undo thumb row (see BuildBottomBar).
         private void BuildStatus()
         {
             var card = MakeCard(_safeArea, "StatusCard", StatusCardFill, LineBorder, 22f);
@@ -129,72 +130,85 @@ namespace GravityGolf.Game
             _status = MakeText(card.transform, "Status", 20, TextAnchor.MiddleCenter, TextColor, FontLibrary.SansSemiBold);
             Stretch(_status.rectTransform);
 
-            _hint = MakeText(_safeArea, "Hint", 17, TextAnchor.LowerCenter, MutedColor, FontLibrary.SansRegular);
+            _hint = MakeText(_safeArea, "Hint", 17, TextAnchor.MiddleCenter, MutedColor, FontLibrary.SansRegular);
             Anchor(_hint.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
-            _hint.rectTransform.anchoredPosition = new Vector2(0f, 58f);
-            _hint.rectTransform.sizeDelta = new Vector2(760f, 26f);
+            _hint.rectTransform.anchoredPosition = new Vector2(0f, 132f);
+            _hint.rectTransform.sizeDelta = new Vector2(700f, 28f);
         }
 
+        // Slim power meter centered in the bottom stack, above the Retry/Undo row and just
+        // below the aim hint. Fill grows left-to-right via localScale (see SetPower).
         private void BuildPowerBar()
         {
+            const float width = 420f;
+
             var back = MakePanel(_safeArea, "PowerBack", new Color(0.1f, 0.12f, 0.2f, 0.85f));
             Anchor(back.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
-            back.rectTransform.anchoredPosition = new Vector2(0f, 30f);
-            back.rectTransform.sizeDelta = new Vector2(360f, 18f);
+            back.rectTransform.anchoredPosition = new Vector2(0f, 108f);
+            back.rectTransform.sizeDelta = new Vector2(width, 14f);
 
             var fill = MakePanel(back.transform, "PowerFill", PowerFillColor);
             _powerFill = fill.rectTransform;
             Anchor(_powerFill, new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0.5f));
             _powerFill.anchoredPosition = Vector2.zero;
-            _powerFill.sizeDelta = new Vector2(360f, 0f);
+            _powerFill.sizeDelta = new Vector2(width, 0f);
             _powerFill.localScale = new Vector3(0.04f, 1f, 1f);
         }
 
-        // Bottom-left action row: Retry (full restart) and Undo (rewind one shot) pills.
-        // Undo starts disabled and is toggled by SetUndoEnabled each frame. Both are kept
-        // clear of the centered power bar and the bottom-right level strip.
+        // Bottom thumb row (portrait): Retry (full restart) pinned to the bottom-left corner
+        // and Undo (rewind one shot) to the bottom-right corner, so both sit under the thumbs
+        // and leave the center clear for the power bar / aim hint stacked above. Undo starts
+        // disabled and is toggled by SetUndoEnabled each frame. Corner anchors keep them in
+        // place at any aspect ratio.
         private void BuildBottomBar()
         {
-            const float height = 54f;
-            const float retryWidth = 128f;
-            const float undoWidth = 128f;
-            const float margin = 20f;
-            const float gap = 10f;
+            const float height = 60f;
+            const float width = 150f;
+            const float margin = 24f;
+            const float bottom = 26f;
 
             var retry = MakePill(_safeArea, "RetryButton", "Retry", () => _controller.RestartLevel(), SurfaceFill, LineBorder, TextColor, 16);
             Anchor(retry.Rect, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(0f, 0f));
-            retry.Rect.anchoredPosition = new Vector2(margin, 22f);
-            retry.Rect.sizeDelta = new Vector2(retryWidth, height);
+            retry.Rect.anchoredPosition = new Vector2(margin, bottom);
+            retry.Rect.sizeDelta = new Vector2(width, height);
             SetCorner(retry, height * 0.5f);
 
             _undoPill = MakePill(_safeArea, "UndoButton", "Undo", () => _controller.RequestRewind(), SurfaceFill, LineBorder, TextColor, 16);
-            Anchor(_undoPill.Rect, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(0f, 0f));
-            _undoPill.Rect.anchoredPosition = new Vector2(margin + retryWidth + gap, 22f);
-            _undoPill.Rect.sizeDelta = new Vector2(undoWidth, height);
+            Anchor(_undoPill.Rect, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(1f, 0f));
+            _undoPill.Rect.anchoredPosition = new Vector2(-margin, bottom);
+            _undoPill.Rect.sizeDelta = new Vector2(width, height);
             SetCorner(_undoPill, height * 0.5f);
             SetUndoEnabled(false);
         }
 
+        // Level-select strip (portrait): its own full-width row above the aim hint, out of the
+        // Retry/Undo thumb row so nothing collides in 1080-wide portrait. The container
+        // stretches edge-to-edge (with side margins) and each of the 10 tiles is anchored to
+        // the center of its 1/10 slot, so they stay evenly spread and reachable at any width.
         private void BuildLevelStrip()
         {
-            const float pad = 12f;
-            const float spacing = 42f;
-            const float tile = 36f;
-            const float radius = 12f;
+            const float tile = 54f;
+            const float radius = 16f;
+            const float sideMargin = 22f;
+            const float bottom = 182f;
+            const float height = 64f;
 
             var strip = new GameObject("LevelStrip", typeof(RectTransform));
             strip.transform.SetParent(_safeArea, false);
             var stripRect = (RectTransform)strip.transform;
-            Anchor(stripRect, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(1f, 0f));
-            stripRect.anchoredPosition = new Vector2(-18f, 26f);
-            stripRect.sizeDelta = new Vector2(pad + 9f * spacing + tile + pad, 54f);
+            stripRect.anchorMin = new Vector2(0f, 0f);
+            stripRect.anchorMax = new Vector2(1f, 0f);
+            stripRect.pivot = new Vector2(0.5f, 0f);
+            stripRect.offsetMin = new Vector2(sideMargin, bottom);
+            stripRect.offsetMax = new Vector2(-sideMargin, bottom + height);
 
             for (var i = 0; i < 10; i += 1)
             {
                 var index = i;
                 var pill = MakePill(strip.transform, $"Level{i + 1}", (i + 1).ToString(), () => _controller.LoadLevel(index), TileFill, LineBorder, MutedColor, 16);
-                Anchor(pill.Rect, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f));
-                pill.Rect.anchoredPosition = new Vector2(pad + i * spacing, 0f);
+                var slot = (i + 0.5f) / 10f;
+                Anchor(pill.Rect, new Vector2(slot, 0.5f), new Vector2(slot, 0.5f), new Vector2(0.5f, 0.5f));
+                pill.Rect.anchoredPosition = Vector2.zero;
                 pill.Rect.sizeDelta = new Vector2(tile, tile);
                 SetCorner(pill, radius);
                 _levelPills[i] = pill;
