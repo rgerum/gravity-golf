@@ -82,6 +82,24 @@ namespace GravityGolf.Game
                         yield return null;
                         yield return Capture($"capture-{i:00}.png");
                     }
+                    else if (_controller.CanRewind)
+                    {
+                        // Exercise Undo on non-scoring levels: trigger the animated rewind,
+                        // grab a mid-flight-backward frame, then the settled-back frame so
+                        // both the reverse motion and the restored anchor are verifiable.
+                        _controller.RequestRewind();
+                        yield return null;
+                        yield return Capture($"rewind-{i:00}.png");
+
+                        var rewindWait = 0f;
+                        while (_controller.State == GameState.Rewinding && rewindWait < 4f)
+                        {
+                            rewindWait += Time.deltaTime;
+                            yield return null;
+                        }
+
+                        yield return Capture($"undone-{i:00}.png");
+                    }
                 }
             }
 

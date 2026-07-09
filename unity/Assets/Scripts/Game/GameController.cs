@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using GravityGolf.Core;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -14,6 +15,7 @@ namespace GravityGolf.Game
         Goal,
         Crashed,
         Settled,
+        Rewinding,
     }
 
     /// <summary>
@@ -30,6 +32,12 @@ namespace GravityGolf.Game
         private const int MaxStepsPerFrame = 4;           // main.js:469
         private const double GoalCaptureRate = 3.6;       // main.js:8141
 
+        // Rewind plays the recorded flight backward at ~6x realtime (a forward second is
+        // 120 physics steps, so 6x => 720 reverse steps/sec). The per-frame cap keeps a
+        // long flight from freezing one frame; leftover budget drains on later frames.
+        private const double RewindTimeScale = 6.0;
+        private const int MaxRewindStepsPerFrame = 40;
+
         private WorldDefinition _world;
         private int _levelIndex;
         private LevelRuntime _level;
@@ -40,6 +48,12 @@ namespace GravityGolf.Game
         private double _accumulator;
         private int _strokes;
         private double _goalTransition;
+
+        // Pre-launch checkpoints (one per shot, pushed before the ball is mutated). Undo
+        // pops the top and reverses the live ball back to it.
+        private readonly Stack<Checkpoint> _checkpoints = new Stack<Checkpoint>();
+        private Checkpoint _rewindTarget;
+        private double _rewindAccumulator;
 
         private CameraRig _cameraRig;
         private HudController _hud;
@@ -59,6 +73,14 @@ namespace GravityGolf.Game
         public LevelRuntime Level => _level;
         public BallState Ball => _ball;
         public bool CanAim => Ready && (_state == GameState.Aiming || _state == GameState.Landed);
+
+        // A rewind is possible whenever at least one shot has been taken and we are not
+        // mid-load or already rewinding. Callable from Aiming, Landed, Flying, Crashed,
+        // Settled — the target is always a past anchored launch point.
+        internal bool CanRewind => Ready
+            && _checkpoints.Count > 0
+            && _state != GameState.Rewinding
+            && _state != GameState.Loading;
 
         private void Awake()
         {
@@ -114,12 +136,19 @@ namespace GravityGolf.Game
 
             HandleHotkeys();
 
-            _accumulator += Math.Min(Time.deltaTime, MaxFrameDelta);
-            _accumulator = Math.Min(_accumulator, PhysicsStep * MaxStepsPerFrame);
-            while (_accumulator >= PhysicsStep)
+            if (_state == GameState.Rewinding)
             {
-                Tick(PhysicsStep);
-                _accumulator -= PhysicsStep;
+                UpdateRewind();
+            }
+            else
+            {
+                _accumulator += Math.Min(Time.deltaTime, MaxFrameDelta);
+                _accumulator = Math.Min(_accumulator, PhysicsStep * MaxStepsPerFrame);
+                while (_accumulator >= PhysicsStep)
+                {
+                    Tick(PhysicsStep);
+                    _accumulator -= PhysicsStep;
+                }
             }
 
             if (_ballView != null)
@@ -129,7 +158,7 @@ namespace GravityGolf.Game
 
             if (_ballTrail != null)
             {
-                if (_state == GameState.Flying)
+                if (_state == GameState.Flying || _state == GameState.Rewinding)
                 {
                     _ballTrail.Sample(Depth.ToWorld(_ball.Position, Depth.BallTrail));
                 }
@@ -145,6 +174,7 @@ namespace GravityGolf.Game
             }
 
             _hud.SetPower((float)(ShownPower / Constants.MaxDragDistance));
+            _hud.SetUndoEnabled(CanRewind);
         }
 
         private void HandleHotkeys()
@@ -160,6 +190,12 @@ namespace GravityGolf.Game
             else if (Input.GetKeyDown(KeyCode.P))
             {
                 LoadLevel(Math.Max(_levelIndex - 1, 0));
+            }
+            else if (Input.GetKeyDown(KeyCode.Z))
+            {
+                // Undo/rewind hotkey — also the hook a headless tour uses to trigger and
+                // screenshot a mid-rewind frame.
+                RequestRewind();
             }
         }
 
@@ -238,6 +274,15 @@ namespace GravityGolf.Game
                 return;
             }
 
+            // Snapshot the anchored pre-launch state so Undo can reverse back to it. Push
+            // BEFORE any mutation and before _strokes is incremented.
+            _checkpoints.Push(new Checkpoint
+            {
+                Ball = _ball.Clone(),
+                LevelTime = _ball.Time,
+                Strokes = _strokes,
+            });
+
             var launchPlanetIndex = _ball.AnchorPlanetIndex;
             _ball.Velocity = LaunchMath.AssembleLaunchVelocity(_level, _ball, aimDirection, dragPower);
             _ball.LaunchGracePlanetIndex = launchPlanetIndex;
@@ -271,15 +316,116 @@ namespace GravityGolf.Game
                 "bounds" => "Lost in open space.",
                 _ => "Crashed.",
             };
-            _hud.ShowGameOver(message, "Tap Retry to try again.");
+            _hud.ShowGameOver(message, "Undo the shot, or retry the hole.", CanRewind);
             _hud.SetStatus(message, string.Empty);
         }
 
         private void BeginSettled()
         {
             _state = GameState.Settled;
-            _hud.ShowGameOver("Drifted to a stop.", "Lost momentum in open space. Tap Retry.");
+            _hud.ShowGameOver("Drifted to a stop.", "Undo the shot, or retry the hole.", CanRewind);
             _hud.SetStatus("Drifted to a stop.", string.Empty);
+        }
+
+        // Undo one shot: reverse the live ball back to the previous anchored launch point.
+        // Safe to call from any state where CanRewind is true (Aiming/Landed/Flying/
+        // Crashed/Settled); no-ops otherwise.
+        internal void RequestRewind()
+        {
+            if (!CanRewind)
+            {
+                return;
+            }
+
+            _rewindTarget = _checkpoints.Pop();
+            _rewindAccumulator = 0;
+            _state = GameState.Rewinding;
+
+            _hud.HideGameOver();
+            if (_ballTrail != null)
+            {
+                _ballTrail.Clear();
+            }
+
+            // Stop treating the crash/landing spot as anchored so the reverse integration
+            // moves the ball freely; the exact anchored state is restored on completion.
+            _ball.AnchorPlanetIndex = null;
+            _ball.AnchorNormal = null;
+
+            _hud.SetStatus("Rewinding…", string.Empty);
+            _hud.SetUndoEnabled(CanRewind);
+        }
+
+        // Backward-integrate the ball toward the checkpoint's level time, capped per frame
+        // so a long flight stays watchable and never freezes a single frame.
+        private void UpdateRewind()
+        {
+            _rewindAccumulator += Time.deltaTime * RewindTimeScale;
+            var maxThisFrame = MaxRewindStepsPerFrame * PhysicsStep;
+            if (_rewindAccumulator > maxThisFrame)
+            {
+                _rewindAccumulator = maxThisFrame;
+            }
+
+            var steps = 0;
+            while (_state == GameState.Rewinding && steps < MaxRewindStepsPerFrame)
+            {
+                if (_ball.Time <= _rewindTarget.LevelTime + 1e-9)
+                {
+                    CompleteRewind();
+                    break;
+                }
+
+                if (_rewindAccumulator < PhysicsStep)
+                {
+                    break;
+                }
+
+                _rewindAccumulator -= PhysicsStep;
+                steps += 1;
+                Sim.ReverseStepBall(_level, _ball, PhysicsStep, _rewindTarget.Ball.AnchorPlanetIndex);
+            }
+        }
+
+        // Snap the ball exactly to the checkpoint's anchored state and resume aiming.
+        private void CompleteRewind()
+        {
+            var checkpoint = _rewindTarget;
+            var anchored = checkpoint.Ball;
+
+            _ball.Position = anchored.Position;
+            _ball.Velocity = new Vec2(0, 0);
+            _ball.Time = anchored.Time;
+            _ball.LandingCount = anchored.LandingCount;
+            _ball.LaunchGracePlanetIndex = anchored.LaunchGracePlanetIndex;
+            _ball.AnchorPlanetIndex = anchored.AnchorPlanetIndex;
+            _ball.AnchorNormal = anchored.AnchorNormal;
+            _ball.AnchorSinceTime = anchored.AnchorSinceTime;
+            _ball.PortalCooldown = anchored.PortalCooldown;
+            _ball.Heat = anchored.Heat;
+
+            Orbits.SetLevelTime(_level, checkpoint.LevelTime);
+            Sim.SyncBallToAnchor(_level, _ball);
+            _strokes = checkpoint.Strokes;
+            _rewindAccumulator = 0;
+
+            // Mirror the normal aim/landing choice: the launch planet chooses Aiming (start)
+            // vs Landed (a relay you touched down on).
+            var anchorIndex = _ball.AnchorPlanetIndex;
+            var isStart = !anchorIndex.HasValue || anchorIndex.Value == _level.StartPlanetIndex;
+            if (isStart)
+            {
+                _state = GameState.Aiming;
+                _hud.SetStatus("Rewound to launch.", "Stretch and release.");
+            }
+            else
+            {
+                _state = GameState.Landed;
+                var planetName = _level.Planets[anchorIndex.Value].Name;
+                _hud.SetStatus($"Rewound to {planetName}.", "Line up the next launch.");
+            }
+
+            _hud.SetUndoEnabled(CanRewind);
         }
 
         public void RestartLevel() => LoadLevel(_levelIndex);
@@ -294,6 +440,8 @@ namespace GravityGolf.Game
             }
 
             _levelIndex = index;
+            _checkpoints.Clear();
+            _rewindAccumulator = 0;
             _level = _world.Levels[index].Clone();
             _cameraRig.SetLevel(_level);
             Orbits.SetLevelTime(_level, _level.StartTimeSeconds);
@@ -432,6 +580,15 @@ namespace GravityGolf.Game
                 2 => "Double Bogey",
                 _ => $"+{diff} Over",
             };
+        }
+
+        // One pre-launch snapshot: the anchored ball, the level time it was launched at,
+        // and the stroke count before the launch that follows it.
+        private struct Checkpoint
+        {
+            public BallState Ball;
+            public double LevelTime;
+            public int Strokes;
         }
     }
 }

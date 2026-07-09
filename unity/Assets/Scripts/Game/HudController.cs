@@ -34,6 +34,11 @@ namespace GravityGolf.Game
         private Text _modalTitle;
         private Text _modalHint;
 
+        private Button _undoButton;
+        private Text _undoLabel;
+        private Button _modalUndoButton;
+        private Text _modalUndoLabel;
+
         private readonly Button[] _levelButtons = new Button[10];
         private readonly Text[] _levelLabels = new Text[10];
         private readonly Outline[] _levelOutlines = new Outline[10];
@@ -45,6 +50,9 @@ namespace GravityGolf.Game
         private static readonly Color ActiveLevelLabel = Color.white;
         private static readonly Color InactiveLevelLabel = new Color(0.72f, 0.78f, 0.90f, 1f);
         private static readonly Color AccentColor = ColorUtil.FromInt(0xFF7D58);
+        private static readonly Color UndoAccentColor = new Color(0.36f, 0.55f, 0.92f, 1f);
+        private static readonly Color DisabledButtonColor = new Color(0.10f, 0.12f, 0.18f, 0.55f);
+        private static readonly Color DisabledLabelColor = new Color(0.48f, 0.54f, 0.66f, 0.7f);
 
         public void Build(GameController controller)
         {
@@ -129,12 +137,29 @@ namespace GravityGolf.Game
             _powerFill.localScale = new Vector3(0.04f, 1f, 1f);
         }
 
+        // Two persistent thumb-reachable primaries in the lower-left corner: Retry (full
+        // restart) and Undo (rewind one shot), sized as generous >=64px touch targets and
+        // kept well clear of the centered power bar and the bottom-right level strip. Undo
+        // starts disabled and is toggled by SetUndoEnabled from the controller each frame.
         private void BuildRetry()
         {
-            var button = MakeButton(_safeArea, "RetryButton", "Retry", () => _controller.RestartLevel());
-            Anchor(button.image.rectTransform, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(0f, 0f));
-            button.image.rectTransform.anchoredPosition = new Vector2(18f, 22f);
-            button.image.rectTransform.sizeDelta = new Vector2(120f, 46f);
+            const float height = 64f;
+            const float retryWidth = 128f;
+            const float undoWidth = 128f;
+            const float margin = 18f;
+            const float gap = 14f;
+
+            var retry = MakeButton(_safeArea, "RetryButton", "Retry", () => _controller.RestartLevel());
+            Anchor(retry.image.rectTransform, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(0f, 0f));
+            retry.image.rectTransform.anchoredPosition = new Vector2(margin, 22f);
+            retry.image.rectTransform.sizeDelta = new Vector2(retryWidth, height);
+
+            _undoButton = MakeButton(_safeArea, "UndoButton", "Undo", () => _controller.RequestRewind());
+            Anchor(_undoButton.image.rectTransform, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(0f, 0f));
+            _undoButton.image.rectTransform.anchoredPosition = new Vector2(margin + retryWidth + gap, 22f);
+            _undoButton.image.rectTransform.sizeDelta = new Vector2(undoWidth, height);
+            _undoLabel = _undoButton.GetComponentInChildren<Text>();
+            SetUndoEnabled(false);
         }
 
         private void BuildLevelStrip()
@@ -210,24 +235,38 @@ namespace GravityGolf.Game
             _banner.SetActive(false);
         }
 
+        // Recovery modal after a crash/drift: Undo (rewind the losing shot) is the primary
+        // action — big, accented, on top — and Retry (full restart) is the muted secondary
+        // beneath it. Undo dims out when there's no shot to return to.
         private void BuildModal()
         {
             var panel = MakePanel(_safeArea, "GameOverModal", new Color(0.06f, 0.03f, 0.06f, 0.95f));
             _modal = panel.gameObject;
             Anchor(panel.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
             panel.rectTransform.anchoredPosition = Vector2.zero;
-            panel.rectTransform.sizeDelta = new Vector2(480f, 220f);
+            panel.rectTransform.sizeDelta = new Vector2(520f, 292f);
 
             _modalTitle = MakeText(panel.transform, "ModalTitle", 34, TextAnchor.UpperCenter, ColorUtil.FromInt(0xFF7D58));
-            Place(_modalTitle.rectTransform, 20f, -28f, 440f, 44f);
+            Place(_modalTitle.rectTransform, 20f, -26f, 480f, 44f);
 
             _modalHint = MakeText(panel.transform, "ModalHint", 22, TextAnchor.UpperCenter, new Color(0.82f, 0.85f, 0.92f, 1f));
-            Place(_modalHint.rectTransform, 20f, -80f, 440f, 60f);
+            Place(_modalHint.rectTransform, 20f, -74f, 480f, 34f);
 
-            var retry = MakeButton(panel.transform, "ModalRetry", "Retry", () => _controller.RestartLevel());
+            _modalUndoButton = MakeButton(panel.transform, "ModalUndo", "Undo Shot", () => _controller.RequestRewind());
+            _modalUndoButton.image.color = UndoAccentColor;
+            Anchor(_modalUndoButton.image.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
+            _modalUndoButton.image.rectTransform.anchoredPosition = new Vector2(0f, 96f);
+            _modalUndoButton.image.rectTransform.sizeDelta = new Vector2(240f, 66f);
+            _modalUndoLabel = _modalUndoButton.GetComponentInChildren<Text>();
+            if (_modalUndoLabel != null)
+            {
+                _modalUndoLabel.fontSize = 26;
+            }
+
+            var retry = MakeButton(panel.transform, "ModalRetry", "Retry Hole", () => _controller.RestartLevel());
             Anchor(retry.image.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
             retry.image.rectTransform.anchoredPosition = new Vector2(0f, 24f);
-            retry.image.rectTransform.sizeDelta = new Vector2(160f, 50f);
+            retry.image.rectTransform.sizeDelta = new Vector2(180f, 52f);
 
             _modal.SetActive(false);
         }
@@ -283,14 +322,38 @@ namespace GravityGolf.Game
             _bannerTimer = 3.4f;
         }
 
-        public void ShowGameOver(string title, string hint)
+        public void ShowGameOver(string title, string hint, bool canUndo)
         {
             _modalTitle.text = title;
             _modalHint.text = hint;
+            ApplyButtonEnabled(_modalUndoButton, _modalUndoLabel, canUndo, UndoAccentColor);
             _modal.SetActive(true);
         }
 
         public void HideGameOver() => _modal.SetActive(false);
+
+        // Toggles the persistent Undo control's enabled look. Called every frame by the
+        // controller with CanRewind; also dims while a rewind is playing (CanRewind is
+        // false during GameState.Rewinding).
+        public void SetUndoEnabled(bool enabled)
+        {
+            ApplyButtonEnabled(_undoButton, _undoLabel, enabled, ButtonColor);
+        }
+
+        private static void ApplyButtonEnabled(Button button, Text label, bool enabled, Color enabledColor)
+        {
+            if (button == null)
+            {
+                return;
+            }
+
+            button.interactable = enabled;
+            button.image.color = enabled ? enabledColor : DisabledButtonColor;
+            if (label != null)
+            {
+                label.color = enabled ? Color.white : DisabledLabelColor;
+            }
+        }
 
         // ---- uGUI construction helpers ----
 
