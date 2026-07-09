@@ -24,9 +24,11 @@ mkdir -p "$OUT_DIR"
 EXTRA_ARGS=()
 [ -n "${QUICK:-}" ] && EXTRA_ARGS+=(-gg-quick)
 [ -n "${LEVELS:-}" ] && EXTRA_ARGS+=(-gg-levels "$LEVELS")
+SCREEN="2000x1200x24"
+if [ -n "${PORTRAIT:-}" ]; then EXTRA_ARGS+=(-gg-portrait); SCREEN="1200x2000x24"; fi
 
 echo "==> running screenshot tour (log: $LOG) ${QUICK:+[quick]} ${LEVELS:+[levels=$LEVELS]}"
-LIBGL_ALWAYS_SOFTWARE="${LIBGL_ALWAYS_SOFTWARE:-1}" timeout "${TOUR_TIMEOUT:-540}" xvfb-run -a -s "-screen 0 2000x1200x24" \
+LIBGL_ALWAYS_SOFTWARE="${LIBGL_ALWAYS_SOFTWARE:-1}" timeout "${TOUR_TIMEOUT:-540}" xvfb-run -a -s "-screen 0 $SCREEN" \
     "$UNITY" -projectPath "$(pwd)/unity" \
     -executeMethod GravityGolf.EditorTools.TourLauncher.Run \
     -gg-tour -gg-tour-out "$OUT_DIR" "${EXTRA_ARGS[@]}" \
