@@ -18,6 +18,7 @@ src/game-core.js  LEVELS[i]
    → validateLevelDefinition(source)                                              (game-core.js:3310)
    → createLevelRuntime(i)                  // polar→cartesian, radius scaling,    (game-core.js:4305)
                                             // orbit/spin resolution, time=0
+   → rotateRuntimeAboutSun(runtime, +90°)    // Unity portrait export: goal-up
    → export script snapshots the RUNTIME object at time 0 into JSON
    → unity/Assets/StreamingAssets/levels/world-1.json
 ```
@@ -32,6 +33,15 @@ orbit/spin parameters — see §6.
 Because `SYSTEM_LAYOUT_SCALE === 1` (game-core.js:41) and `sun === (0,0)` for all
 10 levels, `scalePointFromSun` is an identity here, but the export still emits the
 already-scaled runtime values so C# needs no scaling logic.
+
+Unity exports are portrait-oriented by default. After `createLevelRuntime(i)` has
+resolved the web's goal-right landscape runtime, `scripts/unity-export-shared.js`
+rotates the whole runtime by `UNITY_EXPORT_ROTATION_DEGREES` degrees about the
+origin/sun; the default is `90`, which moves the goal to +Y ("up"). The same
+rotated runtime is used for `world-1.json` and for forward/reverse fixture
+generation, and exporter-generated absolute shot angles are offset by the same
+amount. Set `UNITY_EXPORT_ROTATION_DEGREES=0` when running the export scripts to
+reproduce the old landscape goal-right data.
 
 ---
 

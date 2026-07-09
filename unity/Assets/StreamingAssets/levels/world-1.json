@@ -18,15 +18,15 @@
       "sunGravityStrength": 20,
       "sunCollisionRadius": 0.42,
       "startPlanetIndex": 0,
-      "startAngleDeg": -1.9574541435317188,
+      "startAngleDeg": 88.04254585646828,
       "startAnchor": {
-        "x": 6.104246841300538,
-        "y": 0.09589317218866521
+        "x": -0.09589317218866483,
+        "y": 6.104246841300538
       },
       "startTimeSeconds": 0,
       "goalCenter": {
-        "x": 10.353,
-        "y": 0
+        "x": 6.339384155786274e-16,
+        "y": 10.353
       },
       "goalRadius": 0.56,
       "goalPullRadius": 4.9,
@@ -38,8 +38,8 @@
           "index": 0,
           "name": "Start World",
           "basePosition": {
-            "x": 5.354621415532372,
-            "y": 0.12151335861581697
+            "x": -0.12151335861581664,
+            "y": 5.354621415532372
           },
           "radius": 0.31,
           "landingRadius": null,
@@ -50,7 +50,7 @@
           "orbitSemiMajor": 5.356,
           "orbitSemiMinor": 5.356,
           "orbitEccentricity": 0,
-          "orbitRotation": 0.022689280275926288,
+          "orbitRotation": 1.5934856070708228,
           "orbitPhase": 0,
           "orbitSpeed": 0.01,
           "spinSpeed": 0.01,
@@ -60,7 +60,7 @@
       ],
       "launchPresets": [
         {
-          "angleDeg": -1.4,
+          "angleDeg": 88.6,
           "power": 1.38
         }
       ]
@@ -77,15 +77,15 @@
       "sunGravityStrength": 20,
       "sunCollisionRadius": 0.42,
       "startPlanetIndex": 0,
-      "startAngleDeg": -74.7832417078195,
+      "startAngleDeg": 15.2167582921805,
       "startAnchor": {
-        "x": 1.115531095986206,
-        "y": -3.7902495134077667
+        "x": 3.7902495134077667,
+        "y": 1.1155310959862057
       },
       "startTimeSeconds": 0,
       "goalCenter": {
-        "x": 6.416,
-        "y": 1.9891701585087452e-16
+        "x": 1.939496773155964e-16,
+        "y": 6.416
       },
       "goalRadius": 0.56,
       "goalPullRadius": 5.1,
@@ -97,8 +97,8 @@
           "index": 0,
           "name": "Launch World",
           "basePosition": {
-            "x": 0.9057603585662927,
-            "y": -3.0190565037524326
+            "x": 3.0190565037524326,
+            "y": 0.9057603585662924
           },
           "radius": 0.36,
           "landingRadius": null,
@@ -109,7 +109,7 @@
           "orbitSemiMajor": 3.152,
           "orbitSemiMinor": 3.152,
           "orbitEccentricity": 0,
-          "orbitRotation": -1.2793263417118435,
+          "orbitRotation": 0.2914699850830531,
           "orbitPhase": 0,
           "orbitSpeed": 0.18,
           "spinSpeed": 0.1,
@@ -119,7 +119,7 @@
       ],
       "launchPresets": [
         {
-          "angleDeg": 46.900000000000006,
+          "angleDeg": 136.9,
           "power": 2.22
         }
       ]
@@ -136,15 +136,15 @@
       "sunGravityStrength": 20,
       "sunCollisionRadius": 0.42,
       "startPlanetIndex": 0,
-      "startAngleDeg": -158.2582853079557,
+      "startAngleDeg": -68.2582853079557,
       "startAnchor": {
-        "x": -4.439639676247511,
-        "y": -1.5547397033230002
+        "x": 1.554739703323,
+        "y": -4.439639676247511
       },
       "startTimeSeconds": 0,
       "goalCenter": {
-        "x": 6.889,
-        "y": 0
+        "x": 4.2182958996630585e-16,
+        "y": 6.889
       },
       "goalRadius": 0.56,
       "goalPullRadius": 5.2,
@@ -156,8 +156,8 @@
           "index": 0,
           "name": "Swift World",
           "basePosition": {
-            "x": -3.6966653607517945,
-            "y": -1.2584475398751438
+            "x": 1.2584475398751436,
+            "y": -3.6966653607517945
           },
           "radius": 0.35,
           "landingRadius": null,
@@ -168,7 +168,7 @@
           "orbitSemiMajor": 3.9050000000000002,
           "orbitSemiMinor": 3.9050000000000002,
           "orbitEccentricity": 0,
-          "orbitRotation": -2.8134707542148596,
+          "orbitRotation": -1.242674427419963,
           "orbitPhase": 0,
           "orbitSpeed": 0.96,
           "spinSpeed": 0.18,
@@ -178,7 +178,7 @@
       ],
       "launchPresets": [
         {
-          "angleDeg": -4.300000000000001,
+          "angleDeg": 85.7,
           "power": 1.98
         }
       ]
@@ -195,15 +195,15 @@
       "sunGravityStrength": 20,
       "sunCollisionRadius": 0.42,
       "startPlanetIndex": 0,
-      "startAngleDeg": -144.0874011074949,
+      "startAngleDeg": -54.08740110749491,
       "startAnchor": {
-        "x": -4.07348586838276,
-        "y": -2.7269611071824906
+        "x": 2.72696110718249,
+        "y": -4.07348586838276
       },
       "startTimeSeconds": 0,
       "goalCenter": {
-        "x": 7.284,
-        "y": 0
+        "x": 4.460163642494661e-16,
+        "y": 7.284
       },
       "goalRadius": 0.56,
       "goalPullRadius": 5.3,
@@ -215,8 +215,8 @@
           "index": 0,
           "name": "Sweep World",
           "basePosition": {
-            "x": -3.4412428923717617,
-            "y": -2.269081610630352
+            "x": 2.269081610630352,
+            "y": -3.4412428923717617
           },
           "radius": 0.36,
           "landingRadius": null,
@@ -227,7 +227,7 @@
           "orbitSemiMajor": 4.122,
           "orbitSemiMinor": 4.122,
           "orbitEccentricity": 0,
-          "orbitRotation": -2.558652683423687,
+          "orbitRotation": -0.9878563566287903,
           "orbitPhase": 0,
           "orbitSpeed": 1.14,
           "spinSpeed": 0.18,
@@ -237,7 +237,7 @@
       ],
       "launchPresets": [
         {
-          "angleDeg": 7.600000000000001,
+          "angleDeg": 97.6,
           "power": 2.12
         }
       ]
@@ -254,15 +254,15 @@
       "sunGravityStrength": 20,
       "sunCollisionRadius": 0.42,
       "startPlanetIndex": 0,
-      "startAngleDeg": -120.5460848273603,
+      "startAngleDeg": -30.546084827360303,
       "startAnchor": {
-        "x": -2.1733333396543517,
-        "y": -3.3723532132246854
+        "x": 3.3723532132246854,
+        "y": -2.1733333396543517
       },
       "startTimeSeconds": 0,
       "goalCenter": {
-        "x": 9.126,
-        "y": 0
+        "x": 5.588063344509372e-16,
+        "y": 9.126
       },
       "goalRadius": 0.56,
       "goalPullRadius": 5,
@@ -274,8 +274,8 @@
           "index": 0,
           "name": "Launch World",
           "basePosition": {
-            "x": -1.802990934305865,
-            "y": -2.744791374733399
+            "x": 2.744791374733399,
+            "y": -1.8029909343058652
           },
           "radius": 0.34,
           "landingRadius": null,
@@ -286,7 +286,7 @@
           "orbitSemiMajor": 3.284,
           "orbitSemiMinor": 3.284,
           "orbitEccentricity": 0,
-          "orbitRotation": -2.1519909677090086,
+          "orbitRotation": -0.581194640914112,
           "orbitPhase": 0,
           "orbitSpeed": 0.16,
           "spinSpeed": 0.08,
@@ -297,8 +297,8 @@
           "index": 1,
           "name": "Eclipse Giant",
           "basePosition": {
-            "x": 4.961969769797956,
-            "y": 0.0173206123223404
+            "x": -0.017320612322340095,
+            "y": 4.961969769797956
           },
           "radius": 0.51,
           "landingRadius": null,
@@ -309,7 +309,7 @@
           "orbitSemiMajor": 4.681132075471698,
           "orbitSemiMinor": 4.672698440620915,
           "orbitEccentricity": 0.06,
-          "orbitRotation": -3.1381019950858042,
+          "orbitRotation": -1.5673056682909077,
           "orbitPhase": 3.141592653589793,
           "orbitSpeed": -0.08,
           "spinSpeed": -0.06,
@@ -319,7 +319,7 @@
       ],
       "launchPresets": [
         {
-          "angleDeg": 2.6000000000000014,
+          "angleDeg": 92.6,
           "power": 2.18
         }
       ]
@@ -336,15 +336,15 @@
       "sunGravityStrength": 20,
       "sunCollisionRadius": 0.42,
       "startPlanetIndex": 0,
-      "startAngleDeg": -178.6731553133135,
+      "startAngleDeg": -88.67315531331349,
       "startAnchor": {
-        "x": -0.058131226056780054,
-        "y": 1.1885793034363064
+        "x": -1.1885793034363064,
+        "y": -0.058131226056779985
       },
       "startTimeSeconds": 0,
       "goalCenter": {
-        "x": 9.101,
-        "y": 2.8216081067001387e-16
+        "x": 2.7511471528198926e-16,
+        "y": 9.101
       },
       "goalRadius": 0.56,
       "goalPullRadius": 4.4,
@@ -356,8 +356,8 @@
           "index": 0,
           "name": "Launch World",
           "basePosition": {
-            "x": 0.8826161433153065,
-            "y": 1.2103688460792497
+            "x": -1.2103688460792497,
+            "y": 0.8826161433153066
           },
           "radius": 0.46,
           "landingRadius": 0.81,
@@ -368,7 +368,7 @@
           "orbitSemiMajor": 1.498,
           "orbitSemiMinor": 1.498,
           "orbitEccentricity": 0,
-          "orbitRotation": 0.9407324668249436,
+          "orbitRotation": 2.5115287936198403,
           "orbitPhase": 0,
           "orbitSpeed": 0.18,
           "spinSpeed": 0.1,
@@ -379,8 +379,8 @@
           "index": 1,
           "name": "Outer Relay",
           "basePosition": {
-            "x": -4.52832671929198,
-            "y": 1.0871550594769521
+            "x": -1.0871550594769523,
+            "y": -4.52832671929198
           },
           "radius": 0.28,
           "landingRadius": null,
@@ -391,7 +391,7 @@
           "orbitSemiMajor": 4.657,
           "orbitSemiMinor": 4.657,
           "orbitEccentricity": 0,
-          "orbitRotation": 2.9059732045705586,
+          "orbitRotation": 4.476769531365456,
           "orbitPhase": 0,
           "orbitSpeed": 0.08,
           "spinSpeed": 0.05,
@@ -401,11 +401,11 @@
       ],
       "launchPresets": [
         {
-          "angleDeg": 177.4,
+          "angleDeg": 267.4,
           "power": 2.75
         },
         {
-          "angleDeg": 318.3,
+          "angleDeg": 408.3,
           "power": 2.75
         }
       ]
@@ -422,15 +422,15 @@
       "sunGravityStrength": 20,
       "sunCollisionRadius": 0.42,
       "startPlanetIndex": 0,
-      "startAngleDeg": 177.67811608736966,
+      "startAngleDeg": 267.67811608736963,
       "startAnchor": {
-        "x": 2.971235931904222,
-        "y": 0.29656877273450616
+        "x": -0.296568772734506,
+        "y": 2.971235931904222
       },
       "startTimeSeconds": 0,
       "goalCenter": {
-        "x": 10.292,
-        "y": -1.5954285591779929e-16
+        "x": 7.897460987590273e-16,
+        "y": 10.292
       },
       "goalRadius": 0.56,
       "goalPullRadius": 4.8,
@@ -442,8 +442,8 @@
           "index": 0,
           "name": "Tidal World",
           "basePosition": {
-            "x": 4.100337751917029,
-            "y": 0.25078740040919195
+            "x": -0.2507874004091917,
+            "y": 4.100337751917029
           },
           "radius": 0.44,
           "landingRadius": 0.79,
@@ -454,7 +454,7 @@
           "orbitSemiMajor": 4.108,
           "orbitSemiMinor": 4.108,
           "orbitEccentricity": 0,
-          "orbitRotation": 0.06108652381980153,
+          "orbitRotation": 1.631882850614698,
           "orbitPhase": 0,
           "orbitSpeed": 0.66,
           "spinSpeed": 0.66,
@@ -465,8 +465,8 @@
           "index": 1,
           "name": "Gate Giant",
           "basePosition": {
-            "x": 5.921450972382907,
-            "y": -2.3804080283988127
+            "x": 2.380408028398813,
+            "y": 5.921450972382907
           },
           "radius": 0.49,
           "landingRadius": null,
@@ -477,7 +477,7 @@
           "orbitSemiMajor": 6.382,
           "orbitSemiMinor": 6.382,
           "orbitEccentricity": 0,
-          "orbitRotation": -0.3822271061867582,
+          "orbitRotation": 1.1885692206081384,
           "orbitPhase": 0,
           "orbitSpeed": 0.02,
           "spinSpeed": -0.03,
@@ -487,11 +487,11 @@
       ],
       "launchPresets": [
         {
-          "angleDeg": 36.9,
+          "angleDeg": 126.9,
           "power": 1.29
         },
         {
-          "angleDeg": -1.1000000000000005,
+          "angleDeg": 88.9,
           "power": 2.18
         }
       ]
@@ -508,15 +508,15 @@
       "sunGravityStrength": 20,
       "sunCollisionRadius": 0.42,
       "startPlanetIndex": 0,
-      "startAngleDeg": -179.02776470549205,
+      "startAngleDeg": -89.02776470549205,
       "startAnchor": {
-        "x": 2.9478635587461843,
-        "y": -0.28904054908660076
+        "x": 0.28904054908660093,
+        "y": 2.9478635587461843
       },
       "startTimeSeconds": 0,
       "goalCenter": {
-        "x": 10.348,
-        "y": 0
+        "x": 6.336322538788406e-16,
+        "y": 10.348
       },
       "goalRadius": 0.56,
       "goalPullRadius": 4.8,
@@ -528,8 +528,8 @@
           "index": 0,
           "name": "Lock World",
           "basePosition": {
-            "x": 4.153324803248809,
-            "y": -0.2685834669488111
+            "x": 0.26858346694881136,
+            "y": 4.153324803248809
           },
           "radius": 0.44,
           "landingRadius": 0.79,
@@ -540,7 +540,7 @@
           "orbitSemiMajor": 4.162000000000001,
           "orbitSemiMinor": 4.162000000000001,
           "orbitEccentricity": 0,
-          "orbitRotation": -0.06457718232379019,
+          "orbitRotation": 1.5062191444711064,
           "orbitPhase": 0,
           "orbitSpeed": -0.62,
           "spinSpeed": -0.62,
@@ -551,8 +551,8 @@
           "index": 1,
           "name": "Wide Keeper",
           "basePosition": {
-            "x": 6.243138699947263,
-            "y": 2.497077326239779
+            "x": -2.4970773262397787,
+            "y": 6.243138699947263
           },
           "radius": 0.49,
           "landingRadius": null,
@@ -563,7 +563,7 @@
           "orbitSemiMajor": 6.724000000000001,
           "orbitSemiMinor": 6.724000000000001,
           "orbitEccentricity": 0,
-          "orbitRotation": 0.38048177693476387,
+          "orbitRotation": 1.9512781037296605,
           "orbitPhase": 0,
           "orbitSpeed": -0.02,
           "spinSpeed": 0.03,
@@ -573,11 +573,11 @@
       ],
       "launchPresets": [
         {
-          "angleDeg": 41.2,
+          "angleDeg": 131.2,
           "power": 1.16
         },
         {
-          "angleDeg": -0.7999999999999998,
+          "angleDeg": 89.2,
           "power": 2.18
         }
       ]
@@ -594,15 +594,15 @@
       "sunGravityStrength": 20,
       "sunCollisionRadius": 0.42,
       "startPlanetIndex": 0,
-      "startAngleDeg": 160.0895132590919,
+      "startAngleDeg": 250.0895132590919,
       "startAnchor": {
-        "x": -1.7628607183962275,
-        "y": 1.1058404439771303
+        "x": -1.1058404439771303,
+        "y": -1.7628607183962275
       },
       "startTimeSeconds": 0,
       "goalCenter": {
-        "x": 9.214,
-        "y": 0
+        "x": 5.641947803671857e-16,
+        "y": 9.214
       },
       "goalRadius": 0.56,
       "goalPullRadius": 4.6,
@@ -614,8 +614,8 @@
           "index": 0,
           "name": "Launch Two",
           "basePosition": {
-            "x": -1.4041651476186332,
-            "y": 0.975920200740379
+            "x": -0.9759202007403791,
+            "y": -1.4041651476186332
           },
           "radius": 0.32,
           "landingRadius": null,
@@ -626,7 +626,7 @@
           "orbitSemiMajor": 1.7099999999999997,
           "orbitSemiMinor": 1.7099999999999997,
           "orbitEccentricity": 0,
-          "orbitRotation": 2.534218073895766,
+          "orbitRotation": 4.105014400690663,
           "orbitPhase": 0,
           "orbitSpeed": -0.18,
           "spinSpeed": 0.14,
@@ -637,8 +637,8 @@
           "index": 1,
           "name": "Lower Harbor",
           "basePosition": {
-            "x": 1.9262916831069188,
-            "y": -2.247443069711247
+            "x": 2.247443069711247,
+            "y": 1.9262916831069186
           },
           "radius": 0.4,
           "landingRadius": 0.65,
@@ -649,7 +649,7 @@
           "orbitSemiMajor": 2.96,
           "orbitSemiMinor": 2.96,
           "orbitEccentricity": 0,
-          "orbitRotation": -0.8621926504851988,
+          "orbitRotation": 0.7086036763096978,
           "orbitPhase": 0,
           "orbitSpeed": 0.08,
           "spinSpeed": -0.76,
@@ -660,8 +660,8 @@
           "index": 2,
           "name": "Upper Harbor",
           "basePosition": {
-            "x": 1.3462583937780717,
-            "y": 4.2183850389908795
+            "x": -4.2183850389908795,
+            "y": 1.3462583937780719
           },
           "radius": 0.41,
           "landingRadius": 0.67,
@@ -672,7 +672,7 @@
           "orbitSemiMajor": 4.257692307692307,
           "orbitSemiMinor": 4.254284790293554,
           "orbitEccentricity": 0.04,
-          "orbitRotation": -1.879719604397893,
+          "orbitRotation": -0.3089232776029964,
           "orbitPhase": 3.141592653589793,
           "orbitSpeed": 1.08,
           "spinSpeed": 0.58,
@@ -683,8 +683,8 @@
           "index": 3,
           "name": "Outer Gate",
           "basePosition": {
-            "x": 6.139211402491691,
-            "y": 0.7429262113534577
+            "x": -0.7429262113534574,
+            "y": 6.139211402491691
           },
           "radius": 0.46,
           "landingRadius": 0.69,
@@ -695,7 +695,7 @@
           "orbitSemiMajor": 5.9461538461538455,
           "orbitSemiMinor": 5.941395018783952,
           "orbitEccentricity": 0.04,
-          "orbitRotation": -3.0211649352021843,
+          "orbitRotation": -1.4503686084072878,
           "orbitPhase": 3.141592653589793,
           "orbitSpeed": 0.46,
           "spinSpeed": 0.05,
@@ -706,8 +706,8 @@
           "index": 4,
           "name": "Rim Giant",
           "basePosition": {
-            "x": 7.322721357172351,
-            "y": -1.1598051238082716
+            "x": 1.159805123808272,
+            "y": 7.322721357172351
           },
           "radius": 0.5,
           "landingRadius": null,
@@ -718,7 +718,7 @@
           "orbitSemiMajor": 7.413999999999999,
           "orbitSemiMinor": 7.413999999999999,
           "orbitEccentricity": 0,
-          "orbitRotation": -0.15707963267948968,
+          "orbitRotation": 1.413716694115407,
           "orbitPhase": 0,
           "orbitSpeed": -0.05,
           "spinSpeed": -0.02,
@@ -728,11 +728,11 @@
       ],
       "launchPresets": [
         {
-          "angleDeg": 269.20000000000005,
+          "angleDeg": 359.20000000000005,
           "power": 1.29
         },
         {
-          "angleDeg": 347.40000000000003,
+          "angleDeg": 437.40000000000003,
           "power": 2.39
         }
       ]
@@ -749,15 +749,15 @@
       "sunGravityStrength": 20,
       "sunCollisionRadius": 0.42,
       "startPlanetIndex": 0,
-      "startAngleDeg": -179.84652082859955,
+      "startAngleDeg": -89.84652082859955,
       "startAnchor": {
-        "x": -1.9806982841048113,
-        "y": 0.03457321715225801
+        "x": -0.034573217152258126,
+        "y": -1.9806982841048113
       },
       "startTimeSeconds": 0,
       "goalCenter": {
-        "x": 9.276,
-        "y": 0
+        "x": 5.679911854445424e-16,
+        "y": 9.276
       },
       "goalRadius": 0.56,
       "goalPullRadius": 4.6,
@@ -769,8 +769,8 @@
           "index": 0,
           "name": "Launch One",
           "basePosition": {
-            "x": -1.4705608914681205,
-            "y": 0.03593973406255233
+            "x": -0.03593973406255242,
+            "y": -1.4705608914681205
           },
           "radius": 0.32,
           "landingRadius": null,
@@ -781,7 +781,7 @@
           "orbitSemiMajor": 1.4710000000000003,
           "orbitSemiMinor": 1.4710000000000003,
           "orbitEccentricity": 0,
-          "orbitRotation": 3.117158044061873,
+          "orbitRotation": 4.68795437085677,
           "orbitPhase": 0,
           "orbitSpeed": 0.14,
           "spinSpeed": 0.12,
@@ -792,8 +792,8 @@
           "index": 1,
           "name": "Blue Lift",
           "basePosition": {
-            "x": 2.445237004682422,
-            "y": 2.3204432746636443
+            "x": -2.3204432746636443,
+            "y": 2.445237004682422
           },
           "radius": 0.39,
           "landingRadius": 0.63,
@@ -804,7 +804,7 @@
           "orbitSemiMajor": 2.856779661016949,
           "orbitSemiMinor": 2.8101187652083803,
           "orbitEccentricity": 0.18,
-          "orbitRotation": -2.38237442897226,
+          "orbitRotation": -0.8115781021773634,
           "orbitPhase": 3.141592653589793,
           "orbitSpeed": 0.96,
           "spinSpeed": -0.52,
@@ -815,8 +815,8 @@
           "index": 2,
           "name": "Outer Relay",
           "basePosition": {
-            "x": 4.618986757653786,
-            "y": -0.09675397986110909
+            "x": 0.09675397986110937,
+            "y": 4.618986757653786
           },
           "radius": 0.44,
           "landingRadius": 0.7,
@@ -827,7 +827,7 @@
           "orbitSemiMajor": 4.125000000000001,
           "orbitSemiMinor": 4.095192303176984,
           "orbitEccentricity": 0.12,
-          "orbitRotation": -3.162536604613725,
+          "orbitRotation": -1.5917402778188285,
           "orbitPhase": 3.141592653589793,
           "orbitSpeed": 0.06,
           "spinSpeed": 0.82,
@@ -838,8 +838,8 @@
           "index": 3,
           "name": "Goal Ward",
           "basePosition": {
-            "x": 6.80204431079337,
-            "y": -2.4623056662412046
+            "x": 2.462305666241205,
+            "y": 6.80204431079337
           },
           "radius": 0.48,
           "landingRadius": null,
@@ -850,7 +850,7 @@
           "orbitSemiMajor": 7.233999999999999,
           "orbitSemiMinor": 7.233999999999999,
           "orbitEccentricity": 0,
-          "orbitRotation": -0.3473205211468716,
+          "orbitRotation": 1.2234758056480248,
           "orbitPhase": 0,
           "orbitSpeed": -0.03,
           "spinSpeed": -0.04,
@@ -860,11 +860,11 @@
       ],
       "launchPresets": [
         {
-          "angleDeg": 67.1,
+          "angleDeg": 157.1,
           "power": 2.02
         },
         {
-          "angleDeg": -11.2,
+          "angleDeg": 78.8,
           "power": 2.75
         }
       ]

@@ -26,6 +26,7 @@ export const REVERSE_FIXTURE_MIN_FLYING_STEPS = 40;
 export const REVERSE_FIXTURE_SHOT_LIMIT = 3;
 export const FIXTURE_MAX_TIME = 20;
 export const SUN_COLLISION_RADIUS = 0.42;
+export const UNITY_EXPORT_ROTATION_DEGREES = parseExportRotationDegrees();
 export const DEFAULT_COVERAGE_POWER_GRID = [1.4, 2.4, 3.2];
 export const WIDE_COVERAGE_POWER_GRID = [1.0, 1.4, 1.8, 2.2, 2.6, 3.0, 3.4, 3.6];
 export const COVERAGE_ANGLE_STEPS = 48;
@@ -67,8 +68,47 @@ export function createUnityLevels() {
 
 export function createUnityLevel(index) {
   const level = createLevelRuntime(index);
+  rotateRuntimeAboutSun(level, UNITY_EXPORT_ROTATION_DEGREES);
   validateRuntimeLevel(level, index);
   return level;
+}
+
+export function rotateRuntimeAboutSun(runtime, degrees = UNITY_EXPORT_ROTATION_DEGREES) {
+  if (!runtime || degrees === 0) {
+    return runtime;
+  }
+
+  assertFiniteNumber(degrees, 'UNITY_EXPORT_ROTATION_DEGREES');
+  const radians = degrees * Math.PI / 180;
+  const rotatedBodies = new Set();
+
+  rotateVec2InPlace(runtime.sun, radians);
+  rotateVec2InPlace(runtime.systemCenter, radians);
+  rotateOrbitalBody(runtime.primarySunBody, radians, rotatedBodies);
+  rotateOrbitalBody(runtime.secondarySunBody, radians, rotatedBodies);
+  rotateOrbitalBodies(runtime.extraSuns, radians, rotatedBodies);
+
+  rotateVec2InPlace(runtime.startAnchor, radians);
+  rotateVec2InPlace(runtime.goalCenter, radians);
+  runtime.startAngleDeg = rotateAngleDeg(runtime.startAngleDeg, degrees);
+  runtime.launchPreset = rotateLaunchPreset(runtime.launchPreset, degrees);
+  runtime.launchPresets = rotateLaunchPresets(runtime.launchPresets, degrees);
+  runtime.adminSolutions = rotateAdminSolutions(runtime.adminSolutions, degrees);
+
+  for (const planet of runtime.planets ?? []) {
+    rotateVec2InPlace(planet.basePosition, radians);
+    rotateVec2InPlace(planet.position, radians);
+    rotateVec2InPlace(planet.orbitCenter, radians);
+    rotateVec2InPlace(planet.velocity, radians);
+    planet.orbitRotation = rotateAngleRad(planet.orbitRotation, radians);
+  }
+
+  rotateOrbitalBodies(runtime.portals, radians, rotatedBodies);
+  rotateOrbitalBodies(runtime.dustClouds, radians, rotatedBodies);
+  rotateAsteroids(runtime.asteroids, radians, degrees);
+  rotateMeteorImpacts(runtime.meteorImpacts, radians, degrees);
+
+  return runtime;
 }
 
 export function buildWorldExport(levels) {
@@ -210,7 +250,8 @@ function buildCoverageShots(levelIndex, powerGrid) {
   let selectionIndex = 0;
 
   for (let angleIndex = 0; angleIndex < COVERAGE_ANGLE_STEPS; angleIndex += 1) {
-    const angle = angleIndex * 2 * Math.PI / COVERAGE_ANGLE_STEPS;
+    const angle = angleIndex * 2 * Math.PI / COVERAGE_ANGLE_STEPS
+      + UNITY_EXPORT_ROTATION_DEGREES * Math.PI / 180;
     const angleDeg = angle * 180 / Math.PI;
     for (const power of powerGrid) {
       for (const waitTime of COVERAGE_WAIT_GRID) {
@@ -298,7 +339,8 @@ function buildReverseSequences(levelIndex) {
   let selectionIndex = 0;
 
   for (let angleIndex = 0; angleIndex < COVERAGE_ANGLE_STEPS; angleIndex += 1) {
-    const angle = angleIndex * 2 * Math.PI / COVERAGE_ANGLE_STEPS;
+    const angle = angleIndex * 2 * Math.PI / COVERAGE_ANGLE_STEPS
+      + UNITY_EXPORT_ROTATION_DEGREES * Math.PI / 180;
     const angleDeg = angle * 180 / Math.PI;
     for (const power of WIDE_COVERAGE_POWER_GRID) {
       for (const waitTime of COVERAGE_WAIT_GRID) {
@@ -603,6 +645,101 @@ export function getFixturePath(level, levelIndex) {
 export function getReverseFixturePath(level, levelIndex) {
   const levelNumber = String(levelIndex).padStart(2, '0');
   return path.join(REVERSE_FIXTURE_DIR, `level-${levelNumber}-${level.id}.reverse.json`);
+}
+
+function parseExportRotationDegrees() {
+  const value = process.env.UNITY_EXPORT_ROTATION_DEGREES ?? '90';
+  const degrees = Number.parseFloat(value);
+  if (!Number.isFinite(degrees)) {
+    throw new Error(`UNITY_EXPORT_ROTATION_DEGREES must be a finite number, got "${value}"`);
+  }
+  return degrees;
+}
+
+function rotateVec2InPlace(point, radians) {
+  if (!point) {
+    return point;
+  }
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+  const x = point.x * cos - point.y * sin;
+  const y = point.x * sin + point.y * cos;
+  point.x = x;
+  point.y = y;
+  return point;
+}
+
+function rotateAngleDeg(angleDeg, degrees) {
+  return angleDeg === undefined || angleDeg === null ? angleDeg : angleDeg + degrees;
+}
+
+function rotateAngleRad(angleRad, radians) {
+  return angleRad === undefined || angleRad === null ? angleRad : angleRad + radians;
+}
+
+function rotateLaunchPreset(preset, degrees) {
+  if (!preset) {
+    return preset;
+  }
+  return {
+    ...preset,
+    angleDeg: rotateAngleDeg(preset.angleDeg, degrees),
+  };
+}
+
+function rotateLaunchPresets(presets, degrees) {
+  return Array.isArray(presets)
+    ? presets.map((preset) => rotateLaunchPreset(preset, degrees))
+    : presets;
+}
+
+function rotateAdminSolutions(adminSolutions, degrees) {
+  return Array.isArray(adminSolutions)
+    ? adminSolutions.map((solution) => ({
+      ...solution,
+      shots: Array.isArray(solution.shots)
+        ? solution.shots.map((shot) => rotateLaunchPreset(shot, degrees))
+        : solution.shots,
+    }))
+    : adminSolutions;
+}
+
+function rotateOrbitalBody(body, radians, seen = new Set()) {
+  if (!body) {
+    return;
+  }
+  if (seen.has(body)) {
+    return;
+  }
+  seen.add(body);
+  rotateVec2InPlace(body.basePosition, radians);
+  rotateVec2InPlace(body.position, radians);
+  rotateVec2InPlace(body.orbitCenter, radians);
+  rotateVec2InPlace(body.velocity, radians);
+  body.orbitRotation = rotateAngleRad(body.orbitRotation, radians);
+}
+
+function rotateOrbitalBodies(bodies, radians, seen = new Set()) {
+  for (const body of bodies ?? []) {
+    rotateOrbitalBody(body, radians, seen);
+  }
+}
+
+function rotateAsteroids(asteroids, radians, degrees) {
+  for (const asteroid of asteroids ?? []) {
+    rotateVec2InPlace(asteroid.position, radians);
+    asteroid.baseAngleDeg = rotateAngleDeg(asteroid.baseAngleDeg, degrees);
+  }
+}
+
+function rotateMeteorImpacts(meteorImpacts, radians, degrees) {
+  for (const meteor of meteorImpacts ?? []) {
+    rotateVec2InPlace(meteor.start, radians);
+    rotateVec2InPlace(meteor.target, radians);
+    rotateVec2InPlace(meteor.position, radians);
+    rotateVec2InPlace(meteor.targetPosition, radians);
+    meteor.approachAngleDeg = rotateAngleDeg(meteor.approachAngleDeg, degrees);
+  }
 }
 
 function validateRuntimeLevel(level, index) {
