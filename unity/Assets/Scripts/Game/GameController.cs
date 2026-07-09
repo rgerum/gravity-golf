@@ -316,15 +316,15 @@ namespace GravityGolf.Game
                 "bounds" => "Lost in open space.",
                 _ => "Crashed.",
             };
+            // ShowGameOver puts the message in the top status card and promotes the bottom
+            // Undo button; no separate SetStatus (it would clear the danger styling).
             _hud.ShowGameOver(message, "Undo the shot, or retry the hole.", CanRewind);
-            _hud.SetStatus(message, string.Empty);
         }
 
         private void BeginSettled()
         {
             _state = GameState.Settled;
             _hud.ShowGameOver("Drifted to a stop.", "Undo the shot, or retry the hole.", CanRewind);
-            _hud.SetStatus("Drifted to a stop.", string.Empty);
         }
 
         // Undo one shot: reverse the live ball back to the previous anchored launch point.

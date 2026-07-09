@@ -31,12 +31,8 @@ namespace GravityGolf.Game
         private Text _bannerDetail;
         private float _bannerTimer;
 
-        private GameObject _modal;
-        private Text _modalTitle;
-        private Text _modalHint;
-
         private Pill _undoPill;
-        private Pill _modalUndoPill;
+        private bool _deathMode;
 
         private readonly Pill[] _levelPills = new Pill[10];
         private readonly Outline[] _levelOutlines = new Outline[10];
@@ -51,13 +47,11 @@ namespace GravityGolf.Game
 
         private static readonly Color LineBorder = new Color(0.537f, 0.659f, 1f, 0.18f);   // rgba(137,168,255,0.18)
         private static readonly Color PrimaryBorder = new Color(0.49f, 0.953f, 0.851f, 0.42f); // teal
-        private static readonly Color InnerRing = new Color(0.537f, 0.659f, 1f, 0.09f);
 
         private static readonly Color TextColor = new Color(0.929f, 0.953f, 1f, 1f);       // #edf3ff
         private static readonly Color MutedColor = new Color(0.929f, 0.953f, 1f, 0.68f);   // rgba(237,243,255,0.68)
         private static readonly Color AccentBlue = new Color(0.62f, 0.847f, 1f, 1f);       // #9ed8ff
         private static readonly Color AccentTeal = new Color(0.49f, 0.953f, 0.851f, 1f);   // #7df3d9
-        private static readonly Color WarningColor = new Color(1f, 0.733f, 0.486f, 1f);    // #ffbb7c
         private static readonly Color DangerColor = new Color(1f, 0.427f, 0.227f, 1f);     // #ff6d3a
         private static readonly Color GoldColor = ColorUtil.FromInt(0xFFC85C);
         private static readonly Color PowerFillColor = ColorUtil.FromInt(0xFF7D58);
@@ -91,7 +85,6 @@ namespace GravityGolf.Game
             BuildBottomBar();
             BuildLevelStrip();
             BuildBanner();
-            BuildModal();
         }
 
         // Top-left level block: no background box (like web) — a mono kicker, the hole title
@@ -105,7 +98,7 @@ namespace GravityGolf.Game
             rect.anchoredPosition = new Vector2(22f, -20f);
             rect.sizeDelta = new Vector2(440f, 150f);
 
-            _kicker = MakeText(block.transform, "Kicker", 15, TextAnchor.UpperLeft, AccentBlue, FontLibrary.MonoSemiBold);
+            _kicker = MakeText(block.transform, "Kicker", 16, TextAnchor.UpperLeft, AccentBlue, FontLibrary.MonoSemiBold);
             Place(_kicker.rectTransform, 0f, 0f, 430f, 20f);
 
             _levelName = MakeText(block.transform, "LevelName", 30, TextAnchor.UpperLeft, TextColor, FontLibrary.SansSemiBold);
@@ -130,9 +123,9 @@ namespace GravityGolf.Game
             _status = MakeText(card.transform, "Status", 20, TextAnchor.MiddleCenter, TextColor, FontLibrary.SansSemiBold);
             Stretch(_status.rectTransform);
 
-            _hint = MakeText(_safeArea, "Hint", 17, TextAnchor.MiddleCenter, MutedColor, FontLibrary.SansRegular);
+            _hint = MakeText(_safeArea, "Hint", 18, TextAnchor.MiddleCenter, MutedColor, FontLibrary.SansRegular);
             Anchor(_hint.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
-            _hint.rectTransform.anchoredPosition = new Vector2(0f, 132f);
+            _hint.rectTransform.anchoredPosition = new Vector2(0f, 178f);
             _hint.rectTransform.sizeDelta = new Vector2(700f, 28f);
         }
 
@@ -144,7 +137,7 @@ namespace GravityGolf.Game
 
             var back = MakePanel(_safeArea, "PowerBack", new Color(0.1f, 0.12f, 0.2f, 0.85f));
             Anchor(back.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
-            back.rectTransform.anchoredPosition = new Vector2(0f, 108f);
+            back.rectTransform.anchoredPosition = new Vector2(0f, 150f);
             back.rectTransform.sizeDelta = new Vector2(width, 14f);
 
             var fill = MakePanel(back.transform, "PowerFill", PowerFillColor);
@@ -162,21 +155,27 @@ namespace GravityGolf.Game
         // place at any aspect ratio.
         private void BuildBottomBar()
         {
-            const float height = 60f;
-            const float width = 150f;
-            const float margin = 24f;
-            const float bottom = 26f;
+            const float height = 92f;
+            const float margin = 22f;
+            const float gap = 22f;
+            const float bottom = 24f;
 
-            var retry = MakePill(_safeArea, "RetryButton", "Retry", () => _controller.RestartLevel(), SurfaceFill, LineBorder, TextColor, 16);
-            Anchor(retry.Rect, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(0f, 0f));
-            retry.Rect.anchoredPosition = new Vector2(margin, bottom);
-            retry.Rect.sizeDelta = new Vector2(width, height);
+            // Two big buttons, each filling half the width (minus a center gap) with
+            // horizontal-stretch anchors so they're full-width and easy to thumb at any size.
+            var retry = MakePill(_safeArea, "RetryButton", "Retry", () => _controller.RestartLevel(), SurfaceFill, LineBorder, TextColor, 22);
+            retry.Rect.anchorMin = new Vector2(0f, 0f);
+            retry.Rect.anchorMax = new Vector2(0.5f, 0f);
+            retry.Rect.pivot = new Vector2(0.5f, 0f);
+            retry.Rect.offsetMin = new Vector2(margin, bottom);
+            retry.Rect.offsetMax = new Vector2(-gap * 0.5f, bottom + height);
             SetCorner(retry, height * 0.5f);
 
-            _undoPill = MakePill(_safeArea, "UndoButton", "Undo", () => _controller.RequestRewind(), SurfaceFill, LineBorder, TextColor, 16);
-            Anchor(_undoPill.Rect, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(1f, 0f));
-            _undoPill.Rect.anchoredPosition = new Vector2(-margin, bottom);
-            _undoPill.Rect.sizeDelta = new Vector2(width, height);
+            _undoPill = MakePill(_safeArea, "UndoButton", "Undo", () => _controller.RequestRewind(), SurfaceFill, LineBorder, TextColor, 22);
+            _undoPill.Rect.anchorMin = new Vector2(0.5f, 0f);
+            _undoPill.Rect.anchorMax = new Vector2(1f, 0f);
+            _undoPill.Rect.pivot = new Vector2(0.5f, 0f);
+            _undoPill.Rect.offsetMin = new Vector2(gap * 0.5f, bottom);
+            _undoPill.Rect.offsetMax = new Vector2(-margin, bottom + height);
             SetCorner(_undoPill, height * 0.5f);
             SetUndoEnabled(false);
         }
@@ -187,10 +186,10 @@ namespace GravityGolf.Game
         // the center of its 1/10 slot, so they stay evenly spread and reachable at any width.
         private void BuildLevelStrip()
         {
-            const float tile = 54f;
-            const float radius = 16f;
+            const float tile = 60f;
+            const float radius = 18f;
             const float sideMargin = 22f;
-            const float bottom = 182f;
+            const float bottom = 216f;
             const float height = 64f;
 
             var strip = new GameObject("LevelStrip", typeof(RectTransform));
@@ -205,7 +204,7 @@ namespace GravityGolf.Game
             for (var i = 0; i < 10; i += 1)
             {
                 var index = i;
-                var pill = MakePill(strip.transform, $"Level{i + 1}", (i + 1).ToString(), () => _controller.LoadLevel(index), TileFill, LineBorder, MutedColor, 16);
+                var pill = MakePill(strip.transform, $"Level{i + 1}", (i + 1).ToString(), () => _controller.LoadLevel(index), TileFill, LineBorder, MutedColor, 18);
                 var slot = (i + 0.5f) / 10f;
                 Anchor(pill.Rect, new Vector2(slot, 0.5f), new Vector2(slot, 0.5f), new Vector2(0.5f, 0.5f));
                 pill.Rect.anchoredPosition = Vector2.zero;
@@ -264,47 +263,6 @@ namespace GravityGolf.Game
             _banner.SetActive(false);
         }
 
-        // Recovery modal after a crash/drift: a rounded surface-strong panel with a hairline
-        // border + inner ring, a mono kicker, a Plex Sans danger title, a muted hint, and two
-        // stacked pills — teal primary "Undo Shot" over the muted "Retry Hole". Undo dims out
-        // when there's no shot to return to.
-        private void BuildModal()
-        {
-            var card = MakeCard(_safeArea, "GameOverModal", ModalFill, LineBorder, 28f);
-            _modal = card.gameObject;
-            Anchor(card.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-            card.rectTransform.anchoredPosition = Vector2.zero;
-            card.rectTransform.sizeDelta = new Vector2(460f, 300f);
-
-            var ring = MakeBorder(card.transform, InnerRing);
-            ring.rectTransform.offsetMin = new Vector2(10f, 10f);
-            ring.rectTransform.offsetMax = new Vector2(-10f, -10f);
-            ring.pixelsPerUnitMultiplier = RoundedSprite.CornerRadius / 20f;
-
-            var kicker = MakeText(card.transform, "ModalKicker", 14, TextAnchor.UpperCenter, WarningColor, FontLibrary.MonoSemiBold);
-            Place(kicker.rectTransform, 20f, -26f, 420f, 20f);
-            kicker.text = "RECOVERY";
-
-            _modalTitle = MakeText(card.transform, "ModalTitle", 34, TextAnchor.MiddleCenter, DangerColor, FontLibrary.SansSemiBold);
-            Place(_modalTitle.rectTransform, 20f, -52f, 420f, 46f);
-
-            _modalHint = MakeText(card.transform, "ModalHint", 18, TextAnchor.MiddleCenter, MutedColor, FontLibrary.SansRegular);
-            Place(_modalHint.rectTransform, 20f, -108f, 420f, 44f);
-
-            _modalUndoPill = MakePill(card.transform, "ModalUndo", "Undo Shot", () => _controller.RequestRewind(), PrimaryFill, PrimaryBorder, TextColor, 17);
-            Anchor(_modalUndoPill.Rect, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
-            _modalUndoPill.Rect.anchoredPosition = new Vector2(0f, 94f);
-            _modalUndoPill.Rect.sizeDelta = new Vector2(260f, 52f);
-            SetCorner(_modalUndoPill, 26f);
-
-            var retry = MakePill(card.transform, "ModalRetry", "Retry Hole", () => _controller.RestartLevel(), SurfaceFill, LineBorder, TextColor, 16);
-            Anchor(retry.Rect, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
-            retry.Rect.anchoredPosition = new Vector2(0f, 34f);
-            retry.Rect.sizeDelta = new Vector2(210f, 48f);
-            SetCorner(retry, 24f);
-
-            _modal.SetActive(false);
-        }
 
         private void Update()
         {
@@ -338,6 +296,7 @@ namespace GravityGolf.Game
         public void SetStatus(string message, string hint)
         {
             _status.text = message ?? string.Empty;
+            _status.color = TextColor;
             _hint.text = hint ?? string.Empty;
         }
 
@@ -357,15 +316,43 @@ namespace GravityGolf.Game
             _bannerTimer = 3.4f;
         }
 
+        // Death view: no center modal. The message shows in the top status card (danger),
+        // and the recovery actions are the big bottom buttons already under the thumb —
+        // Undo is promoted to the teal primary look when there's a shot to rewind.
         public void ShowGameOver(string title, string hint, bool canUndo)
         {
-            _modalTitle.text = title;
-            _modalHint.text = hint;
-            ApplyPillEnabled(_modalUndoPill, canUndo);
-            _modal.SetActive(true);
+            _deathMode = true;
+            _status.text = title ?? string.Empty;
+            _status.color = DangerColor;
+            _hint.text = hint ?? string.Empty;
+            StyleUndo(primary: canUndo);
+            ApplyPillEnabled(_undoPill, canUndo);
         }
 
-        public void HideGameOver() => _modal.SetActive(false);
+        public void HideGameOver()
+        {
+            if (!_deathMode)
+            {
+                return;
+            }
+
+            _deathMode = false;
+            _status.color = TextColor;
+            StyleUndo(primary: false);
+        }
+
+        // Swaps the persistent Undo button between the muted surface look and the teal
+        // primary look (used to flag it as the recommended recovery action on death).
+        private void StyleUndo(bool primary)
+        {
+            if (_undoPill == null)
+            {
+                return;
+            }
+
+            _undoPill.Fill.color = primary ? PrimaryFill : SurfaceFill;
+            _undoPill.Border.color = primary ? PrimaryBorder : LineBorder;
+        }
 
         // Toggles the persistent Undo control's enabled look. Called every frame by the
         // controller with CanRewind; also dims while a rewind is playing (CanRewind is
