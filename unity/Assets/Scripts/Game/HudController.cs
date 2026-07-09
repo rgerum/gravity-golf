@@ -34,6 +34,14 @@ namespace GravityGolf.Game
         private Pill _undoPill;
         private bool _deathMode;
 
+        private GameObject _statusCard;
+        private GameObject _powerBar;
+        private GameObject _levelStrip;
+        private GameObject _backdrop;
+        private GameObject _drawer;
+        private Text _drawerTitle;
+        private Text _drawerHint;
+
         private readonly Pill[] _levelPills = new Pill[10];
         private readonly Outline[] _levelOutlines = new Outline[10];
 
@@ -53,6 +61,9 @@ namespace GravityGolf.Game
         private static readonly Color AccentBlue = new Color(0.62f, 0.847f, 1f, 1f);       // #9ed8ff
         private static readonly Color AccentTeal = new Color(0.49f, 0.953f, 0.851f, 1f);   // #7df3d9
         private static readonly Color DangerColor = new Color(1f, 0.427f, 0.227f, 1f);     // #ff6d3a
+        private static readonly Color WarningColor = new Color(1f, 0.733f, 0.486f, 1f);    // #ffbb7c
+        private static readonly Color DrawerFill = new Color(0.043f, 0.071f, 0.122f, 0.86f); // game-over-copy bg
+        private static readonly Color BackdropColor = new Color(0.016f, 0.031f, 0.071f, 0.42f);
         private static readonly Color GoldColor = ColorUtil.FromInt(0xFFC85C);
         private static readonly Color PowerFillColor = ColorUtil.FromInt(0xFF7D58);
 
@@ -85,6 +96,47 @@ namespace GravityGolf.Game
             BuildBottomBar();
             BuildLevelStrip();
             BuildBanner();
+            BuildDeathDrawer();
+        }
+
+        // Death view = a bottom drawer (web mobile .game-over-copy): a dim backdrop over the
+        // play field, plus a rounded message card sitting just above the big Retry/Undo
+        // buttons so the whole recovery UI lives in the thumb zone. The buttons double as the
+        // drawer's actions (Undo promoted to teal). Built hidden; shown by ShowGameOver.
+        private void BuildDeathDrawer()
+        {
+            var backdrop = MakePanel(_safeArea, "DeathBackdrop", BackdropColor);
+            _backdrop = backdrop.gameObject;
+            Stretch(backdrop.rectTransform);
+            backdrop.raycastTarget = true;          // swallow taps on the dimmed play field
+            backdrop.transform.SetAsFirstSibling(); // render behind the rest of the HUD
+            _backdrop.SetActive(false);
+
+            var card = MakeCard(_safeArea, "DeathDrawer", DrawerFill, LineBorder, 20f);
+            _drawer = card.gameObject;
+            card.rectTransform.anchorMin = new Vector2(0f, 0f);
+            card.rectTransform.anchorMax = new Vector2(1f, 0f);
+            card.rectTransform.pivot = new Vector2(0.5f, 0f);
+            card.rectTransform.offsetMin = new Vector2(22f, 128f);          // just above the button row
+            card.rectTransform.offsetMax = new Vector2(-22f, 128f + 132f);  // 132-tall drawer
+
+            var kicker = MakeText(card.transform, "DrawerKicker", 15, TextAnchor.MiddleCenter, WarningColor, FontLibrary.MonoSemiBold);
+            Anchor(kicker.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
+            kicker.rectTransform.anchoredPosition = new Vector2(0f, -20f);
+            kicker.rectTransform.sizeDelta = new Vector2(560f, 20f);
+            kicker.text = "RECOVERY";
+
+            _drawerTitle = MakeText(card.transform, "DrawerTitle", 30, TextAnchor.MiddleCenter, DangerColor, FontLibrary.SansSemiBold);
+            Anchor(_drawerTitle.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            _drawerTitle.rectTransform.anchoredPosition = new Vector2(0f, 6f);
+            _drawerTitle.rectTransform.sizeDelta = new Vector2(640f, 40f);
+
+            _drawerHint = MakeText(card.transform, "DrawerHint", 17, TextAnchor.MiddleCenter, MutedColor, FontLibrary.SansRegular);
+            Anchor(_drawerHint.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
+            _drawerHint.rectTransform.anchoredPosition = new Vector2(0f, 22f);
+            _drawerHint.rectTransform.sizeDelta = new Vector2(640f, 26f);
+
+            _drawer.SetActive(false);
         }
 
         // Top-left level block: no background box (like web) — a mono kicker, the hole title
@@ -116,6 +168,7 @@ namespace GravityGolf.Game
         private void BuildStatus()
         {
             var card = MakeCard(_safeArea, "StatusCard", StatusCardFill, LineBorder, 22f);
+            _statusCard = card.gameObject;
             Anchor(card.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
             card.rectTransform.anchoredPosition = new Vector2(0f, -22f);
             card.rectTransform.sizeDelta = new Vector2(440f, 46f);
@@ -136,6 +189,7 @@ namespace GravityGolf.Game
             const float width = 420f;
 
             var back = MakePanel(_safeArea, "PowerBack", new Color(0.1f, 0.12f, 0.2f, 0.85f));
+            _powerBar = back.gameObject;
             Anchor(back.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
             back.rectTransform.anchoredPosition = new Vector2(0f, 150f);
             back.rectTransform.sizeDelta = new Vector2(width, 14f);
@@ -193,6 +247,7 @@ namespace GravityGolf.Game
             const float height = 64f;
 
             var strip = new GameObject("LevelStrip", typeof(RectTransform));
+            _levelStrip = strip;
             strip.transform.SetParent(_safeArea, false);
             var stripRect = (RectTransform)strip.transform;
             stripRect.anchorMin = new Vector2(0f, 0f);
@@ -316,15 +371,18 @@ namespace GravityGolf.Game
             _bannerTimer = 3.4f;
         }
 
-        // Death view: no center modal. The message shows in the top status card (danger),
-        // and the recovery actions are the big bottom buttons already under the thumb —
-        // Undo is promoted to the teal primary look when there's a shot to rewind.
+        // Death view: a bottom drawer (message just above the big buttons) over a dimmed
+        // backdrop, blending with the persistent Retry/Undo — all in the thumb zone. The
+        // aiming chrome (status card, power bar, aim hint, level strip) hides so the drawer
+        // reads cleanly; Undo is promoted to the teal primary when there's a shot to rewind.
         public void ShowGameOver(string title, string hint, bool canUndo)
         {
             _deathMode = true;
-            _status.text = title ?? string.Empty;
-            _status.color = DangerColor;
-            _hint.text = hint ?? string.Empty;
+            _drawerTitle.text = title ?? string.Empty;
+            _drawerHint.text = hint ?? string.Empty;
+            _backdrop.SetActive(true);
+            _drawer.SetActive(true);
+            SetGameplayChromeVisible(false);
             StyleUndo(primary: canUndo);
             ApplyPillEnabled(_undoPill, canUndo);
         }
@@ -337,8 +395,18 @@ namespace GravityGolf.Game
             }
 
             _deathMode = false;
-            _status.color = TextColor;
+            _backdrop.SetActive(false);
+            _drawer.SetActive(false);
+            SetGameplayChromeVisible(true);
             StyleUndo(primary: false);
+        }
+
+        private void SetGameplayChromeVisible(bool visible)
+        {
+            _statusCard.SetActive(visible);
+            _powerBar.SetActive(visible);
+            _hint.gameObject.SetActive(visible);
+            _levelStrip.SetActive(visible);
         }
 
         // Swaps the persistent Undo button between the muted surface look and the teal
