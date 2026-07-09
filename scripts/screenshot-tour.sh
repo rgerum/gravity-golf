@@ -19,11 +19,17 @@ command -v xvfb-run >/dev/null || { echo "ERROR: xvfb-run not found (sudo apt in
 rm -rf "$OUT_DIR"
 mkdir -p "$OUT_DIR"
 
-echo "==> running screenshot tour (log: $LOG)"
+# Fast iteration knobs (env): QUICK=1 -> stills only, trimmed waits.
+# LEVELS="0,4,8" -> capture just those level indices. Both default to full tour.
+EXTRA_ARGS=()
+[ -n "${QUICK:-}" ] && EXTRA_ARGS+=(-gg-quick)
+[ -n "${LEVELS:-}" ] && EXTRA_ARGS+=(-gg-levels "$LEVELS")
+
+echo "==> running screenshot tour (log: $LOG) ${QUICK:+[quick]} ${LEVELS:+[levels=$LEVELS]}"
 LIBGL_ALWAYS_SOFTWARE="${LIBGL_ALWAYS_SOFTWARE:-1}" timeout "${TOUR_TIMEOUT:-540}" xvfb-run -a -s "-screen 0 2000x1200x24" \
     "$UNITY" -projectPath "$(pwd)/unity" \
     -executeMethod GravityGolf.EditorTools.TourLauncher.Run \
-    -gg-tour -gg-tour-out "$OUT_DIR" \
+    -gg-tour -gg-tour-out "$OUT_DIR" "${EXTRA_ARGS[@]}" \
     -logFile "$LOG"
 
 COUNT=$(ls "$OUT_DIR"/*.png 2>/dev/null | wc -l)

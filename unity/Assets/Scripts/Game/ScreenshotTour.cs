@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.IO;
 using GravityGolf.Core;
 using UnityEngine;
@@ -19,16 +20,45 @@ namespace GravityGolf.Game
         private const float SettleSeconds = 1.0f;
         private const float FlightSeconds = 0.8f;
         private const float WriteSeconds = 0.6f;
+        // Quick mode: stills only, shorter settle/write — for fast visual iteration.
+        private const float QuickSettleSeconds = 0.35f;
+        private const float QuickWriteSeconds = 0.3f;
 
         private GameController _controller;
         private string _outDir;
+        private bool _quick;
+        private int[] _levels;
 
         private void Start()
         {
             _controller = GetComponent<GameController>();
             _outDir = ReadArg("-gg-tour-out") ?? Path.Combine(Application.dataPath, "..", "Screenshots");
+            // -gg-quick: only settled level stills (no flight/rewind), trimmed waits.
+            _quick = Array.IndexOf(Environment.GetCommandLineArgs(), "-gg-quick") >= 0;
+            // -gg-levels 0,4,8: capture just these level indices (default: all).
+            _levels = ParseLevels(ReadArg("-gg-levels"));
             Directory.CreateDirectory(_outDir);
             StartCoroutine(RunTour());
+        }
+
+        private static int[] ParseLevels(string raw)
+        {
+            if (string.IsNullOrEmpty(raw))
+            {
+                return null;
+            }
+
+            var parts = raw.Split(',');
+            var result = new List<int>();
+            foreach (var part in parts)
+            {
+                if (int.TryParse(part.Trim(), out var value))
+                {
+                    result.Add(value);
+                }
+            }
+
+            return result.Count > 0 ? result.ToArray() : null;
         }
 
         private static string ReadArg(string name)
@@ -53,11 +83,23 @@ namespace GravityGolf.Game
             }
 
             var levelCount = _controller.World.Levels.Count;
+            var settle = _quick ? QuickSettleSeconds : SettleSeconds;
             for (var i = 0; i < levelCount; i++)
             {
+                if (_levels != null && Array.IndexOf(_levels, i) < 0)
+                {
+                    continue;
+                }
+
                 _controller.LoadLevel(i);
-                yield return new WaitForSeconds(SettleSeconds);
+                yield return new WaitForSeconds(settle);
                 yield return Capture($"level-{i:00}.png");
+
+                // Quick mode stops at the settled still — no flight/rewind captures.
+                if (_quick)
+                {
+                    continue;
+                }
 
                 var level = _controller.CurrentLevel;
                 if (_controller.CanAim && level.LaunchPresets.Count > 0)
@@ -112,7 +154,7 @@ namespace GravityGolf.Game
             var path = Path.Combine(_outDir, fileName);
             ScreenCapture.CaptureScreenshot(path);
             // CaptureScreenshot writes asynchronously at end of frame.
-            yield return new WaitForSeconds(WriteSeconds);
+            yield return new WaitForSeconds(_quick ? QuickWriteSeconds : WriteSeconds);
         }
 
         private static void Quit()
