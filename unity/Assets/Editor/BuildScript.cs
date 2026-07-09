@@ -23,15 +23,15 @@ public static class BuildScript
         // Point Unity at the externally-managed SDK/NDK/JDK (this editor was installed
         // from the raw tarball). Set each independently so one bad path doesn't skip
         // the others.
-        SetTool(() => UnityEditor.Android.AndroidExternalToolsSettings.sdkRootPath = sdk, "SDK", sdk);
+        SetAndroidTool("sdkRootPath", "SDK", sdk);
         if (!string.IsNullOrEmpty(ndk))
         {
-            SetTool(() => UnityEditor.Android.AndroidExternalToolsSettings.ndkRootPath = ndk, "NDK", ndk);
+            SetAndroidTool("ndkRootPath", "NDK", ndk);
         }
 
         if (!string.IsNullOrEmpty(jdk))
         {
-            SetTool(() => UnityEditor.Android.AndroidExternalToolsSettings.jdkRootPath = jdk, "JDK", jdk);
+            SetAndroidTool("jdkRootPath", "JDK", jdk);
         }
 
         PlayerSettings.productName = "Gravity Golf";
@@ -39,12 +39,12 @@ public static class BuildScript
         PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.Android, "com.rgerum.gravitygolf");
         PlayerSettings.SetScriptingBackend(NamedBuildTarget.Android, ScriptingImplementation.IL2CPP);
         PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARM64;
-        PlayerSettings.Android.minSdkVersion = AndroidSdkVersions.AndroidApiLevel23;
+        PlayerSettings.Android.minSdkVersion = AndroidSdkVersions.AndroidApiLevel26;
         PlayerSettings.Android.targetSdkVersion = AndroidSdkVersions.AndroidApiLevelAuto;
         // Development build is auto-signed with Unity's debug keystore — no keystore setup.
         PlayerSettings.Android.useCustomKeystore = false;
 
-        var outPath = Path.Combine(home, "WebstormProjects/gravity-golf/unity/Build/GravityGolf.apk");
+        var outPath = Path.Combine(Directory.GetCurrentDirectory(), "Build/GravityGolf.apk");
         Directory.CreateDirectory(Path.GetDirectoryName(outPath));
 
         var options = new BuildPlayerOptions
@@ -78,9 +78,10 @@ public static class BuildScript
         PlayerSettings.companyName = "rgerum";
         PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.iOS, "com.rgerum.gravitygolf");
         PlayerSettings.SetScriptingBackend(NamedBuildTarget.iOS, ScriptingImplementation.IL2CPP);
+        PlayerSettings.iOS.appleDeveloperTeamID = "WLCA6C349S";
+        PlayerSettings.iOS.appleEnableAutomaticSigning = true;
 
-        var home = Environment.GetEnvironmentVariable("HOME");
-        var outPath = Path.Combine(home, "WebstormProjects/gravity-golf/unity/Build/iOS");
+        var outPath = Path.Combine(Directory.GetCurrentDirectory(), "Build/iOS");
         Directory.CreateDirectory(outPath);
 
         var options = new BuildPlayerOptions
@@ -116,5 +117,18 @@ public static class BuildScript
         {
             Debug.LogWarning($"[Build] Could not set Android {label} ({path}): {e.Message}");
         }
+    }
+
+    private static void SetAndroidTool(string propertyName, string label, string path)
+    {
+        var type = Type.GetType("UnityEditor.Android.AndroidExternalToolsSettings, UnityEditor.Android.Extensions");
+        var property = type?.GetProperty(propertyName);
+        if (property == null)
+        {
+            Debug.LogWarning($"[Build] Android {label} path not set; Android editor support is not installed.");
+            return;
+        }
+
+        SetTool(() => property.SetValue(null, path), label, path);
     }
 }
