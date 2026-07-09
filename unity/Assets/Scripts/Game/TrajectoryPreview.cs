@@ -14,7 +14,10 @@ namespace GravityGolf.Game
 
         private readonly List<Transform> _dots = new List<Transform>();
         private readonly List<MeshRenderer> _renderers = new List<MeshRenderer>();
-        private readonly MaterialPropertyBlock _propertyBlock = new MaterialPropertyBlock();
+
+        // MaterialPropertyBlock cannot be constructed in a field initializer (it runs in
+        // the MonoBehaviour ctor, which Unity forbids); create it lazily in Init instead.
+        private MaterialPropertyBlock _propertyBlock;
 
         private Material _material;
         private Color _color;
@@ -27,6 +30,7 @@ namespace GravityGolf.Game
             _radius = width;
             _z = z;
             _material = MeshFactory.NewMaterial(Color.white);
+            _propertyBlock = new MaterialPropertyBlock();
         }
 
         public void SetPoints(List<Vec2> points)
