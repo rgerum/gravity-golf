@@ -124,6 +124,24 @@ namespace GravityGolf.Game
             _world = world;
             LoadLevel(0);
             Ready = true;
+            // Boot into the title screen; PLAY dismisses it and jumps to the first
+            // uncompleted hole (the level keeps running behind the backdrop).
+            _hud.ShowTitle(world);
+        }
+
+        /// <summary>Tour hook: dismiss the boot title so captures show gameplay.</summary>
+        internal void DismissTitle() => _hud.HideTitle();
+
+        /// <summary>Tour hook: open/close the settings panel for a capture.</summary>
+        internal void SetSettingsVisible(bool open) => _hud.SetSettingsVisible(open);
+
+        /// <summary>Settings toggle hook: routes the saved sound setting to the mixer.</summary>
+        public void OnSoundSettingChanged(bool on)
+        {
+            if (_audio != null)
+            {
+                _audio.Enabled = on;
+            }
         }
 
         private void OnWorldError(string message)
@@ -163,7 +181,9 @@ namespace GravityGolf.Game
 
             if (_ballTrail != null)
             {
-                if (_state == GameState.Flying || _state == GameState.Rewinding)
+                var trailOn = (_state == GameState.Flying || _state == GameState.Rewinding)
+                    && !SaveStore.Instance.Settings.ReducedMotion;
+                if (trailOn)
                 {
                     _ballTrail.Sample(Depth.ToWorld(_ball.Position, Depth.BallTrail));
                 }
@@ -312,6 +332,7 @@ namespace GravityGolf.Game
             var newBest = SaveStore.Instance.RecordResult(_level.Id, launches, medal, launches <= par);
             var best = SaveStore.Instance.GetLevel(_level.Id).BestStrokes;
             _hud.ShowResult(_world, _level, medal, ResultName(par, launches), par, launches, newBest, best);
+            Haptics.Strong();
             _audio?.PlayGoal();
             _audio?.PlayMedal(medal);
             _hud.SetStatus("Captured!", string.Empty);
@@ -320,6 +341,7 @@ namespace GravityGolf.Game
         private void BeginCrash(string reason)
         {
             _state = GameState.Crashed;
+            Haptics.Strong();
             _audio?.PlayCrash(reason);
             var message = reason switch
             {

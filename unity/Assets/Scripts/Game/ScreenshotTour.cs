@@ -82,6 +82,16 @@ namespace GravityGolf.Game
                 yield return null;
             }
 
+            // Let the first frames present before capturing (an immediate capture under
+            // Xvfb grabs an uninitialized buffer), then shoot the boot title and move on.
+            yield return new WaitForSeconds(0.5f);
+            yield return Capture("title.png");
+            _controller.DismissTitle();
+
+            _controller.SetSettingsVisible(true);
+            yield return Capture("settings.png");
+            _controller.SetSettingsVisible(false);
+
             var levelCount = _controller.World.Levels.Count;
             var settle = _quick ? QuickSettleSeconds : SettleSeconds;
             for (var i = 0; i < levelCount; i++)

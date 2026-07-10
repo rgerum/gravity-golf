@@ -42,6 +42,19 @@ namespace GravityGolf.Game
         private Text _drawerTitle;
         private Text _drawerHint;
 
+        private Text _bestPill;
+        private GameObject _settingsPanel;
+        private Text _soundValue;
+        private Text _hapticsValue;
+        private Text _motionValue;
+        private Pill _soundPill;
+        private Pill _hapticsPill;
+        private Pill _motionPill;
+        private Text _streakLine;
+        private GameObject _titleScreen;
+        private Text _titleStats;
+        private WorldDefinition _world;
+
         private readonly Pill[] _levelPills = new Pill[10];
         private readonly Outline[] _levelOutlines = new Outline[10];
 
@@ -70,6 +83,9 @@ namespace GravityGolf.Game
         private static readonly Color ActiveTileFill = new Color(0.49f, 0.953f, 0.851f, 0.16f);
         private static readonly Color ActiveTileBorder = new Color(0.49f, 0.953f, 0.851f, 0.55f);
         private static readonly Color ActiveTileGlow = new Color(0.49f, 0.953f, 0.851f, 0.6f);
+        private static readonly Color DoneTileBorder = new Color(0.49f, 0.953f, 0.851f, 0.28f);
+        private static readonly Color DoneTileLabel = new Color(0.49f, 0.953f, 0.851f, 0.75f);
+        private static readonly Color TitleBackdrop = new Color(0.016f, 0.027f, 0.059f, 0.94f); // #04070f-ish
 
         public void Build(GameController controller)
         {
@@ -97,6 +113,9 @@ namespace GravityGolf.Game
             BuildLevelStrip();
             BuildBanner();
             BuildDeathDrawer();
+            BuildMenuButton();
+            BuildTitleScreen();
+            BuildSettingsPanel();
         }
 
         // Death view = a bottom drawer (web mobile .game-over-copy): a dim backdrop over the
@@ -160,6 +179,8 @@ namespace GravityGolf.Game
             Place(_levelLabel.rectTransform, 1f, -68f, 430f, 22f);
 
             _parPill = MakeChip(block.transform, "ParPill", 1f, -98f, 96f, 30f, ChipFill, LineBorder, MutedColor, 14);
+            _bestPill = MakeChip(block.transform, "BestPill", 106f, -98f, 110f, 30f, ChipFill, DoneTileBorder, DoneTileLabel, 14);
+            _bestPill.transform.parent.gameObject.SetActive(false);
         }
 
         // Top-center status line, wrapped in a translucent rounded status-card. The aim hint
@@ -288,9 +309,12 @@ namespace GravityGolf.Game
                 }
 
                 var active = i == levelIndex;
+                var done = _world != null
+                    && i < _world.Levels.Count
+                    && SaveStore.Instance.IsCompleted(_world.Levels[i].Id);
                 pill.Fill.color = active ? ActiveTileFill : TileFill;
-                pill.Border.color = active ? ActiveTileBorder : LineBorder;
-                pill.Label.color = active ? AccentTeal : MutedColor;
+                pill.Border.color = active ? ActiveTileBorder : (done ? DoneTileBorder : LineBorder);
+                pill.Label.color = active ? AccentTeal : (done ? DoneTileLabel : MutedColor);
                 if (_levelOutlines[i] != null)
                 {
                     _levelOutlines[i].enabled = active;
@@ -341,10 +365,19 @@ namespace GravityGolf.Game
 
         public void OnLevelLoaded(WorldDefinition world, LevelRuntime level, int levelIndex, int par)
         {
+            _world = world;
             _kicker.text = $"WORLD {world.WorldNumber} · {world.WorldName}".ToUpperInvariant();
             _levelName.text = level.Name;
             _levelLabel.text = $"Level {levelIndex + 1} / {world.Levels.Count}";
             _parPill.text = $"PAR {par}";
+
+            var progress = SaveStore.Instance.GetLevel(level.Id);
+            _bestPill.transform.parent.gameObject.SetActive(progress.Completed);
+            if (progress.Completed)
+            {
+                _bestPill.text = $"BEST {progress.BestStrokes}";
+            }
+
             HighlightLevel(levelIndex);
         }
 
@@ -440,6 +473,220 @@ namespace GravityGolf.Game
 
             pill.Button.interactable = enabled;
             pill.Group.alpha = enabled ? 1f : 0.42f;
+        }
+
+        // Small top-right pill that opens the settings panel.
+        private void BuildMenuButton()
+        {
+            var menu = MakePill(_safeArea, "MenuButton", "Menu", () => SetSettingsOpen(true), SurfaceFill, LineBorder, MutedColor, 14);
+            Anchor(menu.Rect, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(1f, 1f));
+            menu.Rect.anchoredPosition = new Vector2(-22f, -22f);
+            menu.Rect.sizeDelta = new Vector2(104f, 44f);
+            SetCorner(menu, 22f);
+        }
+
+        // Boot title screen: near-opaque backdrop over the running level, the game name in
+        // Plex Sans, a progress line once anything is saved, and PLAY / SETTINGS pills.
+        // The backdrop is a raycast target, so drags can't reach the aim controller.
+        private void BuildTitleScreen()
+        {
+            var screen = new GameObject("TitleScreen", typeof(RectTransform));
+            _titleScreen = screen;
+            screen.transform.SetParent(_safeArea, false);
+            Stretch((RectTransform)screen.transform);
+
+            var backdrop = MakePanel(screen.transform, "TitleBackdrop", TitleBackdrop);
+            backdrop.raycastTarget = true;
+            Stretch(backdrop.rectTransform);
+
+            var kicker = MakeText(screen.transform, "TitleKicker", 17, TextAnchor.MiddleCenter, AccentBlue, FontLibrary.MonoSemiBold);
+            Anchor(kicker.rectTransform, new Vector2(0.5f, 0.62f), new Vector2(0.5f, 0.62f), new Vector2(0.5f, 0.5f));
+            kicker.rectTransform.anchoredPosition = new Vector2(0f, 64f);
+            kicker.rectTransform.sizeDelta = new Vector2(640f, 24f);
+            kicker.text = "A GRAVITY PUZZLE";
+
+            var title = MakeText(screen.transform, "TitleName", 64, TextAnchor.MiddleCenter, TextColor, FontLibrary.SansSemiBold);
+            Anchor(title.rectTransform, new Vector2(0.5f, 0.62f), new Vector2(0.5f, 0.62f), new Vector2(0.5f, 0.5f));
+            title.rectTransform.anchoredPosition = Vector2.zero;
+            title.rectTransform.sizeDelta = new Vector2(800f, 80f);
+            title.text = "Gravity Golf";
+
+            _titleStats = MakeText(screen.transform, "TitleStats", 15, TextAnchor.MiddleCenter, MutedColor, FontLibrary.MonoSemiBold);
+            Anchor(_titleStats.rectTransform, new Vector2(0.5f, 0.62f), new Vector2(0.5f, 0.62f), new Vector2(0.5f, 0.5f));
+            _titleStats.rectTransform.anchoredPosition = new Vector2(0f, -58f);
+            _titleStats.rectTransform.sizeDelta = new Vector2(700f, 22f);
+
+            var play = MakePill(screen.transform, "TitlePlay", "Play", OnTitlePlay, PrimaryFill, PrimaryBorder, TextColor, 24);
+            Anchor(play.Rect, new Vector2(0.5f, 0.3f), new Vector2(0.5f, 0.3f), new Vector2(0.5f, 0.5f));
+            play.Rect.anchoredPosition = Vector2.zero;
+            play.Rect.sizeDelta = new Vector2(340f, 92f);
+            SetCorner(play, 46f);
+
+            var settings = MakePill(screen.transform, "TitleSettings", "Settings", () => SetSettingsOpen(true), SurfaceFill, LineBorder, MutedColor, 16);
+            Anchor(settings.Rect, new Vector2(0.5f, 0.3f), new Vector2(0.5f, 0.3f), new Vector2(0.5f, 0.5f));
+            settings.Rect.anchoredPosition = new Vector2(0f, -84f);
+            settings.Rect.sizeDelta = new Vector2(220f, 56f);
+            SetCorner(settings, 28f);
+        }
+
+        private void OnTitlePlay()
+        {
+            _titleScreen.SetActive(false);
+            if (_world != null)
+            {
+                // Resume at the first hole without a recorded completion.
+                var target = 0;
+                for (var i = 0; i < _world.Levels.Count; i += 1)
+                {
+                    if (!SaveStore.Instance.IsCompleted(_world.Levels[i].Id))
+                    {
+                        target = i;
+                        break;
+                    }
+                }
+
+                _controller.LoadLevel(target);
+            }
+        }
+
+        // Settings drawer: dim backdrop (tap to close) + a web-styled card with mono toggle
+        // rows for sound / haptics / reduced motion and the par-streak stats.
+        private void BuildSettingsPanel()
+        {
+            var panelRoot = new GameObject("SettingsRoot", typeof(RectTransform));
+            _settingsPanel = panelRoot;
+            panelRoot.transform.SetParent(_safeArea, false);
+            Stretch((RectTransform)panelRoot.transform);
+
+            var backdrop = MakePanel(panelRoot.transform, "SettingsBackdrop", BackdropColor);
+            backdrop.raycastTarget = true;
+            Stretch(backdrop.rectTransform);
+            var closeCatcher = backdrop.gameObject.AddComponent<Button>();
+            closeCatcher.transition = Selectable.Transition.None;
+            closeCatcher.onClick.AddListener(() => SetSettingsOpen(false));
+
+            var card = MakeCard(panelRoot.transform, "SettingsCard", ModalFill, LineBorder, 28f);
+            Anchor(card.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            card.rectTransform.anchoredPosition = Vector2.zero;
+            card.rectTransform.sizeDelta = new Vector2(560f, 470f);
+            // The card must eat clicks so the close-catcher behind it doesn't fire.
+            card.raycastTarget = true;
+
+            var kicker = MakeText(card.transform, "SettingsKicker", 15, TextAnchor.MiddleCenter, AccentBlue, FontLibrary.MonoSemiBold);
+            Anchor(kicker.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
+            kicker.rectTransform.anchoredPosition = new Vector2(0f, -26f);
+            kicker.rectTransform.sizeDelta = new Vector2(500f, 22f);
+            kicker.text = "SETTINGS";
+
+            _soundPill = BuildToggleRow(card.transform, "Sound", -70f, out _soundValue, ToggleSound);
+            _hapticsPill = BuildToggleRow(card.transform, "Haptics", -140f, out _hapticsValue, ToggleHaptics);
+            _motionPill = BuildToggleRow(card.transform, "Reduced motion", -210f, out _motionValue, ToggleMotion);
+
+            _streakLine = MakeText(card.transform, "StreakLine", 14, TextAnchor.MiddleCenter, MutedColor, FontLibrary.MonoSemiBold);
+            Anchor(_streakLine.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
+            _streakLine.rectTransform.anchoredPosition = new Vector2(0f, 118f);
+            _streakLine.rectTransform.sizeDelta = new Vector2(500f, 22f);
+
+            var close = MakePill(card.transform, "SettingsClose", "Close", () => SetSettingsOpen(false), SurfaceFill, LineBorder, TextColor, 17);
+            Anchor(close.Rect, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
+            close.Rect.anchoredPosition = new Vector2(0f, 30f);
+            close.Rect.sizeDelta = new Vector2(240f, 62f);
+            SetCorner(close, 31f);
+
+            _settingsPanel.SetActive(false);
+        }
+
+        // One settings row: muted label on the left, an ON/OFF value pill on the right.
+        private Pill BuildToggleRow(Transform parent, string label, float y, out Text valueLabel, UnityAction onClick)
+        {
+            var text = MakeText(parent, $"{label}Label", 18, TextAnchor.MiddleLeft, TextColor, FontLibrary.SansRegular);
+            Anchor(text.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f));
+            text.rectTransform.anchoredPosition = new Vector2(36f, y);
+            text.rectTransform.sizeDelta = new Vector2(320f, 44f);
+            text.text = label;
+
+            var pill = MakePill(parent, $"{label}Toggle", "On", onClick, SurfaceFill, LineBorder, TextColor, 15);
+            Anchor(pill.Rect, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(1f, 1f));
+            pill.Rect.anchoredPosition = new Vector2(-36f, y);
+            pill.Rect.sizeDelta = new Vector2(110f, 44f);
+            SetCorner(pill, 22f);
+            valueLabel = pill.Label;
+            return pill;
+        }
+
+        private void ToggleSound()
+        {
+            var save = SaveStore.Instance;
+            save.SetSound(!save.Settings.Sound);
+            _controller.OnSoundSettingChanged(save.Settings.Sound);
+            RefreshSettingsUi();
+        }
+
+        private void ToggleHaptics()
+        {
+            var save = SaveStore.Instance;
+            save.SetHaptics(!save.Settings.Haptics);
+            RefreshSettingsUi();
+        }
+
+        private void ToggleMotion()
+        {
+            var save = SaveStore.Instance;
+            save.SetReducedMotion(!save.Settings.ReducedMotion);
+            RefreshSettingsUi();
+        }
+
+        private void SetSettingsOpen(bool open)
+        {
+            RefreshSettingsUi();
+            _settingsPanel.SetActive(open);
+        }
+
+        private void RefreshSettingsUi()
+        {
+            var settings = SaveStore.Instance.Settings;
+            ApplyToggleLook(_soundPill, _soundValue, settings.Sound);
+            ApplyToggleLook(_hapticsPill, _hapticsValue, settings.Haptics);
+            ApplyToggleLook(_motionPill, _motionValue, settings.ReducedMotion);
+            _streakLine.text = $"PAR STREAK {SaveStore.Instance.CurrentParStreak} · BEST {SaveStore.Instance.BestParStreak}";
+        }
+
+        private static void ApplyToggleLook(Pill pill, Text value, bool on)
+        {
+            if (pill == null)
+            {
+                return;
+            }
+
+            value.text = on ? "ON" : "OFF";
+            pill.Fill.color = on ? ActiveTileFill : SurfaceFill;
+            pill.Border.color = on ? ActiveTileBorder : LineBorder;
+            pill.Label.color = on ? AccentTeal : MutedColor;
+        }
+
+        /// <summary>Hides the title screen (used by PLAY and by the headless tour).</summary>
+        public void HideTitle() => _titleScreen.SetActive(false);
+
+        /// <summary>Tour hook: open/close the settings panel for a capture.</summary>
+        public void SetSettingsVisible(bool open) => SetSettingsOpen(open);
+
+        /// <summary>Shows the boot title screen with saved-progress stats.</summary>
+        public void ShowTitle(WorldDefinition world)
+        {
+            _world = world;
+            var done = 0;
+            for (var i = 0; i < world.Levels.Count; i += 1)
+            {
+                if (SaveStore.Instance.IsCompleted(world.Levels[i].Id))
+                {
+                    done += 1;
+                }
+            }
+
+            _titleStats.text = done > 0
+                ? $"{done} / {world.Levels.Count} HOLES · BEST STREAK {SaveStore.Instance.BestParStreak}"
+                : "DRAG ANYWHERE · RELEASE TO LAUNCH";
+            _titleScreen.SetActive(true);
         }
 
         // ---- uGUI construction helpers ----
