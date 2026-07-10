@@ -91,7 +91,35 @@ namespace GravityGolf.Game
             _boundsCenter = new Vector2((float)((minX + maxX) * 0.5), (float)((minY + maxY) * 0.5));
             _halfWidth = (float)((maxX - minX) * 0.5);
             _halfHeight = (float)((maxY - minY) * 0.5);
+            // Level switches snap to the new framing instead of gliding across systems.
+            _trackingBall = false;
+            _viewInitialized = false;
+            _centerVelocity = Vector2.zero;
+            _sizeVelocity = 0f;
             Apply();
+        }
+
+        // A ball flying past the level bounds no longer dies at an invisible wall; the
+        // camera expands to keep it in view instead. Each frame the target framing is
+        // the base fit grown (if needed) to contain the tracked ball plus a margin, and
+        // the live view smooth-damps toward that target — zooming out as the ball
+        // escapes, easing back home once it returns or the flight ends.
+        private const float BallMargin = 2.4f;
+        private const float FollowSmoothTime = 0.4f;
+
+        private bool _trackingBall;
+        private Vector2 _ballPoint;
+        private Vector2 _viewCenter;
+        private float _viewSize;
+        private Vector2 _centerVelocity;
+        private float _sizeVelocity;
+        private bool _viewInitialized;
+
+        /// <summary>Feed the live ball position while it flies; pass tracking=false at rest.</summary>
+        public void TrackBall(Vec2 position, bool tracking)
+        {
+            _trackingBall = tracking;
+            _ballPoint = new Vector2((float)position.X, (float)position.Y);
         }
 
         private void Apply()
@@ -104,9 +132,36 @@ namespace GravityGolf.Game
             var aspect = (float)Screen.width / Mathf.Max(1, Screen.height);
             // Fit the bounds box against both axes, then re-center the camera on it.
             var size = Mathf.Max(_halfHeight, _halfWidth / aspect) * ContentMargin;
-            _camera.orthographicSize = Mathf.Max(size, MinOrthoSize);
+            var targetSize = Mathf.Max(size, MinOrthoSize);
+            var targetCenter = _boundsCenter;
+
+            // Grow the target framing to also contain the tracked ball (with margin).
+            if (_trackingBall)
+            {
+                var halfWidth = targetSize * aspect;
+                var minX = Mathf.Min(targetCenter.x - halfWidth, _ballPoint.x - BallMargin);
+                var maxX = Mathf.Max(targetCenter.x + halfWidth, _ballPoint.x + BallMargin);
+                var minY = Mathf.Min(targetCenter.y - targetSize, _ballPoint.y - BallMargin);
+                var maxY = Mathf.Max(targetCenter.y + targetSize, _ballPoint.y + BallMargin);
+                targetCenter = new Vector2((minX + maxX) * 0.5f, (minY + maxY) * 0.5f);
+                targetSize = Mathf.Max((maxY - minY) * 0.5f, (maxX - minX) * 0.5f / aspect);
+            }
+
+            if (!_viewInitialized)
+            {
+                _viewInitialized = true;
+                _viewCenter = targetCenter;
+                _viewSize = targetSize;
+            }
+            else
+            {
+                _viewCenter = Vector2.SmoothDamp(_viewCenter, targetCenter, ref _centerVelocity, FollowSmoothTime);
+                _viewSize = Mathf.SmoothDamp(_viewSize, targetSize, ref _sizeVelocity, FollowSmoothTime);
+            }
+
+            _camera.orthographicSize = _viewSize;
             var z = _camera.transform.position.z;
-            _camera.transform.position = new Vector3(_boundsCenter.x, _boundsCenter.y, z);
+            _camera.transform.position = new Vector3(_viewCenter.x, _viewCenter.y, z);
         }
 
         /// <summary>Screen pixel → 2D world point on the gameplay plane (spec §1.2).</summary>

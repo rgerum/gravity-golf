@@ -13,7 +13,7 @@ namespace GravityGolf.Game
     /// </summary>
     public sealed class StarfieldView : MonoBehaviour
     {
-        private const int StarCount = 180;
+        private const int StarCount = 300;
         private const int Seed = 20260708;
         private const int RimSegments = 8;
 

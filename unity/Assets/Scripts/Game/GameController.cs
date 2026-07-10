@@ -182,6 +182,8 @@ namespace GravityGolf.Game
                 _ballView.CaptureScale = _state == GameState.Goal ? (float)Math.Max(0.0, 1.0 - _goalTransition) : 1f;
             }
 
+            _cameraRig.TrackBall(_ball.Position, _state == GameState.Flying || _state == GameState.Rewinding);
+
             if (_ballTrail != null)
             {
                 var trailOn = (_state == GameState.Flying || _state == GameState.Rewinding)
@@ -531,13 +533,15 @@ namespace GravityGolf.Game
 
             _levelRoot = new GameObject("Level").transform;
 
-            // Subtle static starfield behind everything, overspread to cover the fitted
-            // view (the camera is already positioned by SetLevel above).
+            // Subtle static starfield behind everything, overspread well past the fitted
+            // view so the dynamic zoom-out (camera follows far slingshot flights up to
+            // the ±20 escape backstop) never reaches bare corners.
             var starfield = new GameObject("Starfield").AddComponent<StarfieldView>();
             starfield.transform.SetParent(_levelRoot, false);
             var viewHalf = _cameraRig.ViewHalfSize;
             const float coverage = 1.8f;
-            starfield.Init(_cameraRig.ViewCenter, viewHalf.x * 2f * coverage, viewHalf.y * 2f * coverage);
+            var span = Mathf.Max(viewHalf.x * 2f * coverage, viewHalf.y * 2f * coverage, 52f);
+            starfield.Init(_cameraRig.ViewCenter, span, span);
 
             var sun = new GameObject("Sun").AddComponent<SunView>();
             sun.transform.SetParent(_levelRoot, false);

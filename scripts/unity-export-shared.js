@@ -660,24 +660,23 @@ function parseExportRotationDegrees() {
   return degrees;
 }
 
-// The out-of-bounds rectangle is part of the course, so it must rotate with the
-// level layout — otherwise a portrait (goal-up) export leaves the goal inside the
-// landscape kill zone (|y| > 10 while the goal sits at radius ~10.3). Only right
-// angles keep the rectangle axis-aligned, which is all the exporter supports.
-// Mutating COURSE here makes the JS engine (fixture ground truth) use the rotated
-// rectangle, and the swapped values are exported per level for the C# runtime.
+// The mobile build replaces the web's tight landscape kill rectangle (13.8x10 —
+// an invisible wall that punished slingshot orbits) with a far "escaped the
+// system" backstop: the camera zooms out to follow distant flights, flight
+// friction guarantees the ball settles or returns, and only a truly gone ball
+// is lost. Symmetric, so layout rotation can't strand a goal inside the dead
+// zone again. Mutating COURSE makes the JS engine (fixture ground truth) use
+// the same backstop, and the values are exported per level for the C# runtime.
 function rotateOutBounds(degrees) {
+  // Runs during module init (before top-level consts below), so keep the value local.
+  const MOBILE_OUT_BOUNDS = 20;
   const quarterTurns = degrees / 90;
   if (!Number.isInteger(quarterTurns)) {
     throw new Error(`UNITY_EXPORT_ROTATION_DEGREES must be a multiple of 90 (out-of-bounds rectangle), got ${degrees}`);
   }
 
-  if (quarterTurns % 2 !== 0) {
-    const originalX = COURSE.outBoundsX;
-    COURSE.outBoundsX = COURSE.outBoundsY;
-    COURSE.outBoundsY = originalX;
-  }
-
+  COURSE.outBoundsX = MOBILE_OUT_BOUNDS;
+  COURSE.outBoundsY = MOBILE_OUT_BOUNDS;
   return { x: COURSE.outBoundsX, y: COURSE.outBoundsY };
 }
 

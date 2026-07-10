@@ -366,6 +366,8 @@ namespace GravityGolf.Game
         public void OnLevelLoaded(WorldDefinition world, LevelRuntime level, int levelIndex, int par)
         {
             _world = world;
+            _banner.SetActive(false);
+            _bannerTimer = 0f;
             _kicker.text = $"WORLD {world.WorldNumber} · {world.WorldName}".ToUpperInvariant();
             _levelName.text = level.Name;
             _levelLabel.text = $"Level {levelIndex + 1} / {world.Levels.Count}";
