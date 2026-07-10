@@ -33,6 +33,8 @@
       "goalPullStrength": 6.2,
       "goalOpenSeconds": 9999,
       "goalUnlockRequired": false,
+      "outBoundsX": 10,
+      "outBoundsY": 13.8,
       "planets": [
         {
           "index": 0,
@@ -92,6 +94,8 @@
       "goalPullStrength": 6.8,
       "goalOpenSeconds": 8,
       "goalUnlockRequired": false,
+      "outBoundsX": 10,
+      "outBoundsY": 13.8,
       "planets": [
         {
           "index": 0,
@@ -151,6 +155,8 @@
       "goalPullStrength": 6.9,
       "goalOpenSeconds": 11,
       "goalUnlockRequired": false,
+      "outBoundsX": 10,
+      "outBoundsY": 13.8,
       "planets": [
         {
           "index": 0,
@@ -210,6 +216,8 @@
       "goalPullStrength": 7,
       "goalOpenSeconds": 8,
       "goalUnlockRequired": false,
+      "outBoundsX": 10,
+      "outBoundsY": 13.8,
       "planets": [
         {
           "index": 0,
@@ -269,6 +277,8 @@
       "goalPullStrength": 6.6,
       "goalOpenSeconds": 10,
       "goalUnlockRequired": false,
+      "outBoundsX": 10,
+      "outBoundsY": 13.8,
       "planets": [
         {
           "index": 0,
@@ -351,6 +361,8 @@
       "goalPullStrength": 5.7,
       "goalOpenSeconds": 15,
       "goalUnlockRequired": false,
+      "outBoundsX": 10,
+      "outBoundsY": 13.8,
       "planets": [
         {
           "index": 0,
@@ -437,6 +449,8 @@
       "goalPullStrength": 6.3,
       "goalOpenSeconds": 12,
       "goalUnlockRequired": false,
+      "outBoundsX": 10,
+      "outBoundsY": 13.8,
       "planets": [
         {
           "index": 0,
@@ -523,6 +537,8 @@
       "goalPullStrength": 6.3,
       "goalOpenSeconds": 13,
       "goalUnlockRequired": false,
+      "outBoundsX": 10,
+      "outBoundsY": 13.8,
       "planets": [
         {
           "index": 0,
@@ -609,6 +625,8 @@
       "goalPullStrength": 6.2,
       "goalOpenSeconds": 8,
       "goalUnlockRequired": false,
+      "outBoundsX": 10,
+      "outBoundsY": 13.8,
       "planets": [
         {
           "index": 0,
@@ -764,6 +782,8 @@
       "goalPullStrength": 6.2,
       "goalOpenSeconds": 12,
       "goalUnlockRequired": false,
+      "outBoundsX": 10,
+      "outBoundsY": 13.8,
       "planets": [
         {
           "index": 0,

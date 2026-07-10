@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import {
+  COURSE,
   WORLD_DEFINITIONS,
   WORLD_SIZE,
   createLevelRuntime,
@@ -27,6 +28,7 @@ export const REVERSE_FIXTURE_SHOT_LIMIT = 3;
 export const FIXTURE_MAX_TIME = 20;
 export const SUN_COLLISION_RADIUS = 0.42;
 export const UNITY_EXPORT_ROTATION_DEGREES = parseExportRotationDegrees();
+export const OUT_BOUNDS = rotateOutBounds(UNITY_EXPORT_ROTATION_DEGREES);
 export const DEFAULT_COVERAGE_POWER_GRID = [1.4, 2.4, 3.2];
 export const WIDE_COVERAGE_POWER_GRID = [1.0, 1.4, 1.8, 2.2, 2.6, 3.0, 3.4, 3.6];
 export const COVERAGE_ANGLE_STEPS = 48;
@@ -142,6 +144,8 @@ export function serializeLevel(level, index) {
     goalPullStrength: level.goalPullStrength,
     goalOpenSeconds: level.goalOpenSeconds,
     goalUnlockRequired: level.goalUnlockRequired,
+    outBoundsX: OUT_BOUNDS.x,
+    outBoundsY: OUT_BOUNDS.y,
     planets: level.planets.map(serializePlanet),
     launchPresets: level.launchPresets.map(serializeLaunchPreset),
   };
@@ -654,6 +658,27 @@ function parseExportRotationDegrees() {
     throw new Error(`UNITY_EXPORT_ROTATION_DEGREES must be a finite number, got "${value}"`);
   }
   return degrees;
+}
+
+// The out-of-bounds rectangle is part of the course, so it must rotate with the
+// level layout — otherwise a portrait (goal-up) export leaves the goal inside the
+// landscape kill zone (|y| > 10 while the goal sits at radius ~10.3). Only right
+// angles keep the rectangle axis-aligned, which is all the exporter supports.
+// Mutating COURSE here makes the JS engine (fixture ground truth) use the rotated
+// rectangle, and the swapped values are exported per level for the C# runtime.
+function rotateOutBounds(degrees) {
+  const quarterTurns = degrees / 90;
+  if (!Number.isInteger(quarterTurns)) {
+    throw new Error(`UNITY_EXPORT_ROTATION_DEGREES must be a multiple of 90 (out-of-bounds rectangle), got ${degrees}`);
+  }
+
+  if (quarterTurns % 2 !== 0) {
+    const originalX = COURSE.outBoundsX;
+    COURSE.outBoundsX = COURSE.outBoundsY;
+    COURSE.outBoundsY = originalX;
+  }
+
+  return { x: COURSE.outBoundsX, y: COURSE.outBoundsY };
 }
 
 function rotateVec2InPlace(point, radians) {

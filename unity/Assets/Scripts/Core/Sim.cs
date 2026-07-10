@@ -142,7 +142,7 @@ namespace GravityGolf.Core
             var friction = Math.Pow(Constants.BallFrictionBase, delta * 60);
             ball.Velocity = new Vec2(ball.Velocity.X * friction, ball.Velocity.Y * friction);
 
-            if (Math.Abs(ball.Position.X) > Constants.OutBoundsX || Math.Abs(ball.Position.Y) > Constants.OutBoundsY)
+            if (Math.Abs(ball.Position.X) > level.OutBoundsX || Math.Abs(ball.Position.Y) > level.OutBoundsY)
             {
                 ball.Velocity = new Vec2(0, 0);
                 return new StepResult { Type = "crash", Reason = "bounds" };

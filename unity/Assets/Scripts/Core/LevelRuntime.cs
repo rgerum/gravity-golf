@@ -68,6 +68,14 @@ namespace GravityGolf.Core
 
         public bool GoalUnlocked { get; set; } = true;
 
+        // The out-of-bounds rectangle rotates with the exported layout (a portrait
+        // export swaps the landscape 13.8x10 rectangle); defaults keep old data working.
+        [JsonProperty("outBoundsX")]
+        public double OutBoundsX { get; set; } = Constants.OutBoundsX;
+
+        [JsonProperty("outBoundsY")]
+        public double OutBoundsY { get; set; } = Constants.OutBoundsY;
+
         [JsonProperty("planets")]
         public List<PlanetRuntime> Planets { get; set; } = new List<PlanetRuntime>();
 
@@ -98,6 +106,8 @@ namespace GravityGolf.Core
                 GoalOpenSeconds = GoalOpenSeconds,
                 GoalUnlockRequired = GoalUnlockRequired,
                 GoalUnlocked = GoalUnlocked,
+                OutBoundsX = OutBoundsX,
+                OutBoundsY = OutBoundsY,
                 LaunchPresets = LaunchPresets.Select(p => new LaunchPreset { AngleDeg = p.AngleDeg, Power = p.Power }).ToList(),
                 Planets = Planets.Select(p => p.Clone()).ToList(),
             };
