@@ -361,12 +361,13 @@ namespace GravityGolf.Game
             _powerFill.localScale = new Vector3(clamped, 1f, 1f);
         }
 
-        public void ShowResult(WorldDefinition world, LevelRuntime level, string medalLabel, string resultName, int par, int launches)
+        public void ShowResult(WorldDefinition world, LevelRuntime level, string medalLabel, string resultName, int par, int launches, bool newBest, int bestStrokes)
         {
             _bannerKicker.text = $"{world.WorldName} · HOLE {level.WorldLevelNumber}".ToUpperInvariant();
             _bannerTitle.text = resultName;
             var launchWord = launches == 1 ? "launch" : "launches";
-            _bannerDetail.text = $"{medalLabel} · PAR {par} · {launches} {launchWord}".ToUpperInvariant();
+            var bestTag = newBest ? "NEW BEST" : $"BEST {bestStrokes}";
+            _bannerDetail.text = $"{medalLabel} · PAR {par} · {launches} {launchWord} · {bestTag}".ToUpperInvariant();
             _banner.SetActive(true);
             _bannerTimer = 3.4f;
         }

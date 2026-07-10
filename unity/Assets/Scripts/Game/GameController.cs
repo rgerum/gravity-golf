@@ -62,6 +62,7 @@ namespace GravityGolf.Game
         private BallView _ballView;
         private GoalView _goalView;
         private TrailView _ballTrail;
+        private AudioManager _audio;
 
         public bool Ready { get; private set; }
 
@@ -90,6 +91,10 @@ namespace GravityGolf.Game
             cameraGo.AddComponent<Camera>();
             _cameraRig = cameraGo.AddComponent<CameraRig>();
             _cameraRig.Setup();
+
+            _audio = gameObject.AddComponent<AudioManager>();
+            _audio.Initialize();
+            _audio.Enabled = SaveStore.Instance.Settings.Sound;
 
             if (EventSystem.current == null)
             {
@@ -252,6 +257,7 @@ namespace GravityGolf.Game
                 case "flying":
                     break;
                 case "landed":
+                    _audio?.PlayLand();
                     _state = GameState.Landed;
                     _hud.SetStatus($"Relay locked on {result.PlanetName}.", "Line up the next launch.");
                     break;
@@ -292,6 +298,7 @@ namespace GravityGolf.Game
             _ball.PortalCooldown = 0;
             _strokes += 1;
             _state = GameState.Flying;
+            _audio?.PlayLaunch();
             _hud.SetStatus($"Flight underway. {_level.Name}.", string.Empty);
         }
 
@@ -301,13 +308,19 @@ namespace GravityGolf.Game
             _goalTransition = 0;
             var par = Math.Max(1, _level.LaunchPresets.Count);
             var launches = Math.Max(1, _strokes);
-            _hud.ShowResult(_world, _level, MedalLabel(par, launches), ResultName(par, launches), par, launches);
+            var medal = MedalLabel(par, launches);
+            var newBest = SaveStore.Instance.RecordResult(_level.Id, launches, medal, launches <= par);
+            var best = SaveStore.Instance.GetLevel(_level.Id).BestStrokes;
+            _hud.ShowResult(_world, _level, medal, ResultName(par, launches), par, launches, newBest, best);
+            _audio?.PlayGoal();
+            _audio?.PlayMedal(medal);
             _hud.SetStatus("Captured!", string.Empty);
         }
 
         private void BeginCrash(string reason)
         {
             _state = GameState.Crashed;
+            _audio?.PlayCrash(reason);
             var message = reason switch
             {
                 "sun" => "Burned in the sun.",
@@ -340,6 +353,7 @@ namespace GravityGolf.Game
             _rewindTarget = _checkpoints.Pop();
             _rewindAccumulator = 0;
             _state = GameState.Rewinding;
+            _audio?.PlayRewind();
 
             _hud.HideGameOver();
             if (_ballTrail != null)
@@ -440,6 +454,10 @@ namespace GravityGolf.Game
             }
 
             _levelIndex = index;
+            if (Ready)
+            {
+                _audio?.PlayUi();
+            }
             _checkpoints.Clear();
             _rewindAccumulator = 0;
             _level = _world.Levels[index].Clone();
