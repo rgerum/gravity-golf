@@ -21,7 +21,29 @@ namespace GravityGolf.Game
         private int _sourceFlip;
         private uint _noiseState = 0x1234abcd;
 
-        public bool Enabled { get; set; } = true;
+        private bool _enabled = true;
+
+        // Muting also silences clips already in flight, not just future one-shots.
+        public bool Enabled
+        {
+            get => _enabled;
+            set
+            {
+                _enabled = value;
+                if (!value)
+                {
+                    if (_sourceA != null)
+                    {
+                        _sourceA.Stop();
+                    }
+
+                    if (_sourceB != null)
+                    {
+                        _sourceB.Stop();
+                    }
+                }
+            }
+        }
 
         public float MasterVolume
         {

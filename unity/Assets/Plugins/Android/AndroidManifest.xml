@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Minimal custom manifest: Unity merges its generated application/activity entries
+     into this. Present only to declare the vibrate permission for Haptics.cs. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <uses-permission android:name="android.permission.VIBRATE" />
+</manifest>

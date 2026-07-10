@@ -17,6 +17,14 @@ namespace GravityGolf.Game
 
         private static SaveStore _instance;
 
+        // Statics survive play-mode restarts when domain reload is disabled; re-read the
+        // save file each session so external edits/deletes are picked up.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetStatics()
+        {
+            _instance = null;
+        }
+
         public static SaveStore Instance
         {
             get

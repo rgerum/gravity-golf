@@ -77,11 +77,14 @@ namespace GravityGolf.Game
 
         // A rewind is possible whenever at least one shot has been taken and we are not
         // mid-load or already rewinding. Callable from Aiming, Landed, Flying, Crashed,
-        // Settled — the target is always a past anchored launch point.
+        // Settled — the target is always a past anchored launch point. Goal is excluded:
+        // the result is already recorded, and rewinding out of a capture would let the
+        // same hole re-score repeatedly (par-streak farming).
         internal bool CanRewind => Ready
             && _checkpoints.Count > 0
             && _state != GameState.Rewinding
-            && _state != GameState.Loading;
+            && _state != GameState.Loading
+            && _state != GameState.Goal;
 
         private void Awake()
         {
