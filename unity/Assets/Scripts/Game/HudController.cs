@@ -21,9 +21,7 @@ namespace GravityGolf.Game
         private Text _levelLabel;
         private Text _levelName;
         private Text _parPill;
-        private Text _status;
         private Text _hint;
-        private RectTransform _powerFill;
 
         private GameObject _banner;
         private Text _bannerKicker;
@@ -34,8 +32,6 @@ namespace GravityGolf.Game
         private Pill _undoPill;
         private bool _deathMode;
 
-        private GameObject _statusCard;
-        private GameObject _powerBar;
         private GameObject _levelStrip;
         private GameObject _backdrop;
         private GameObject _drawer;
@@ -60,7 +56,6 @@ namespace GravityGolf.Game
 
         // ---- Web palette (src/style.css :root). ----
         private static readonly Color SurfaceFill = new Color(0.031f, 0.055f, 0.102f, 0.78f);   // rgba(8,14,26,0.78)
-        private static readonly Color StatusCardFill = new Color(0.035f, 0.059f, 0.106f, 0.75f); // status-card gradient mid
         private static readonly Color ModalFill = new Color(0.035f, 0.059f, 0.106f, 0.93f);      // modal gradient mid
         private static readonly Color PrimaryFill = new Color(0.071f, 0.157f, 0.176f, 0.9f);     // dark-teal gradient mid
         private static readonly Color ChipFill = new Color(1f, 1f, 1f, 0.03f);                   // rgba(255,255,255,0.03)
@@ -78,7 +73,6 @@ namespace GravityGolf.Game
         private static readonly Color DrawerFill = new Color(0.043f, 0.071f, 0.122f, 0.86f); // game-over-copy bg
         private static readonly Color BackdropColor = new Color(0.016f, 0.031f, 0.071f, 0.42f);
         private static readonly Color GoldColor = ColorUtil.FromInt(0xFFC85C);
-        private static readonly Color PowerFillColor = ColorUtil.FromInt(0xFF7D58);
 
         private static readonly Color ActiveTileFill = new Color(0.49f, 0.953f, 0.851f, 0.16f);
         private static readonly Color ActiveTileBorder = new Color(0.49f, 0.953f, 0.851f, 0.55f);
@@ -111,7 +105,6 @@ namespace GravityGolf.Game
 
             BuildTopLeft();
             BuildStatus();
-            BuildPowerBar();
             BuildBottomBar();
             BuildLevelStrip();
             BuildBanner();
@@ -189,44 +182,17 @@ namespace GravityGolf.Game
         // Top-center status line, wrapped in a translucent rounded status-card. The aim hint
         // is part of the bottom control stack (portrait): it sits centered just above the
         // power bar, which sits above the Retry/Undo thumb row (see BuildBottomBar).
+        // The old top-center status card is gone (it crowded the goal on tall phones);
+        // only the bottom aim hint remains. Crash/result messaging lives in the death
+        // drawer and the result banner, so no floating status text is needed.
         private void BuildStatus()
         {
-            var card = MakeCard(_safeArea, "StatusCard", StatusCardFill, LineBorder, 22f);
-            _statusCard = card.gameObject;
-            // Sits below the top-left level block and the top-right menu button so it can't
-            // collide with the title on narrow (tall-aspect) phones.
-            Anchor(card.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
-            card.rectTransform.anchoredPosition = new Vector2(0f, -158f);
-            card.rectTransform.sizeDelta = new Vector2(440f, 46f);
-
-            _status = MakeText(card.transform, "Status", 20, TextAnchor.MiddleCenter, TextColor, FontLibrary.SansSemiBold);
-            Stretch(_status.rectTransform);
-
             _hint = MakeText(_safeArea, "Hint", 18, TextAnchor.MiddleCenter, MutedColor, FontLibrary.SansRegular);
             Anchor(_hint.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
-            _hint.rectTransform.anchoredPosition = new Vector2(0f, 178f);
+            _hint.rectTransform.anchoredPosition = new Vector2(0f, 150f);
             _hint.rectTransform.sizeDelta = new Vector2(520f, 28f);
         }
 
-        // Slim power meter centered in the bottom stack, above the Retry/Undo row and just
-        // below the aim hint. Fill grows left-to-right via localScale (see SetPower).
-        private void BuildPowerBar()
-        {
-            const float width = 420f;
-
-            var back = MakePanel(_safeArea, "PowerBack", new Color(0.1f, 0.12f, 0.2f, 0.85f));
-            _powerBar = back.gameObject;
-            Anchor(back.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
-            back.rectTransform.anchoredPosition = new Vector2(0f, 150f);
-            back.rectTransform.sizeDelta = new Vector2(width, 14f);
-
-            var fill = MakePanel(back.transform, "PowerFill", PowerFillColor);
-            _powerFill = fill.rectTransform;
-            Anchor(_powerFill, new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0.5f));
-            _powerFill.anchoredPosition = Vector2.zero;
-            _powerFill.sizeDelta = new Vector2(width, 0f);
-            _powerFill.localScale = new Vector3(0.04f, 1f, 1f);
-        }
 
         // Bottom thumb row (portrait): Retry (full restart) pinned to the bottom-left corner
         // and Undo (rewind one shot) to the bottom-right corner, so both sit under the thumbs
@@ -388,17 +354,16 @@ namespace GravityGolf.Game
             HighlightLevel(levelIndex);
         }
 
+        // Only the bottom aim hint survives; the message argument (old top status card)
+        // is dropped — crash/result feedback is shown by the drawer and result banner.
         public void SetStatus(string message, string hint)
         {
-            _status.text = message ?? string.Empty;
-            _status.color = TextColor;
             _hint.text = hint ?? string.Empty;
         }
 
+        // Power meter removed; kept as a no-op so the controller's per-frame call is fine.
         public void SetPower(float fraction)
         {
-            var clamped = Mathf.Max(0.04f, Mathf.Min(1f, fraction));
-            _powerFill.localScale = new Vector3(clamped, 1f, 1f);
         }
 
         public void ShowResult(WorldDefinition world, LevelRuntime level, string medalLabel, string resultName, int par, int launches, bool newBest, int bestStrokes)
@@ -444,8 +409,6 @@ namespace GravityGolf.Game
 
         private void SetGameplayChromeVisible(bool visible)
         {
-            _statusCard.SetActive(visible);
-            _powerBar.SetActive(visible);
             _hint.gameObject.SetActive(visible);
             _levelStrip.SetActive(visible);
         }
