@@ -97,10 +97,10 @@ namespace GravityGolf.Game
             canvas.sortingOrder = 100;
             var scaler = canvasGo.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            // Portrait-first: match the canvas to a 720-unit width so the UI renders
-            // ~1.5x on a 1080 phone (the old 1600x900 landscape reference left all text
-            // ~35% too small to read comfortably on device).
-            scaler.referenceResolution = new Vector2(720, 1280);
+            // Portrait-first: the UI is a fixed fraction of screen WIDTH, so a smaller
+            // reference width scales everything up. 560 lands button/label text at a
+            // comfortable ~16pt on a 414pt-wide iPhone (720 was still too small there).
+            scaler.referenceResolution = new Vector2(560, 1000);
             scaler.matchWidthOrHeight = 0f;
             canvasGo.AddComponent<GraphicRaycaster>();
 
@@ -193,8 +193,10 @@ namespace GravityGolf.Game
         {
             var card = MakeCard(_safeArea, "StatusCard", StatusCardFill, LineBorder, 22f);
             _statusCard = card.gameObject;
+            // Sits below the top-left level block and the top-right menu button so it can't
+            // collide with the title on narrow (tall-aspect) phones.
             Anchor(card.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
-            card.rectTransform.anchoredPosition = new Vector2(0f, -22f);
+            card.rectTransform.anchoredPosition = new Vector2(0f, -158f);
             card.rectTransform.sizeDelta = new Vector2(440f, 46f);
 
             _status = MakeText(card.transform, "Status", 20, TextAnchor.MiddleCenter, TextColor, FontLibrary.SansSemiBold);
@@ -203,7 +205,7 @@ namespace GravityGolf.Game
             _hint = MakeText(_safeArea, "Hint", 18, TextAnchor.MiddleCenter, MutedColor, FontLibrary.SansRegular);
             Anchor(_hint.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
             _hint.rectTransform.anchoredPosition = new Vector2(0f, 178f);
-            _hint.rectTransform.sizeDelta = new Vector2(660f, 28f);
+            _hint.rectTransform.sizeDelta = new Vector2(520f, 28f);
         }
 
         // Slim power meter centered in the bottom stack, above the Retry/Undo row and just
@@ -264,8 +266,8 @@ namespace GravityGolf.Game
         // the center of its 1/10 slot, so they stay evenly spread and reachable at any width.
         private void BuildLevelStrip()
         {
-            const float tile = 56f;
-            const float radius = 17f;
+            const float tile = 44f;
+            const float radius = 13f;
             const float sideMargin = 22f;
             const float bottom = 216f;
             const float height = 64f;
@@ -573,7 +575,7 @@ namespace GravityGolf.Game
             var card = MakeCard(panelRoot.transform, "SettingsCard", ModalFill, LineBorder, 28f);
             Anchor(card.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
             card.rectTransform.anchoredPosition = Vector2.zero;
-            card.rectTransform.sizeDelta = new Vector2(560f, 470f);
+            card.rectTransform.sizeDelta = new Vector2(500f, 470f);
             // The card must eat clicks so the close-catcher behind it doesn't fire.
             card.raycastTarget = true;
 

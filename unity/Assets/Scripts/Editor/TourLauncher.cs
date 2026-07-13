@@ -25,7 +25,9 @@ namespace GravityGolf.EditorTools
                 }
                 else
                 {
-                    PlayModeWindow.SetCustomRenderingResolution(1080, 1920, "TourPortrait");
+                    // iPhone 11 native (828x1792): a narrow, tall aspect representative of
+                    // modern phones, so HUD crowding shows up the way it does on device.
+                    PlayModeWindow.SetCustomRenderingResolution(828, 1792, "TourPortrait");
                 }
             }
             catch (System.Exception e)
