@@ -45,6 +45,7 @@ namespace GravityGolf.Game
         private LevelRuntime _previewLevel;
 
         private GameState _state = GameState.Loading;
+        private bool _paused;
         private double _accumulator;
         private int _strokes;
         private double _goalTransition;
@@ -73,7 +74,7 @@ namespace GravityGolf.Game
         internal GameState State => _state;
         public LevelRuntime Level => _level;
         public BallState Ball => _ball;
-        public bool CanAim => Ready && (_state == GameState.Aiming || _state == GameState.Landed);
+        public bool CanAim => Ready && !_paused && (_state == GameState.Aiming || _state == GameState.Landed);
 
         // A rewind is possible whenever at least one shot has been taken and we are not
         // mid-load or already rewinding. Callable from Aiming, Landed, Flying, Crashed,
@@ -153,9 +154,22 @@ namespace GravityGolf.Game
             _hud.SetStatus("Could not load levels.", message);
         }
 
+        /// <summary>Freezes the simulation (and input) while the settings menu is open.</summary>
+        internal void SetPaused(bool paused)
+        {
+            _paused = paused;
+            // Drop any partially-accumulated step so resuming doesn't jump.
+            _accumulator = 0;
+        }
+
         private void Update()
         {
             if (!Ready)
+            {
+                return;
+            }
+
+            if (_paused)
             {
                 return;
             }

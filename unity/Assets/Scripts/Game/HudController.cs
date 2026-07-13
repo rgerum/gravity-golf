@@ -97,8 +97,11 @@ namespace GravityGolf.Game
             canvas.sortingOrder = 100;
             var scaler = canvasGo.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1600, 900);
-            scaler.matchWidthOrHeight = 0.5f;
+            // Portrait-first: match the canvas to a 720-unit width so the UI renders
+            // ~1.5x on a 1080 phone (the old 1600x900 landscape reference left all text
+            // ~35% too small to read comfortably on device).
+            scaler.referenceResolution = new Vector2(720, 1280);
+            scaler.matchWidthOrHeight = 0f;
             canvasGo.AddComponent<GraphicRaycaster>();
 
             var safeGo = new GameObject("SafeArea", typeof(RectTransform));
@@ -200,7 +203,7 @@ namespace GravityGolf.Game
             _hint = MakeText(_safeArea, "Hint", 18, TextAnchor.MiddleCenter, MutedColor, FontLibrary.SansRegular);
             Anchor(_hint.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
             _hint.rectTransform.anchoredPosition = new Vector2(0f, 178f);
-            _hint.rectTransform.sizeDelta = new Vector2(700f, 28f);
+            _hint.rectTransform.sizeDelta = new Vector2(660f, 28f);
         }
 
         // Slim power meter centered in the bottom stack, above the Retry/Undo row and just
@@ -261,8 +264,8 @@ namespace GravityGolf.Game
         // the center of its 1/10 slot, so they stay evenly spread and reachable at any width.
         private void BuildLevelStrip()
         {
-            const float tile = 60f;
-            const float radius = 18f;
+            const float tile = 56f;
+            const float radius = 17f;
             const float sideMargin = 22f;
             const float bottom = 216f;
             const float height = 64f;
@@ -642,6 +645,8 @@ namespace GravityGolf.Game
         {
             RefreshSettingsUi();
             _settingsPanel.SetActive(open);
+            // The menu pauses the simulation — orbits, flight, and aiming all freeze.
+            _controller.SetPaused(open);
         }
 
         private void RefreshSettingsUi()
