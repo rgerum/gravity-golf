@@ -43,27 +43,27 @@ namespace GravityGolf.Game
             _discMat = disc.GetComponent<MeshRenderer>().sharedMaterial;
         }
 
-        // Drives the death burn: t in [0,1] flies the ball from its crash point into the
-        // body center (eased so it accelerates in), shrinks it toward 0, and — when
-        // flourish is on (reduced motion off) — heats it toward hot orange while fading out.
-        public void SetBurn(float t, float fromX, float fromY, float toX, float toY, bool flourish)
+        // Drives the death sink: the controller integrates the ball into the body center and
+        // pushes the explicit world position here each frame. t in [0,1] is the anim progress
+        // used only for the tint/alpha — the ball stays FULL size (no shrink). When flourish
+        // is on (reduced motion off) it heats toward hot orange; either way it fades out only
+        // in the last ~30% so it vanishes as it settles at the center.
+        public void SetBurn(float t, float posX, float posY, bool flourish)
         {
             _burning = true;
             var clamped = Mathf.Clamp01(t);
-            var eased = clamped * clamped;
-            var px = Mathf.Lerp(fromX, toX, eased);
-            var py = Mathf.Lerp(fromY, toY, eased);
-            _burnPos = new Vector3(px, py, 0f);
-            _burnScale = _radius * Mathf.Clamp01(1f - clamped);
+            _burnPos = new Vector3(posX, posY, 0f);
+            _burnScale = _radius; // full size — the shrink is gone; the ball sinks into the body
 
             var hot = ColorUtil.FromInt(0xFF5A2A);
-            var heat = flourish ? Mathf.Clamp01(clamped * 1.5f) : 0f;
+            var heat = flourish ? Mathf.Clamp01(clamped * 1.4f) : 0f;
             var disc = Color.Lerp(BaseDiscColor, hot, heat);
-            disc.a = Mathf.Clamp01(1f - clamped * clamped);
+            var fade = clamped <= 0.7f ? 1f : Mathf.Clamp01(1f - (clamped - 0.7f) / 0.3f);
+            disc.a = fade;
             _burnDiscColor = disc;
 
             var glow = disc;
-            glow.a = 0.14f * Mathf.Clamp01(1f - clamped);
+            glow.a = 0.14f * fade;
             _burnGlowColor = glow;
         }
 

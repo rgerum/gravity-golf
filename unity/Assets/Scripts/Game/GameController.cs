@@ -45,9 +45,14 @@ namespace GravityGolf.Game
         // while still bounding a hitched frame.
         private const int FastStepsPerFrame = 16;
 
-        // Burn/drown death: on a lethal sun/planet crash the ball flies into the body center
-        // while shrinking and heating before the recovery drawer appears.
-        private const double DeathDuration = 0.4;
+        // Burn/drown death: on a lethal sun/planet crash the ball keeps its pre-impact
+        // velocity and sinks into the body center under a gravity-like pull plus heavy gas
+        // drag (so it curves in and decelerates, tinting hot at full size) before the
+        // recovery drawer appears.
+        private const double DeathDuration = 0.7;          // max sink time (seconds)
+        private const double DeathPullAccel = 16.0;        // acceleration toward the body center
+        private const double DeathDrag = 0.9;              // fraction of velocity kept per 1/60s
+        private const double DeathFallbackSpeed = 3.0;     // drift-in speed when no pre-impact velocity
 
         private WorldDefinition _world;
         private int _levelIndex;
@@ -66,6 +71,10 @@ namespace GravityGolf.Game
         private double _deathElapsed;
         private Vec2 _deathFrom;
         private Vec2 _deathCenter;
+        private Vec2 _deathPos;
+        private Vec2 _deathVelocity;
+        private double _deathRadius;
+        private Vec2 _lastFlyingVelocity;
         private bool _deathFlourish;
         private string _deathMessage = "";
         private string _deathHint = "";
@@ -284,6 +293,9 @@ namespace GravityGolf.Game
             switch (_state)
             {
                 case GameState.Flying:
+                    // Remember the live velocity before the core zeroes it on a crash step,
+                    // so a lethal impact can carry the pre-impact velocity into the death sink.
+                    _lastFlyingVelocity = _ball.Velocity;
                     HandleStepResult(Sim.StepBall(_level, _ball, delta));
                     break;
                 case GameState.Aiming:
@@ -333,6 +345,9 @@ namespace GravityGolf.Game
                     break;
                 case "landed":
                     _audio?.PlayLand();
+                    // At rest there is no in-flight velocity; clear it so a later at-rest crash
+                    // (e.g. the anchored planet being consumed) uses the drift-in fallback.
+                    _lastFlyingVelocity = new Vec2(0, 0);
                     _state = GameState.Landed;
                     _hud.SetStatus($"Relay locked on {result.PlanetName}.", "Line up the next launch.");
                     break;
@@ -422,38 +437,83 @@ namespace GravityGolf.Game
             _deathMessage = message;
             _deathHint = hint;
             _deathFrom = _ball.Position;
-            _deathCenter = reason == "sun"
-                ? _level.Sun
-                : (result.PlanetIndex.HasValue
-                    && result.PlanetIndex.Value >= 0
-                    && result.PlanetIndex.Value < _level.Planets.Count
-                        ? _level.Planets[result.PlanetIndex.Value].Position
-                        : _ball.Position);
+            _deathPos = _ball.Position;
+
+            var hasPlanet = reason != "sun"
+                && result.PlanetIndex.HasValue
+                && result.PlanetIndex.Value >= 0
+                && result.PlanetIndex.Value < _level.Planets.Count;
+            if (reason == "sun")
+            {
+                _deathCenter = _level.Sun;
+                _deathRadius = _level.SunCollisionRadius;
+            }
+            else if (hasPlanet)
+            {
+                var planet = _level.Planets[result.PlanetIndex.Value];
+                _deathCenter = planet.Position;
+                _deathRadius = planet.Radius;
+            }
+            else
+            {
+                _deathCenter = _ball.Position;
+                _deathRadius = Constants.BallRadius;
+            }
+
+            // Carry the pre-impact velocity into the sink; if there was effectively none
+            // (e.g. an at-rest planet-consumed crash), drift in from the crash point toward
+            // the center at a modest speed so the ball still visibly falls in.
+            var sinkVelocity = _lastFlyingVelocity;
+            if (VecMath.Length(sinkVelocity) < 0.5)
+            {
+                var inward = VecMath.Normalize(new Vec2(_deathCenter.X - _deathFrom.X, _deathCenter.Y - _deathFrom.Y));
+                sinkVelocity = new Vec2(inward.X * DeathFallbackSpeed, inward.Y * DeathFallbackSpeed);
+            }
+
+            _deathVelocity = sinkVelocity;
             _deathFlourish = !SaveStore.Instance.Settings.ReducedMotion;
             _deathElapsed = 0;
             _state = GameState.Dying;
         }
 
-        // Advances the burn: drive BallView from the crash point into the body center while
-        // it shrinks and heats, then hand off to the recovery drawer exactly as before.
+        // Advances the death sink: integrate the ball at full size from its crash point into
+        // the body center under a pull toward the center plus heavy gas drag, so it curves in
+        // and decelerates while heating and (late) fading. Ends when it reaches the center or
+        // the max duration elapses, then hands off to the recovery drawer.
         private void UpdateDeath()
         {
-            _deathElapsed += Time.deltaTime;
+            var dt = Time.deltaTime;
+            _deathElapsed += dt;
+
+            // Gravity-like pull toward the center + strong per-frame drag (frame-rate stable
+            // via pow), then advance the position by the sinking velocity.
+            var toCenter = new Vec2(_deathCenter.X - _deathPos.X, _deathCenter.Y - _deathPos.Y);
+            var pull = VecMath.Normalize(toCenter);
+            _deathVelocity = new Vec2(
+                _deathVelocity.X + pull.X * DeathPullAccel * dt,
+                _deathVelocity.Y + pull.Y * DeathPullAccel * dt);
+            var drag = Math.Pow(DeathDrag, dt * 60.0);
+            _deathVelocity = new Vec2(_deathVelocity.X * drag, _deathVelocity.Y * drag);
+            _deathPos = new Vec2(_deathPos.X + _deathVelocity.X * dt, _deathPos.Y + _deathVelocity.Y * dt);
+
             var t = DeathDuration > 0 ? (float)(_deathElapsed / DeathDuration) : 1f;
             if (_ballView != null)
             {
-                _ballView.SetBurn(
-                    t,
-                    (float)_deathFrom.X, (float)_deathFrom.Y,
-                    (float)_deathCenter.X, (float)_deathCenter.Y,
-                    _deathFlourish);
+                _ballView.SetBurn(t, (float)_deathPos.X, (float)_deathPos.Y, _deathFlourish);
             }
 
-            if (_deathElapsed >= DeathDuration)
+            var reached = VecMath.Distance(_deathPos, _deathCenter) <= _deathRadius * 0.15;
+            if (_deathElapsed >= DeathDuration || reached)
             {
+                // Snap to the center, fully faded, then reveal the recovery drawer. ShowGameOver
+                // puts the message in the drawer and promotes the bottom Undo button; no separate
+                // SetStatus (it would clear the danger styling).
+                if (_ballView != null)
+                {
+                    _ballView.SetBurn(1f, (float)_deathCenter.X, (float)_deathCenter.Y, _deathFlourish);
+                }
+
                 _state = GameState.Crashed;
-                // ShowGameOver puts the message in the drawer and promotes the bottom Undo
-                // button; no separate SetStatus (it would clear the danger styling).
                 _hud.ShowGameOver(_deathMessage, _deathHint, CanRewind);
             }
         }
@@ -550,6 +610,7 @@ namespace GravityGolf.Game
             Sim.SyncBallToAnchor(_level, _ball);
             _strokes = checkpoint.Strokes;
             _rewindAccumulator = 0;
+            _lastFlyingVelocity = new Vec2(0, 0);
 
             // Mirror the normal aim/landing choice: the launch planet chooses Aiming (start)
             // vs Landed (a relay you touched down on).
@@ -598,6 +659,7 @@ namespace GravityGolf.Game
             _strokes = 0;
             _goalTransition = 0;
             _accumulator = 0;
+            _lastFlyingVelocity = new Vec2(0, 0);
             _state = GameState.Aiming;
 
             BuildLevelViews();

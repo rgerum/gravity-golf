@@ -8,8 +8,8 @@ namespace GravityGolf.Game
 {
     /// <summary>
     /// uGUI HUD built entirely in code (spec §8), restyled to match the web game: level
-    /// title + PAR chip (top-left, transparent), a translucent status card (top-center),
-    /// pill buttons, a rounded level-select strip, a result banner, and a game-over modal.
+    /// title + PAR chip (top-left, transparent), pill buttons, a speed transport row, a
+    /// level-select grid inside the settings menu, a result banner, and a game-over drawer.
     /// Chrome uses the web palette (periwinkle hairline borders, teal accent) and IBM Plex
     /// fonts. Safe-area aware via Screen.safeArea. Purely visual over the prior wiring.
     /// </summary>
@@ -22,7 +22,6 @@ namespace GravityGolf.Game
         private Text _levelLabel;
         private Text _levelName;
         private Text _parPill;
-        private Text _hint;
 
         private GameObject _banner;
         private Text _bannerKicker;
@@ -37,7 +36,6 @@ namespace GravityGolf.Game
         private static readonly string[] SpeedLabels = { "II", "0.5×", "1×", "3×" };
         private bool _deathMode;
 
-        private GameObject _levelStrip;
         private GameObject _backdrop;
         private GameObject _drawer;
         private Text _drawerTitle;
@@ -58,6 +56,7 @@ namespace GravityGolf.Game
 
         private readonly Pill[] _levelPills = new Pill[10];
         private readonly Outline[] _levelOutlines = new Outline[10];
+        private int _activeLevelIndex;
 
         // ---- Web palette (src/style.css :root). ----
         private static readonly Color SurfaceFill = new Color(0.031f, 0.055f, 0.102f, 0.78f);   // rgba(8,14,26,0.78)
@@ -109,9 +108,7 @@ namespace GravityGolf.Game
             Stretch(_safeArea);
 
             BuildTopLeft();
-            BuildStatus();
             BuildBottomBar();
-            BuildLevelStrip();
             BuildBanner();
             BuildDeathDrawer();
             BuildMenuButton();
@@ -185,21 +182,6 @@ namespace GravityGolf.Game
             _bestPill.transform.parent.gameObject.SetActive(false);
         }
 
-        // Top-center status line, wrapped in a translucent rounded status-card. The aim hint
-        // is part of the bottom control stack (portrait): it sits centered just above the
-        // power bar, which sits above the Retry/Undo thumb row (see BuildBottomBar).
-        // The old top-center status card is gone (it crowded the goal on tall phones);
-        // only the bottom aim hint remains. Crash/result messaging lives in the death
-        // drawer and the result banner, so no floating status text is needed.
-        private void BuildStatus()
-        {
-            _hint = MakeText(_safeArea, "Hint", 18, TextAnchor.MiddleCenter, MutedColor, FontLibrary.SansRegular);
-            Anchor(_hint.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
-            _hint.rectTransform.anchoredPosition = new Vector2(0f, 198f);
-            _hint.rectTransform.sizeDelta = new Vector2(520f, 28f);
-        }
-
-
         // Bottom thumb row (portrait): Retry (full restart) pinned to the bottom-left corner
         // and Undo (rewind one shot) to the bottom-right corner, so both sit under the thumbs
         // and leave the center clear for the power bar / aim hint stacked above. Undo starts
@@ -230,47 +212,6 @@ namespace GravityGolf.Game
             _undoPill.Rect.offsetMax = new Vector2(-margin, bottom + height);
             SetCorner(_undoPill, height * 0.5f);
             SetUndoEnabled(false);
-        }
-
-        // Level-select strip (portrait): its own full-width row above the aim hint, out of the
-        // Retry/Undo thumb row so nothing collides in 1080-wide portrait. The container
-        // stretches edge-to-edge (with side margins) and each of the 10 tiles is anchored to
-        // the center of its 1/10 slot, so they stay evenly spread and reachable at any width.
-        private void BuildLevelStrip()
-        {
-            const float tile = 44f;
-            const float radius = 13f;
-            const float sideMargin = 22f;
-            const float bottom = 232f;
-            const float height = 64f;
-
-            var strip = new GameObject("LevelStrip", typeof(RectTransform));
-            _levelStrip = strip;
-            strip.transform.SetParent(_safeArea, false);
-            var stripRect = (RectTransform)strip.transform;
-            stripRect.anchorMin = new Vector2(0f, 0f);
-            stripRect.anchorMax = new Vector2(1f, 0f);
-            stripRect.pivot = new Vector2(0.5f, 0f);
-            stripRect.offsetMin = new Vector2(sideMargin, bottom);
-            stripRect.offsetMax = new Vector2(-sideMargin, bottom + height);
-
-            for (var i = 0; i < 10; i += 1)
-            {
-                var index = i;
-                var pill = MakePill(strip.transform, $"Level{i + 1}", (i + 1).ToString(), () => _controller.LoadLevel(index), TileFill, LineBorder, MutedColor, 18);
-                var slot = (i + 0.5f) / 10f;
-                Anchor(pill.Rect, new Vector2(slot, 0.5f), new Vector2(slot, 0.5f), new Vector2(0.5f, 0.5f));
-                pill.Rect.anchoredPosition = Vector2.zero;
-                pill.Rect.sizeDelta = new Vector2(tile, tile);
-                SetCorner(pill, radius);
-                _levelPills[i] = pill;
-
-                var outline = pill.Fill.gameObject.AddComponent<Outline>();
-                outline.effectColor = ActiveTileGlow;
-                outline.effectDistance = new Vector2(2f, -2f);
-                outline.enabled = false;
-                _levelOutlines[i] = outline;
-            }
         }
 
         // Brightens the current level's tile (teal fill + border + label + glow) and returns
@@ -359,14 +300,15 @@ namespace GravityGolf.Game
                 _bestPill.text = $"BEST {progress.BestStrokes}";
             }
 
+            _activeLevelIndex = levelIndex;
             HighlightLevel(levelIndex);
         }
 
-        // Only the bottom aim hint survives; the message argument (old top status card)
-        // is dropped — crash/result feedback is shown by the drawer and result banner.
+        // No-op: the old top status card and bottom aim hint are gone; crash/result feedback
+        // is shown by the death drawer and the result banner. Kept so GameController's calls
+        // still compile.
         public void SetStatus(string message, string hint)
         {
-            _hint.text = hint ?? string.Empty;
         }
 
         // Power meter removed; kept as a no-op so the controller's per-frame call is fine.
@@ -387,8 +329,8 @@ namespace GravityGolf.Game
 
         // Death view: a bottom drawer (message just above the big buttons) over a dimmed
         // backdrop, blending with the persistent Retry/Undo — all in the thumb zone. The
-        // aiming chrome (status card, power bar, aim hint, level strip) hides so the drawer
-        // reads cleanly; Undo is promoted to the teal primary when there's a shot to rewind.
+        // speed row hides so the drawer reads cleanly; Undo is promoted to the teal primary
+        // when there's a shot to rewind.
         public void ShowGameOver(string title, string hint, bool canUndo)
         {
             _deathMode = true;
@@ -415,10 +357,10 @@ namespace GravityGolf.Game
             StyleUndo(primary: false);
         }
 
+        // The level strip and aim hint no longer live on the play field (level select moved
+        // into the settings menu), so only the speed row hides under the death drawer.
         private void SetGameplayChromeVisible(bool visible)
         {
-            _hint.gameObject.SetActive(visible);
-            _levelStrip.SetActive(visible);
             _speedRow.SetActive(visible);
         }
 
@@ -597,7 +539,7 @@ namespace GravityGolf.Game
             var card = MakeCard(panelRoot.transform, "SettingsCard", ModalFill, LineBorder, 28f);
             Anchor(card.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
             card.rectTransform.anchoredPosition = Vector2.zero;
-            card.rectTransform.sizeDelta = new Vector2(500f, 470f);
+            card.rectTransform.sizeDelta = new Vector2(500f, 600f);
             // The card must eat clicks so the close-catcher behind it doesn't fire.
             card.raycastTarget = true;
 
@@ -610,6 +552,8 @@ namespace GravityGolf.Game
             _soundPill = BuildToggleRow(card.transform, "Sound", -70f, out _soundValue, ToggleSound);
             _hapticsPill = BuildToggleRow(card.transform, "Haptics", -140f, out _hapticsValue, ToggleHaptics);
             _motionPill = BuildToggleRow(card.transform, "Reduced motion", -210f, out _motionValue, ToggleMotion);
+
+            BuildLevelGrid(card.transform, -276f);
 
             _streakLine = MakeText(card.transform, "StreakLine", 14, TextAnchor.MiddleCenter, MutedColor, FontLibrary.MonoSemiBold);
             Anchor(_streakLine.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
@@ -641,6 +585,62 @@ namespace GravityGolf.Game
             SetCorner(pill, 22f);
             valueLabel = pill.Label;
             return pill;
+        }
+
+        // Compact level picker inside the settings card: two rows of five tiles reusing the
+        // old play-strip tile look (completed = teal border/label, active = teal fill + glow
+        // via HighlightLevel). Tapping a tile loads that hole and closes the menu. `top` is
+        // the header's offset from the card top; the grid stacks just below it.
+        private void BuildLevelGrid(Transform card, float top)
+        {
+            const float tile = 46f;
+            const float radius = 13f;
+            const float sideMargin = 40f;
+            const float rowGap = 10f;
+
+            var header = MakeText(card, "LevelsHeader", 15, TextAnchor.MiddleCenter, AccentBlue, FontLibrary.MonoSemiBold);
+            Anchor(header.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
+            header.rectTransform.anchoredPosition = new Vector2(0f, top);
+            header.rectTransform.sizeDelta = new Vector2(500f, 20f);
+            header.text = "LEVELS";
+
+            for (var row = 0; row < 2; row += 1)
+            {
+                var rowGo = new GameObject($"LevelRow{row}", typeof(RectTransform));
+                rowGo.transform.SetParent(card, false);
+                var rowRect = (RectTransform)rowGo.transform;
+                rowRect.anchorMin = new Vector2(0f, 1f);
+                rowRect.anchorMax = new Vector2(1f, 1f);
+                rowRect.pivot = new Vector2(0.5f, 1f);
+                var rowTop = top - 28f - row * (tile + rowGap);
+                rowRect.offsetMin = new Vector2(sideMargin, rowTop - tile);
+                rowRect.offsetMax = new Vector2(-sideMargin, rowTop);
+
+                for (var col = 0; col < 5; col += 1)
+                {
+                    var index = row * 5 + col;
+                    var pill = MakePill(rowGo.transform, $"Level{index + 1}", (index + 1).ToString(), () => OnLevelTile(index), TileFill, LineBorder, MutedColor, 18);
+                    var slot = (col + 0.5f) / 5f;
+                    Anchor(pill.Rect, new Vector2(slot, 0.5f), new Vector2(slot, 0.5f), new Vector2(0.5f, 0.5f));
+                    pill.Rect.anchoredPosition = Vector2.zero;
+                    pill.Rect.sizeDelta = new Vector2(tile, tile);
+                    SetCorner(pill, radius);
+                    _levelPills[index] = pill;
+
+                    var outline = pill.Fill.gameObject.AddComponent<Outline>();
+                    outline.effectColor = ActiveTileGlow;
+                    outline.effectDistance = new Vector2(2f, -2f);
+                    outline.enabled = false;
+                    _levelOutlines[index] = outline;
+                }
+            }
+        }
+
+        // A menu level tile: load the hole, then close the settings panel.
+        private void OnLevelTile(int index)
+        {
+            _controller.LoadLevel(index);
+            SetSettingsOpen(false);
         }
 
         private void ToggleSound()
@@ -680,6 +680,7 @@ namespace GravityGolf.Game
             ApplyToggleLook(_soundPill, _soundValue, settings.Sound);
             ApplyToggleLook(_hapticsPill, _hapticsValue, settings.Haptics);
             ApplyToggleLook(_motionPill, _motionValue, settings.ReducedMotion);
+            HighlightLevel(_activeLevelIndex);
             _streakLine.text = $"PAR STREAK {SaveStore.Instance.CurrentParStreak} · BEST {SaveStore.Instance.BestParStreak}";
         }
 
