@@ -1,6 +1,7 @@
 using GravityGolf.Core;
 using UnityEngine;
 using UnityEngine.Events;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace GravityGolf.Game
@@ -30,6 +31,7 @@ namespace GravityGolf.Game
         private float _bannerTimer;
 
         private Pill _undoPill;
+        private Pill _ffPill;
         private bool _deathMode;
 
         private GameObject _levelStrip;
@@ -110,6 +112,7 @@ namespace GravityGolf.Game
             BuildBanner();
             BuildDeathDrawer();
             BuildMenuButton();
+            BuildFastForwardButton();
             BuildTitleScreen();
             BuildSettingsPanel();
         }
@@ -455,6 +458,37 @@ namespace GravityGolf.Game
             SetCorner(menu, 22f);
         }
 
+        // Hold-to-fast-forward pill, seated just left of Menu in the top-right so it's a
+        // clean, collision-free thumb target. Pointer-down runs the sim fast, pointer-up (or
+        // dragging off) returns to 1x; while active it lights up teal.
+        private void BuildFastForwardButton()
+        {
+            var ff = MakePill(_safeArea, "FastForwardButton", ">>", null, SurfaceFill, LineBorder, MutedColor, 18);
+            Anchor(ff.Rect, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(1f, 1f));
+            ff.Rect.anchoredPosition = new Vector2(-138f, -22f);
+            ff.Rect.sizeDelta = new Vector2(56f, 44f);
+            SetCorner(ff, 22f);
+            _ffPill = ff;
+
+            var hold = ff.Fill.gameObject.AddComponent<HoldButton>();
+            hold.OnHold = OnFastForwardHold;
+        }
+
+        // Routes the hold state to the controller and mirrors it in the pill's look. Called
+        // by the HoldButton on pointer down/up/exit and forced off when the menu opens.
+        private void OnFastForwardHold(bool on)
+        {
+            _controller.SetFastForward(on);
+            if (_ffPill == null)
+            {
+                return;
+            }
+
+            _ffPill.Fill.color = on ? ActiveTileFill : SurfaceFill;
+            _ffPill.Border.color = on ? ActiveTileBorder : LineBorder;
+            _ffPill.Label.color = on ? AccentTeal : MutedColor;
+        }
+
         // Boot title screen: near-opaque backdrop over the running level, the game name in
         // Plex Sans, a progress line once anything is saved, and PLAY / SETTINGS pills.
         // The backdrop is a raycast target, so drags can't reach the aim controller.
@@ -610,7 +644,13 @@ namespace GravityGolf.Game
         {
             RefreshSettingsUi();
             _settingsPanel.SetActive(open);
-            // The menu pauses the simulation — orbits, flight, and aiming all freeze.
+            // The menu pauses the simulation — orbits, flight, and aiming all freeze. Also
+            // clear any held fast-forward so it can't survive across the pause.
+            if (open)
+            {
+                OnFastForwardHold(false);
+            }
+
             _controller.SetPaused(open);
         }
 
@@ -804,6 +844,22 @@ namespace GravityGolf.Game
             public CanvasGroup Group;
             public RectTransform Rect => (RectTransform)Button.transform;
         }
+    }
+
+    /// <summary>
+    /// Reports press-and-hold state for a uGUI element: true on pointer down, false on
+    /// pointer up or when the pointer drags off the element (so fast-forward never sticks
+    /// on if the finger slides away). Used by the HUD's hold-to-fast-forward pill.
+    /// </summary>
+    internal sealed class HoldButton : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPointerExitHandler
+    {
+        public System.Action<bool> OnHold;
+
+        public void OnPointerDown(PointerEventData eventData) => OnHold?.Invoke(true);
+
+        public void OnPointerUp(PointerEventData eventData) => OnHold?.Invoke(false);
+
+        public void OnPointerExit(PointerEventData eventData) => OnHold?.Invoke(false);
     }
 
     /// <summary>

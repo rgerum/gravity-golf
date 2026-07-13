@@ -16,6 +16,7 @@ namespace GravityGolf.Game
         Crashed,
         Settled,
         Rewinding,
+        Dying,
     }
 
     /// <summary>
@@ -38,6 +39,15 @@ namespace GravityGolf.Game
         private const double RewindTimeScale = 6.0;
         private const int MaxRewindStepsPerFrame = 40;
 
+        // Hold-to-fast-forward multiplier (spec: advance orbits/flight ~3x). Only the delta
+        // fed to the accumulator is scaled; the physics step stays 1/120 and the per-frame
+        // step clamp still guards against a spiral of death.
+        private const double FastForwardScale = 3.0;
+
+        // Burn/drown death: on a lethal sun/planet crash the ball flies into the body center
+        // while shrinking and heating before the recovery drawer appears.
+        private const double DeathDuration = 0.4;
+
         private WorldDefinition _world;
         private int _levelIndex;
         private LevelRuntime _level;
@@ -46,9 +56,18 @@ namespace GravityGolf.Game
 
         private GameState _state = GameState.Loading;
         private bool _paused;
+        private bool _fastForward;
         private double _accumulator;
         private int _strokes;
         private double _goalTransition;
+
+        // Death-burn transition state (set by BeginCrash, consumed by UpdateDeath).
+        private double _deathElapsed;
+        private Vec2 _deathFrom;
+        private Vec2 _deathCenter;
+        private bool _deathFlourish;
+        private string _deathMessage = "";
+        private string _deathHint = "";
 
         // Pre-launch checkpoints (one per shot, pushed before the ball is mutated). Undo
         // pops the top and reverses the live ball back to it.
@@ -85,7 +104,8 @@ namespace GravityGolf.Game
             && _checkpoints.Count > 0
             && _state != GameState.Rewinding
             && _state != GameState.Loading
-            && _state != GameState.Goal;
+            && _state != GameState.Goal
+            && _state != GameState.Dying;
 
         private void Awake()
         {
@@ -162,6 +182,20 @@ namespace GravityGolf.Game
             _accumulator = 0;
         }
 
+        /// <summary>HUD hold-button hook: while held, the sim runs fast-forward (see
+        /// FastForwardActive for when it actually applies).</summary>
+        public void SetFastForward(bool on)
+        {
+            _fastForward = on;
+        }
+
+        // Fast-forward only takes effect while the sim is actually running the ball or its
+        // orbits (aiming, riding a relay, or in flight) and never while paused. Death, goal,
+        // rewind, and load ignore it so those transitions play at their intended pace.
+        private bool FastForwardActive => _fastForward
+            && !_paused
+            && (_state == GameState.Aiming || _state == GameState.Landed || _state == GameState.Flying);
+
         private void Update()
         {
             if (!Ready)
@@ -180,9 +214,16 @@ namespace GravityGolf.Game
             {
                 UpdateRewind();
             }
+            else if (_state == GameState.Dying)
+            {
+                UpdateDeath();
+            }
             else
             {
-                _accumulator += Math.Min(Time.deltaTime, MaxFrameDelta);
+                // Fast-forward feeds MORE accumulated time (scaled real delta) but never a
+                // bigger physics step; the accumulator clamp still bounds steps per frame.
+                var timeScale = FastForwardActive ? FastForwardScale : 1.0;
+                _accumulator += Math.Min(Time.deltaTime, MaxFrameDelta) * timeScale;
                 _accumulator = Math.Min(_accumulator, PhysicsStep * MaxStepsPerFrame);
                 while (_accumulator >= PhysicsStep)
                 {
@@ -304,7 +345,7 @@ namespace GravityGolf.Game
                     BeginGoal();
                     break;
                 case "crash":
-                    BeginCrash(result.Reason);
+                    BeginCrash(result);
                     break;
                 case "settled":
                     BeginSettled();
@@ -357,9 +398,9 @@ namespace GravityGolf.Game
             _hud.SetStatus("Captured!", string.Empty);
         }
 
-        private void BeginCrash(string reason)
+        private void BeginCrash(StepResult result)
         {
-            _state = GameState.Crashed;
+            var reason = result.Reason;
             Haptics.Strong();
             _audio?.PlayCrash(reason);
             var message = reason switch
@@ -370,9 +411,56 @@ namespace GravityGolf.Game
                 "bounds" => "Lost in open space.",
                 _ => "Crashed.",
             };
-            // ShowGameOver puts the message in the top status card and promotes the bottom
-            // Undo button; no separate SetStatus (it would clear the danger styling).
-            _hud.ShowGameOver(message, "Undo the shot, or retry the hole.", CanRewind);
+            const string hint = "Undo the shot, or retry the hole.";
+
+            // Lethal-body crashes (the sun and non-landable planets) play a short burn/drown
+            // animation into the body center FIRST, then show the drawer. Bounds and other
+            // outcomes have no body to fall into, so they show the drawer immediately.
+            var burns = reason == "sun" || reason == "planet" || reason == "planet-consumed";
+            if (!burns)
+            {
+                _state = GameState.Crashed;
+                _hud.ShowGameOver(message, hint, CanRewind);
+                return;
+            }
+
+            _deathMessage = message;
+            _deathHint = hint;
+            _deathFrom = _ball.Position;
+            _deathCenter = reason == "sun"
+                ? _level.Sun
+                : (result.PlanetIndex.HasValue
+                    && result.PlanetIndex.Value >= 0
+                    && result.PlanetIndex.Value < _level.Planets.Count
+                        ? _level.Planets[result.PlanetIndex.Value].Position
+                        : _ball.Position);
+            _deathFlourish = !SaveStore.Instance.Settings.ReducedMotion;
+            _deathElapsed = 0;
+            _state = GameState.Dying;
+        }
+
+        // Advances the burn: drive BallView from the crash point into the body center while
+        // it shrinks and heats, then hand off to the recovery drawer exactly as before.
+        private void UpdateDeath()
+        {
+            _deathElapsed += Time.deltaTime;
+            var t = DeathDuration > 0 ? (float)(_deathElapsed / DeathDuration) : 1f;
+            if (_ballView != null)
+            {
+                _ballView.SetBurn(
+                    t,
+                    (float)_deathFrom.X, (float)_deathFrom.Y,
+                    (float)_deathCenter.X, (float)_deathCenter.Y,
+                    _deathFlourish);
+            }
+
+            if (_deathElapsed >= DeathDuration)
+            {
+                _state = GameState.Crashed;
+                // ShowGameOver puts the message in the drawer and promotes the bottom Undo
+                // button; no separate SetStatus (it would clear the danger styling).
+                _hud.ShowGameOver(_deathMessage, _deathHint, CanRewind);
+            }
         }
 
         private void BeginSettled()
@@ -395,6 +483,10 @@ namespace GravityGolf.Game
             _rewindAccumulator = 0;
             _state = GameState.Rewinding;
             _audio?.PlayRewind();
+
+            // A burnt ball reuses this BallView (only Retry rebuilds the level), so drop the
+            // death override before the reverse integration takes the ball back over.
+            _ballView?.ClearBurn();
 
             _hud.HideGameOver();
             if (_ballTrail != null)

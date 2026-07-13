@@ -129,6 +129,18 @@ namespace GravityGolf.Game
                         yield return null;
                     }
 
+                    // Lethal crashes pass through the ~0.4s Dying burn; grab a mid-burn frame
+                    // so the drown-into-the-body animation is verifiable headlessly.
+                    if (_controller.State == GameState.Dying)
+                    {
+                        yield return new WaitForSeconds(0.2f);
+                        yield return Capture($"burn-{i:00}.png");
+                        while (_controller.State == GameState.Dying)
+                        {
+                            yield return null;
+                        }
+                    }
+
                     if (_controller.State == GameState.Goal)
                     {
                         yield return null;

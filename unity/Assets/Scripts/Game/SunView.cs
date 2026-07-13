@@ -43,6 +43,16 @@ namespace GravityGolf.Game
             // Bright core (front-most).
             var core = MeshFactory.Spawn("Core", MeshFactory.UnitDisc, ColorUtil.FromInt(0xFFDD8F), transform, Depth.Sun);
             core.transform.localScale = new Vector3(radius, radius, 1f);
+
+            // Hot red-orange rim on the collision boundary — matches the hazard-planet
+            // warning language so the sun reads unambiguously as "do not touch".
+            var rim = MeshFactory.Spawn(
+                "SunRim",
+                MeshFactory.Ring(radius * 0.86f, radius, 96),
+                ColorUtil.FromInt(0xFF5A2A, 0.55f),
+                transform,
+                Depth.Sun - 0.05f);
+            rim.transform.localScale = Vector3.one;
         }
 
         private void Update()

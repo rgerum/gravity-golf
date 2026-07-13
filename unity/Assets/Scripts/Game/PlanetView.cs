@@ -30,7 +30,6 @@ namespace GravityGolf.Game
             // Deterministic per-planet character (stable across reloads): keyed on the
             // planet's identity so decoration is fixed, never random per frame.
             var rng = new System.Random(StableHash(planet.Index, planet.Name));
-            var ringAlpha = 0.20f + (float)rng.NextDouble() * 0.08f; // 0.20–0.28, stays readable
 
             // Orbit path (cosmetic, static ring around the origin) for moving planets.
             if (planet.OrbitSpeed != 0 && planet.OrbitSemiMajor > 0)
@@ -45,23 +44,53 @@ namespace GravityGolf.Game
                 path.transform.position = Depth.ToWorld(_level.SystemCenter, Depth.OrbitPath);
             }
 
-            // Landing ring shows where the ball may anchor.
+            // SAFE vs HAZARD affordance (layered under the body disc so only the parts
+            // outside the silhouette show as a rim/halo). LANDABLE planets get a bright,
+            // consistent teal landing halo plus a crisp mint edge hugging the surface —
+            // "you can stand here". NON-LANDABLE planets get a warm red-orange warning rim
+            // and a soft heat haze, and never a teal ring — "do not touch".
             if (planet.Landable)
             {
-                var inner = _radius + 0.2f;
-                var outer = planet.LandingRadius.HasValue ? (float)planet.LandingRadius.Value : _radius + 0.48f;
-                if (outer <= inner)
+                var inner = _radius + 0.12f;
+                var outer = planet.LandingRadius.HasValue ? (float)planet.LandingRadius.Value : _radius + 0.5f;
+                if (outer <= inner + 0.14f)
                 {
-                    outer = inner + 0.12f;
+                    outer = inner + 0.14f;
                 }
 
-                var ring = MeshFactory.Spawn(
+                var halo = MeshFactory.Spawn(
                     "LandingRing",
                     MeshFactory.Ring(inner, outer, 64),
-                    ColorUtil.FromInt(0x75F3D9, ringAlpha),
+                    ColorUtil.FromInt(0x75F3D9, 0.34f),
                     transform,
                     Depth.LandingRing);
-                ring.transform.localScale = Vector3.one;
+                halo.transform.localScale = Vector3.one;
+
+                var edge = MeshFactory.Spawn(
+                    "LandingEdge",
+                    MeshFactory.Ring(_radius + 0.02f, _radius + 0.14f, 64),
+                    ColorUtil.FromInt(0x75F3D9, 0.85f),
+                    transform,
+                    Depth.LandingRing - 0.02f);
+                edge.transform.localScale = Vector3.one;
+            }
+            else
+            {
+                var hazardRim = MeshFactory.Spawn(
+                    "HazardRim",
+                    MeshFactory.Ring(_radius + 0.01f, _radius + 0.16f, 64),
+                    ColorUtil.FromInt(0xFF6D3A, 0.8f),
+                    transform,
+                    Depth.LandingRing - 0.02f);
+                hazardRim.transform.localScale = Vector3.one;
+
+                var haze = MeshFactory.Spawn(
+                    "HazardHaze",
+                    MeshFactory.Ring(_radius + 0.14f, _radius + 0.44f, 64),
+                    ColorUtil.FromInt(0xFF6D3A, 0.22f),
+                    transform,
+                    Depth.LandingRing);
+                haze.transform.localScale = Vector3.one;
             }
 
             _body = new GameObject("Body").transform;
