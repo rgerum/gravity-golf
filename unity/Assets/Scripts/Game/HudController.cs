@@ -31,7 +31,10 @@ namespace GravityGolf.Game
         private float _bannerTimer;
 
         private Pill _undoPill;
-        private Pill _ffPill;
+        private GameObject _speedRow;
+        private readonly Pill[] _speedPills = new Pill[4];
+        private static readonly double[] SpeedValues = { 0.0, 0.5, 1.0, 3.0 };
+        private static readonly string[] SpeedLabels = { "II", "0.5×", "1×", "3×" };
         private bool _deathMode;
 
         private GameObject _levelStrip;
@@ -112,7 +115,7 @@ namespace GravityGolf.Game
             BuildBanner();
             BuildDeathDrawer();
             BuildMenuButton();
-            BuildFastForwardButton();
+            BuildSpeedRow();
             BuildTitleScreen();
             BuildSettingsPanel();
         }
@@ -192,7 +195,7 @@ namespace GravityGolf.Game
         {
             _hint = MakeText(_safeArea, "Hint", 18, TextAnchor.MiddleCenter, MutedColor, FontLibrary.SansRegular);
             Anchor(_hint.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
-            _hint.rectTransform.anchoredPosition = new Vector2(0f, 150f);
+            _hint.rectTransform.anchoredPosition = new Vector2(0f, 198f);
             _hint.rectTransform.sizeDelta = new Vector2(520f, 28f);
         }
 
@@ -238,7 +241,7 @@ namespace GravityGolf.Game
             const float tile = 44f;
             const float radius = 13f;
             const float sideMargin = 22f;
-            const float bottom = 216f;
+            const float bottom = 232f;
             const float height = 64f;
 
             var strip = new GameObject("LevelStrip", typeof(RectTransform));
@@ -347,6 +350,8 @@ namespace GravityGolf.Game
             _levelLabel.text = $"Level {levelIndex + 1} / {world.Levels.Count}";
             _parPill.text = $"PAR {par}";
 
+            SelectSpeed(2); // each level starts at 1x
+
             var progress = SaveStore.Instance.GetLevel(level.Id);
             _bestPill.transform.parent.gameObject.SetActive(progress.Completed);
             if (progress.Completed)
@@ -414,6 +419,7 @@ namespace GravityGolf.Game
         {
             _hint.gameObject.SetActive(visible);
             _levelStrip.SetActive(visible);
+            _speedRow.SetActive(visible);
         }
 
         // Swaps the persistent Undo button between the muted surface look and the teal
@@ -459,34 +465,53 @@ namespace GravityGolf.Game
         }
 
         // Hold-to-fast-forward pill, seated just left of Menu in the top-right so it's a
-        // clean, collision-free thumb target. Pointer-down runs the sim fast, pointer-up (or
-        // dragging off) returns to 1x; while active it lights up teal.
-        private void BuildFastForwardButton()
+        // Speed transport row (footer, just above Retry/Undo): pause / 0.5x / 1x / 3x as
+        // four radio pills. Tapping one sets the sim speed and highlights it teal so orbiting
+        // levels never leave the player just waiting for a window.
+        private void BuildSpeedRow()
         {
-            var ff = MakePill(_safeArea, "FastForwardButton", ">>", null, SurfaceFill, LineBorder, MutedColor, 18);
-            Anchor(ff.Rect, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(1f, 1f));
-            ff.Rect.anchoredPosition = new Vector2(-138f, -22f);
-            ff.Rect.sizeDelta = new Vector2(56f, 44f);
-            SetCorner(ff, 22f);
-            _ffPill = ff;
+            var row = new GameObject("SpeedRow", typeof(RectTransform));
+            _speedRow = row;
+            row.transform.SetParent(_safeArea, false);
+            var rr = (RectTransform)row.transform;
+            rr.anchorMin = new Vector2(0f, 0f);
+            rr.anchorMax = new Vector2(1f, 0f);
+            rr.pivot = new Vector2(0.5f, 0f);
+            rr.offsetMin = new Vector2(20f, 128f);
+            rr.offsetMax = new Vector2(-20f, 128f + 50f);
 
-            var hold = ff.Fill.gameObject.AddComponent<HoldButton>();
-            hold.OnHold = OnFastForwardHold;
-        }
-
-        // Routes the hold state to the controller and mirrors it in the pill's look. Called
-        // by the HoldButton on pointer down/up/exit and forced off when the menu opens.
-        private void OnFastForwardHold(bool on)
-        {
-            _controller.SetFastForward(on);
-            if (_ffPill == null)
+            for (var i = 0; i < SpeedLabels.Length; i += 1)
             {
-                return;
+                var index = i;
+                var pill = MakePill(row.transform, $"Speed{i}", SpeedLabels[i], () => SelectSpeed(index), SurfaceFill, LineBorder, MutedColor, 16);
+                var slot = (i + 0.5f) / SpeedLabels.Length;
+                Anchor(pill.Rect, new Vector2(slot, 0.5f), new Vector2(slot, 0.5f), new Vector2(0.5f, 0.5f));
+                pill.Rect.anchoredPosition = Vector2.zero;
+                pill.Rect.sizeDelta = new Vector2(114f, 50f);
+                SetCorner(pill, 25f);
+                _speedPills[i] = pill;
             }
 
-            _ffPill.Fill.color = on ? ActiveTileFill : SurfaceFill;
-            _ffPill.Border.color = on ? ActiveTileBorder : LineBorder;
-            _ffPill.Label.color = on ? AccentTeal : MutedColor;
+            SelectSpeed(2); // default 1x
+        }
+
+        // Applies a speed selection: drives the controller and lights the chosen pill.
+        private void SelectSpeed(int index)
+        {
+            _controller.SetTimeScale(SpeedValues[index]);
+            for (var i = 0; i < _speedPills.Length; i += 1)
+            {
+                var pill = _speedPills[i];
+                if (pill == null)
+                {
+                    continue;
+                }
+
+                var active = i == index;
+                pill.Fill.color = active ? ActiveTileFill : SurfaceFill;
+                pill.Border.color = active ? ActiveTileBorder : LineBorder;
+                pill.Label.color = active ? AccentTeal : MutedColor;
+            }
         }
 
         // Boot title screen: near-opaque backdrop over the running level, the game name in
@@ -644,13 +669,8 @@ namespace GravityGolf.Game
         {
             RefreshSettingsUi();
             _settingsPanel.SetActive(open);
-            // The menu pauses the simulation — orbits, flight, and aiming all freeze. Also
-            // clear any held fast-forward so it can't survive across the pause.
-            if (open)
-            {
-                OnFastForwardHold(false);
-            }
-
+            // The menu pauses the simulation — orbits, flight, and aiming all freeze
+            // (independent of the speed-row selection, which resumes when the menu closes).
             _controller.SetPaused(open);
         }
 
@@ -844,22 +864,6 @@ namespace GravityGolf.Game
             public CanvasGroup Group;
             public RectTransform Rect => (RectTransform)Button.transform;
         }
-    }
-
-    /// <summary>
-    /// Reports press-and-hold state for a uGUI element: true on pointer down, false on
-    /// pointer up or when the pointer drags off the element (so fast-forward never sticks
-    /// on if the finger slides away). Used by the HUD's hold-to-fast-forward pill.
-    /// </summary>
-    internal sealed class HoldButton : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPointerExitHandler
-    {
-        public System.Action<bool> OnHold;
-
-        public void OnPointerDown(PointerEventData eventData) => OnHold?.Invoke(true);
-
-        public void OnPointerUp(PointerEventData eventData) => OnHold?.Invoke(false);
-
-        public void OnPointerExit(PointerEventData eventData) => OnHold?.Invoke(false);
     }
 
     /// <summary>

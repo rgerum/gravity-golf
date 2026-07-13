@@ -39,10 +39,11 @@ namespace GravityGolf.Game
         private const double RewindTimeScale = 6.0;
         private const int MaxRewindStepsPerFrame = 40;
 
-        // Hold-to-fast-forward multiplier (spec: advance orbits/flight ~3x). Only the delta
-        // fed to the accumulator is scaled; the physics step stays 1/120 and the per-frame
-        // step clamp still guards against a spiral of death.
-        private const double FastForwardScale = 3.0;
+        // Player-selected simulation speed (transport row): 0 = paused, 0.5x, 1x, 3x. Only
+        // the delta fed to the accumulator is scaled; the physics step stays 1/120. When
+        // scaled above 1x the per-frame step budget is raised so the speed-up is real,
+        // while still bounding a hitched frame.
+        private const int FastStepsPerFrame = 16;
 
         // Burn/drown death: on a lethal sun/planet crash the ball flies into the body center
         // while shrinking and heating before the recovery drawer appears.
@@ -56,7 +57,7 @@ namespace GravityGolf.Game
 
         private GameState _state = GameState.Loading;
         private bool _paused;
-        private bool _fastForward;
+        private double _timeScale = 1.0;
         private double _accumulator;
         private int _strokes;
         private double _goalTransition;
@@ -182,19 +183,12 @@ namespace GravityGolf.Game
             _accumulator = 0;
         }
 
-        /// <summary>HUD hold-button hook: while held, the sim runs fast-forward (see
-        /// FastForwardActive for when it actually applies).</summary>
-        public void SetFastForward(bool on)
+        /// <summary>Speed-transport hook: 0 = paused, 0.5 = slow, 1 = normal, 3 = fast.
+        /// Scales orbit/flight advance; death/goal/rewind animations run at their own pace.</summary>
+        public void SetTimeScale(double scale)
         {
-            _fastForward = on;
+            _timeScale = scale;
         }
-
-        // Fast-forward only takes effect while the sim is actually running the ball or its
-        // orbits (aiming, riding a relay, or in flight) and never while paused. Death, goal,
-        // rewind, and load ignore it so those transitions play at their intended pace.
-        private bool FastForwardActive => _fastForward
-            && !_paused
-            && (_state == GameState.Aiming || _state == GameState.Landed || _state == GameState.Flying);
 
         private void Update()
         {
@@ -220,11 +214,12 @@ namespace GravityGolf.Game
             }
             else
             {
-                // Fast-forward feeds MORE accumulated time (scaled real delta) but never a
-                // bigger physics step; the accumulator clamp still bounds steps per frame.
-                var timeScale = FastForwardActive ? FastForwardScale : 1.0;
-                _accumulator += Math.Min(Time.deltaTime, MaxFrameDelta) * timeScale;
-                _accumulator = Math.Min(_accumulator, PhysicsStep * MaxStepsPerFrame);
+                // The selected time scale feeds MORE (or less) accumulated time but never a
+                // bigger physics step. Above 1x we raise the per-frame step budget so the
+                // speed-up is real; a scale of 0 freezes the sim (no steps).
+                _accumulator += Math.Min(Time.deltaTime, MaxFrameDelta) * _timeScale;
+                var maxSteps = _timeScale > 1.0 ? FastStepsPerFrame : MaxStepsPerFrame;
+                _accumulator = Math.Min(_accumulator, PhysicsStep * maxSteps);
                 while (_accumulator >= PhysicsStep)
                 {
                     Tick(PhysicsStep);
@@ -593,6 +588,7 @@ namespace GravityGolf.Game
             }
             _checkpoints.Clear();
             _rewindAccumulator = 0;
+            _timeScale = 1.0;
             _level = _world.Levels[index].Clone();
             _cameraRig.SetLevel(_level);
             Orbits.SetLevelTime(_level, _level.StartTimeSeconds);
