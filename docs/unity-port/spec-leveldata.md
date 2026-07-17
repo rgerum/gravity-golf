@@ -103,6 +103,19 @@ indices 0–9 (game-core.js:4460–4464, `WORLD_SIZE === 10` :72).
 
 `schemaVersion` MUST be `1`. The loader rejects any other value.
 
+### 3.1 World 2 layout
+
+World 2 is exported alongside world 1 at
+`unity/Assets/StreamingAssets/levels/world-2.json`. It uses the same top-level
+shape with `worldId: "asteroid-worlds-v1"`, `worldName: "Asteroid Belts"`,
+`worldNumber: 2`, `worldSize: 10`, and campaign levels 10-19 in order. Per-level
+`index` remains the global campaign index (10-19), while `worldLevelNumber` remains
+1-10 within the world.
+
+World 2 levels may include an `asteroids` array. The asteroid schema, orbit update
+formula, collision behavior, fixture expectations, and C# loader/core additions are
+specified in `docs/unity-port/spec-asteroids.md`.
+
 ---
 
 ## 4. Level object schema
@@ -558,8 +571,9 @@ The C# loader MUST throw at load time (not silently ignore) when:
    `goalUnlock`, `orbitAnchor`, `slideAngularSpeed`, `orbitDecayRate`,
    `orbitAround`, `destroyedByMeteor`, `fallIntoSunRadius`.
 7. Any of these **unknown-mechanic keys** appear at level level (non-empty):
-   `binarySystem`, `extraSuns`, `portals`, `dustClouds`, `asteroids`,
-   `meteorImpacts`, `pulsarJets`, `redGiant`.
+   `binarySystem`, `extraSuns`, `portals`, `dustClouds`, `meteorImpacts`,
+   `pulsarJets`, `redGiant`. `asteroids` is supported only by the World 2
+   addendum in `spec-asteroids.md`.
 8. `startPlanetIndex` out of range, or a `LaunchPreset` with non-finite
    `angleDeg`/`power`.
 
@@ -587,7 +601,7 @@ None of these are exercised by levels 0–9 (verified). If a field is encountere
 | `binarySystem` / `extraSuns` / multi-sun gravity | level | **throw** (rule 7). :4321,:4366,:4834 |
 | `portals` | level | **throw** (rule 7). :4758 |
 | `dustClouds` (drag) | level | **throw** (rule 7). :4872 |
-| `asteroids` | level | **throw** (rule 7). :4671 |
+| `asteroids` | level | supported for World 2 only; see `spec-asteroids.md`. :4671 |
 | `meteorImpacts` | level | **throw** (rule 7). :4691 |
 | `pulsarJets` | level | **throw** (rule 7). :4068 |
 | `redGiant` (growing sun) | level | **throw** (rule 7). :3651 |

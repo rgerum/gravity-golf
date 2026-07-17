@@ -1,20 +1,24 @@
 import {
-  WORLD_FILE_PATH,
+  UNITY_WORLD_INDICES,
   buildWorldExport,
   createUnityLevels,
+  worldFilePath,
   writeJsonFile,
 } from './unity-export-shared.js';
 
 async function main() {
-  const levels = createUnityLevels();
-  const world = buildWorldExport(levels);
+  for (const worldIndex of UNITY_WORLD_INDICES) {
+    const levels = createUnityLevels(worldIndex);
+    const world = buildWorldExport(levels, worldIndex);
+    const filePath = worldFilePath(worldIndex);
 
-  if (world.levels.length !== 10) {
-    throw new Error(`Expected 10 levels, got ${world.levels.length}`);
+    if (world.levels.length !== 10) {
+      throw new Error(`Expected 10 levels, got ${world.levels.length}`);
+    }
+
+    await writeJsonFile(filePath, world);
+    console.log(`Wrote ${filePath} (${world.levels.length} levels)`);
   }
-
-  await writeJsonFile(WORLD_FILE_PATH, world);
-  console.log(`Wrote ${WORLD_FILE_PATH} (${world.levels.length} levels)`);
 }
 
 main().catch((error) => {

@@ -79,6 +79,9 @@ namespace GravityGolf.Core
         [JsonProperty("planets")]
         public List<PlanetRuntime> Planets { get; set; } = new List<PlanetRuntime>();
 
+        [JsonProperty("asteroids")]
+        public List<AsteroidRuntime> Asteroids { get; set; } = new List<AsteroidRuntime>();
+
         [JsonProperty("launchPresets")]
         public List<LaunchPreset> LaunchPresets { get; set; } = new List<LaunchPreset>();
 
@@ -110,6 +113,7 @@ namespace GravityGolf.Core
                 OutBoundsY = OutBoundsY,
                 LaunchPresets = LaunchPresets.Select(p => new LaunchPreset { AngleDeg = p.AngleDeg, Power = p.Power }).ToList(),
                 Planets = Planets.Select(p => p.Clone()).ToList(),
+                Asteroids = Asteroids.Select(a => a.Clone()).ToList(),
             };
             return clone;
         }

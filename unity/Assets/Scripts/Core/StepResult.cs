@@ -7,5 +7,6 @@ namespace GravityGolf.Core
         public string Reason { get; set; } = "";
         public int? PlanetIndex { get; set; }
         public string PlanetName { get; set; } = "";
+        public int? AsteroidIndex { get; set; }
     }
 }

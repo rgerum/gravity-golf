@@ -103,8 +103,17 @@ namespace GravityGolf.Core
             return result;
         }
 
+        public static Vec2 AsteroidPositionAtTime(AsteroidRuntime asteroid, Vec2 sun, double time)
+        {
+            var angleDeg = asteroid.BaseAngleDeg + asteroid.OrbitAngularSpeed * time * 180.0 / Math.PI;
+            var direction = VecMath.DirectionFromAngleDeg(angleDeg);
+            return new Vec2(
+                sun.X + direction.X * asteroid.OrbitRadius,
+                sun.Y + direction.Y * asteroid.OrbitRadius);
+        }
+
         /// <summary>
-        /// Mutates <paramref name="level"/> in place by setting its clock and recomputing dynamic planet positions.
+        /// Mutates <paramref name="level"/> in place by setting its clock and recomputing dynamic body positions.
         /// Clone the level before calling when stepping a preview trajectory.
         /// </summary>
         public static LevelRuntime SetLevelTime(LevelRuntime level, double time)
@@ -117,6 +126,11 @@ namespace GravityGolf.Core
                 planet.Position = orbitState.Position;
                 planet.OrbitCenter = orbitState.OrbitCenter;
                 planet.Active = true;
+            }
+
+            foreach (var asteroid in level.Asteroids)
+            {
+                asteroid.Position = AsteroidPositionAtTime(asteroid, level.SystemCenter, time);
             }
 
             return level;

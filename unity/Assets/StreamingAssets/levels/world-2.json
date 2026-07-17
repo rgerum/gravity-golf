@@ -1,0 +1,4276 @@
+{
+  "schemaVersion": 1,
+  "generatedFrom": "game-core.js",
+  "worldId": "asteroid-worlds-v1",
+  "worldName": "Asteroid Belts",
+  "worldNumber": 2,
+  "worldSize": 10,
+  "levels": [
+    {
+      "index": 10,
+      "id": "belt-gap",
+      "name": "Belt Gap",
+      "worldLevelNumber": 1,
+      "sun": {
+        "x": 0,
+        "y": 0
+      },
+      "sunGravityStrength": 0,
+      "sunCollisionRadius": 0.42,
+      "startPlanetIndex": 0,
+      "startAngleDeg": 90,
+      "startAnchor": {
+        "x": 1.8737096026954504e-16,
+        "y": 3.06
+      },
+      "startTimeSeconds": 0,
+      "goalCenter": {
+        "x": 5.633375276077824e-16,
+        "y": 9.2
+      },
+      "goalRadius": 0.56,
+      "goalPullRadius": 3.2,
+      "goalPullStrength": 6.4,
+      "goalOpenSeconds": 12,
+      "goalUnlockRequired": false,
+      "outBoundsX": 20,
+      "outBoundsY": 20,
+      "planets": [
+        {
+          "index": 0,
+          "name": "Inner Tee",
+          "basePosition": {
+            "x": 1.4695761589768238e-16,
+            "y": 2.4
+          },
+          "radius": 0.35,
+          "landingRadius": null,
+          "gravity": 4.8,
+          "falloff": 3.2,
+          "landable": true,
+          "orbitCenterIndex": null,
+          "orbitSemiMajor": 2.4,
+          "orbitSemiMinor": 2.4,
+          "orbitEccentricity": 0,
+          "orbitRotation": 1.5707963267948966,
+          "orbitPhase": 0,
+          "orbitSpeed": 0,
+          "spinSpeed": 0.05,
+          "core": 7716863,
+          "glow": 10478079
+        },
+        {
+          "index": 1,
+          "name": "Right Catch",
+          "basePosition": {
+            "x": -1.805424680601344,
+            "y": 6.296264108395989
+          },
+          "radius": 0.28,
+          "landingRadius": 0.45,
+          "gravity": 5,
+          "falloff": 3.3,
+          "landable": true,
+          "orbitCenterIndex": null,
+          "orbitSemiMajor": 6.2980769230769225,
+          "orbitSemiMinor": 6.293036444539924,
+          "orbitEccentricity": 0.04,
+          "orbitRotation": -1.2915436464758039,
+          "orbitPhase": 3.141592653589793,
+          "orbitSpeed": 0.08,
+          "spinSpeed": 0.08,
+          "core": 15901542,
+          "glow": 16765322
+        }
+      ],
+      "launchPresets": [
+        {
+          "angleDeg": 90,
+          "power": 2.05
+        }
+      ],
+      "asteroids": [
+        {
+          "index": 0,
+          "position": {
+            "x": 2.464725704625927,
+            "y": 4.6354748625093665
+          },
+          "orbitRadius": 5.25,
+          "baseAngleDeg": 62,
+          "orbitAngularSpeed": 0.14,
+          "radius": 0.152,
+          "spinSpeed": -0.32,
+          "color": 8226191
+        },
+        {
+          "index": 1,
+          "position": {
+            "x": -1.843064439606287,
+            "y": 4.561744564468594
+          },
+          "orbitRadius": 4.92,
+          "baseAngleDeg": 112,
+          "orbitAngularSpeed": 0.14,
+          "radius": 0.136,
+          "spinSpeed": 0.32,
+          "color": 10133674
+        },
+        {
+          "index": 2,
+          "position": {
+            "x": -2.654895513808356,
+            "y": 4.248720961743694
+          },
+          "orbitRadius": 5.01,
+          "baseAngleDeg": 122,
+          "orbitAngularSpeed": 0.14,
+          "radius": 0.16,
+          "spinSpeed": -0.36000000000000004,
+          "color": 8226191
+        },
+        {
+          "index": 3,
+          "position": {
+            "x": -3.4125660924301764,
+            "y": 3.7900386099347103
+          },
+          "orbitRadius": 5.1,
+          "baseAngleDeg": 132,
+          "orbitAngularSpeed": 0.14,
+          "radius": 0.184,
+          "spinSpeed": 0.4,
+          "color": 11709082
+        },
+        {
+          "index": 4,
+          "position": {
+            "x": -4.089775811218887,
+            "y": 3.1952830569401667
+          },
+          "orbitRadius": 5.1899999999999995,
+          "baseAngleDeg": 142,
+          "orbitAngularSpeed": 0.14,
+          "radius": 0.208,
+          "spinSpeed": -0.44000000000000006,
+          "color": 10133674
+        },
+        {
+          "index": 5,
+          "position": {
+            "x": -4.661963290295134,
+            "y": 2.478809851509504
+          },
+          "orbitRadius": 5.279999999999999,
+          "baseAngleDeg": 152,
+          "orbitAngularSpeed": 0.14,
+          "radius": 0.232,
+          "spinSpeed": 0.28,
+          "color": 8226191
+        },
+        {
+          "index": 6,
+          "position": {
+            "x": -4.736261451149864,
+            "y": 1.5389046319872384
+          },
+          "orbitRadius": 4.9799999999999995,
+          "baseAngleDeg": 162,
+          "orbitAngularSpeed": 0.14,
+          "radius": 0.256,
+          "spinSpeed": -0.32,
+          "color": 11709082
+        },
+        {
+          "index": 7,
+          "position": {
+            "x": -5.020659108519761,
+            "y": 0.705607621867531
+          },
+          "orbitRadius": 5.069999999999999,
+          "baseAngleDeg": 172,
+          "orbitAngularSpeed": 0.14,
+          "radius": 0.144,
+          "spinSpeed": 0.36000000000000004,
+          "color": 10133674
+        },
+        {
+          "index": 8,
+          "position": {
+            "x": -5.156856667418533,
+            "y": -0.18008140298490347
+          },
+          "orbitRadius": 5.159999999999999,
+          "baseAngleDeg": 182,
+          "orbitAngularSpeed": 0.14,
+          "radius": 0.168,
+          "spinSpeed": -0.4,
+          "color": 8226191
+        },
+        {
+          "index": 9,
+          "position": {
+            "x": -3.2137529011999373,
+            "y": -4.113416133827088
+          },
+          "orbitRadius": 5.22,
+          "baseAngleDeg": 232,
+          "orbitAngularSpeed": 0.14,
+          "radius": 0.152,
+          "spinSpeed": 0.4,
+          "color": 10133674
+        },
+        {
+          "index": 10,
+          "position": {
+            "x": -2.3098000889065844,
+            "y": -4.34410215686592
+          },
+          "orbitRadius": 4.92,
+          "baseAngleDeg": 242,
+          "orbitAngularSpeed": 0.14,
+          "radius": 0.176,
+          "spinSpeed": -0.44000000000000006,
+          "color": 8226191
+        },
+        {
+          "index": 11,
+          "position": {
+            "x": -1.5481751418184873,
+            "y": -4.764793146638719
+          },
+          "orbitRadius": 5.01,
+          "baseAngleDeg": 252,
+          "orbitAngularSpeed": 0.14,
+          "radius": 0.2,
+          "spinSpeed": 0.28,
+          "color": 11709082
+        },
+        {
+          "index": 12,
+          "position": {
+            "x": -0.7097828148963355,
+            "y": -5.050367150582008
+          },
+          "orbitRadius": 5.1,
+          "baseAngleDeg": 262,
+          "orbitAngularSpeed": 0.14,
+          "radius": 0.224,
+          "spinSpeed": -0.32,
+          "color": 10133674
+        },
+        {
+          "index": 13,
+          "position": {
+            "x": 0.18112838788597935,
+            "y": -5.186838392229107
+          },
+          "orbitRadius": 5.1899999999999995,
+          "baseAngleDeg": 272,
+          "orbitAngularSpeed": 0.14,
+          "radius": 0.248,
+          "spinSpeed": 0.36000000000000004,
+          "color": 8226191
+        },
+        {
+          "index": 14,
+          "position": {
+            "x": 1.0977737275177721,
+            "y": -5.164619331874492
+          },
+          "orbitRadius": 5.279999999999999,
+          "baseAngleDeg": 282,
+          "orbitAngularSpeed": 0.14,
+          "radius": 0.136,
+          "spinSpeed": -0.4,
+          "color": 11709082
+        },
+        {
+          "index": 15,
+          "position": {
+            "x": 1.8655408352112373,
+            "y": -4.617375595742603
+          },
+          "orbitRadius": 4.9799999999999995,
+          "baseAngleDeg": 292,
+          "orbitAngularSpeed": 0.14,
+          "radius": 0.16,
+          "spinSpeed": 0.44000000000000006,
+          "color": 10133674
+        },
+        {
+          "index": 16,
+          "position": {
+            "x": 2.6866906696623474,
+            "y": -4.29960384751308
+          },
+          "orbitRadius": 5.069999999999999,
+          "baseAngleDeg": 302,
+          "orbitAngularSpeed": 0.14,
+          "radius": 0.184,
+          "spinSpeed": -0.28,
+          "color": 8226191
+        },
+        {
+          "index": 17,
+          "position": {
+            "x": 5.080075192644256,
+            "y": -0.7139580079251334
+          },
+          "orbitRadius": 5.13,
+          "baseAngleDeg": 352,
+          "orbitAngularSpeed": 0.14,
+          "radius": 0.168,
+          "spinSpeed": 0.28,
+          "color": 10133674
+        },
+        {
+          "index": 18,
+          "position": {
+            "x": 5.2168201170396795,
+            "y": 0.18217537278705634
+          },
+          "orbitRadius": 5.22,
+          "baseAngleDeg": 362,
+          "orbitAngularSpeed": 0.14,
+          "radius": 0.192,
+          "spinSpeed": -0.32,
+          "color": 8226191
+        },
+        {
+          "index": 19,
+          "position": {
+            "x": 4.812486195610324,
+            "y": 1.022925518823372
+          },
+          "orbitRadius": 4.92,
+          "baseAngleDeg": 372,
+          "orbitAngularSpeed": 0.14,
+          "radius": 0.216,
+          "spinSpeed": 0.36000000000000004,
+          "color": 11709082
+        },
+        {
+          "index": 20,
+          "position": {
+            "x": 4.645191111379605,
+            "y": 1.8767790330137186
+          },
+          "orbitRadius": 5.01,
+          "baseAngleDeg": 382,
+          "orbitAngularSpeed": 0.14,
+          "radius": 0.24,
+          "spinSpeed": -0.4,
+          "color": 10133674
+        },
+        {
+          "index": 21,
+          "position": {
+            "x": 4.325045290397773,
+            "y": 2.7025882475893432
+          },
+          "orbitRadius": 5.1,
+          "baseAngleDeg": 392,
+          "orbitAngularSpeed": 0.14,
+          "radius": 0.264,
+          "spinSpeed": 0.44000000000000006,
+          "color": 8226191
+        },
+        {
+          "index": 22,
+          "position": {
+            "x": 3.8569216442276777,
+            "y": 3.472787847002471
+          },
+          "orbitRadius": 5.1899999999999995,
+          "baseAngleDeg": 402,
+          "orbitAngularSpeed": 0.14,
+          "radius": 0.152,
+          "spinSpeed": -0.28,
+          "color": 11709082
+        },
+        {
+          "index": 23,
+          "position": {
+            "x": 3.250692589719479,
+            "y": 4.160696779043489
+          },
+          "orbitRadius": 5.279999999999999,
+          "baseAngleDeg": 412,
+          "orbitAngularSpeed": 0.14,
+          "radius": 0.176,
+          "spinSpeed": 0.32,
+          "color": 10133674
+        }
+      ]
+    },
+    {
+      "index": 11,
+      "id": "drifting-gap",
+      "name": "Drifting Gap",
+      "worldLevelNumber": 2,
+      "sun": {
+        "x": 0,
+        "y": 0
+      },
+      "sunGravityStrength": 0,
+      "sunCollisionRadius": 0.42,
+      "startPlanetIndex": 0,
+      "startAngleDeg": 86,
+      "startAnchor": {
+        "x": 0.21066455070725898,
+        "y": 3.012643431784669
+      },
+      "startTimeSeconds": 0,
+      "goalCenter": {
+        "x": 1.694995795295389e-15,
+        "y": 9.15
+      },
+      "goalRadius": 0.56,
+      "goalPullRadius": 2.4,
+      "goalPullStrength": 5.8,
+      "goalOpenSeconds": 12,
+      "goalUnlockRequired": false,
+      "outBoundsX": 20,
+      "outBoundsY": 20,
+      "planets": [
+        {
+          "index": 0,
+          "name": "Low Tee",
+          "basePosition": {
+            "x": 0.16462527803613614,
+            "y": 2.354251158613185
+          },
+          "radius": 0.35,
+          "landingRadius": null,
+          "gravity": 4.9,
+          "falloff": 3.2,
+          "landable": true,
+          "orbitCenterIndex": null,
+          "orbitSemiMajor": 2.3599999999999994,
+          "orbitSemiMinor": 2.3599999999999994,
+          "orbitEccentricity": 0,
+          "orbitRotation": 1.5009831567151233,
+          "orbitPhase": 0,
+          "orbitSpeed": 0,
+          "spinSpeed": 0.05,
+          "core": 7783679,
+          "glow": 10675455
+        },
+        {
+          "index": 1,
+          "name": "Low Catch",
+          "basePosition": {
+            "x": -1.9931596137184096,
+            "y": 6.134314530103741
+          },
+          "radius": 0.25,
+          "landingRadius": 0.42,
+          "gravity": 4.6,
+          "falloff": 3,
+          "landable": true,
+          "orbitCenterIndex": null,
+          "orbitSemiMajor": 6.45,
+          "orbitSemiMinor": 6.45,
+          "orbitEccentricity": 0,
+          "orbitRotation": 1.8849555921538759,
+          "orbitPhase": 0,
+          "orbitSpeed": 0.08,
+          "spinSpeed": -0.08,
+          "core": 16164714,
+          "glow": 16765837
+        },
+        {
+          "index": 2,
+          "name": "High Catch",
+          "basePosition": {
+            "x": -6.2016789194642525,
+            "y": 3.0247609128446364
+          },
+          "radius": 0.24,
+          "landingRadius": 0.41,
+          "gravity": 4.4,
+          "falloff": 2.9,
+          "landable": true,
+          "orbitCenterIndex": null,
+          "orbitSemiMajor": 6.900000000000001,
+          "orbitSemiMinor": 6.900000000000001,
+          "orbitEccentricity": 0,
+          "orbitRotation": 2.6878070480712672,
+          "orbitPhase": 0,
+          "orbitSpeed": 0.08,
+          "spinSpeed": 0.08,
+          "core": 10456319,
+          "glow": 13945855
+        }
+      ],
+      "launchPresets": [
+        {
+          "angleDeg": 108,
+          "power": 2
+        },
+        {
+          "angleDeg": 148,
+          "power": 1.75
+        }
+      ],
+      "asteroids": [
+        {
+          "index": 0,
+          "position": {
+            "x": -3.853203548888459,
+            "y": 3.233221676723294
+          },
+          "orbitRadius": 5.03,
+          "baseAngleDeg": 140,
+          "orbitAngularSpeed": 0.16,
+          "radius": 0.216,
+          "spinSpeed": 0.44000000000000006,
+          "color": 8226191
+        },
+        {
+          "index": 1,
+          "position": {
+            "x": -4.434050067376326,
+            "y": 2.560000000000001
+          },
+          "orbitRadius": 5.12,
+          "baseAngleDeg": 150,
+          "orbitAngularSpeed": 0.16,
+          "radius": 0.24,
+          "spinSpeed": -0.28,
+          "color": 11709082
+        },
+        {
+          "index": 2,
+          "position": {
+            "x": -4.867607775671006,
+            "y": -1.771664342426964
+          },
+          "orbitRadius": 5.180000000000001,
+          "baseAngleDeg": 200,
+          "orbitAngularSpeed": 0.16,
+          "radius": 0.224,
+          "spinSpeed": 0.28,
+          "color": 8226191
+        },
+        {
+          "index": 3,
+          "position": {
+            "x": -4.563953877943993,
+            "y": -2.6349999999999985
+          },
+          "orbitRadius": 5.2700000000000005,
+          "baseAngleDeg": 210,
+          "orbitAngularSpeed": 0.16,
+          "radius": 0.248,
+          "spinSpeed": -0.32,
+          "color": 11709082
+        },
+        {
+          "index": 4,
+          "position": {
+            "x": -3.807240882301321,
+            "y": -3.1946544201421005
+          },
+          "orbitRadius": 4.970000000000001,
+          "baseAngleDeg": 220,
+          "orbitAngularSpeed": 0.16,
+          "radius": 0.136,
+          "spinSpeed": 0.36000000000000004,
+          "color": 10133674
+        },
+        {
+          "index": 5,
+          "position": {
+            "x": -3.2525053050138903,
+            "y": -3.8761848821820286
+          },
+          "orbitRadius": 5.0600000000000005,
+          "baseAngleDeg": 230,
+          "orbitAngularSpeed": 0.16,
+          "radius": 0.16,
+          "spinSpeed": -0.4,
+          "color": 8226191
+        },
+        {
+          "index": 6,
+          "position": {
+            "x": 0.8890786696546837,
+            "y": -5.042215695422505
+          },
+          "orbitRadius": 5.12,
+          "baseAngleDeg": 280,
+          "orbitAngularSpeed": 0.16,
+          "radius": 0.144,
+          "spinSpeed": 0.4,
+          "color": 10133674
+        },
+        {
+          "index": 7,
+          "position": {
+            "x": 1.7819249467267335,
+            "y": -4.895798554294583
+          },
+          "orbitRadius": 5.21,
+          "baseAngleDeg": 290,
+          "orbitAngularSpeed": 0.16,
+          "radius": 0.168,
+          "spinSpeed": -0.44000000000000006,
+          "color": 8226191
+        },
+        {
+          "index": 8,
+          "position": {
+            "x": 2.6500000000000004,
+            "y": -4.589934640057526
+          },
+          "orbitRadius": 5.300000000000001,
+          "baseAngleDeg": 300,
+          "orbitAngularSpeed": 0.16,
+          "radius": 0.192,
+          "spinSpeed": 0.28,
+          "color": 11709082
+        },
+        {
+          "index": 9,
+          "position": {
+            "x": 3.213938048432696,
+            "y": -3.8302222155948904
+          },
+          "orbitRadius": 5,
+          "baseAngleDeg": 310,
+          "orbitAngularSpeed": 0.16,
+          "radius": 0.216,
+          "spinSpeed": -0.32,
+          "color": 10133674
+        },
+        {
+          "index": 10,
+          "position": {
+            "x": 3.899166215475598,
+            "y": -3.271788933304487
+          },
+          "orbitRadius": 5.090000000000001,
+          "baseAngleDeg": 320,
+          "orbitAngularSpeed": 0.16,
+          "radius": 0.24,
+          "spinSpeed": 0.36000000000000004,
+          "color": 8226191
+        },
+        {
+          "index": 11,
+          "position": {
+            "x": 4.486011591603392,
+            "y": -2.590000000000003
+          },
+          "orbitRadius": 5.180000000000001,
+          "baseAngleDeg": 330,
+          "orbitAngularSpeed": 0.16,
+          "radius": 0.264,
+          "spinSpeed": -0.4,
+          "color": 11709082
+        },
+        {
+          "index": 12,
+          "position": {
+            "x": 4.923989332918161,
+            "y": 1.792185551026501
+          },
+          "orbitRadius": 5.24,
+          "baseAngleDeg": 380,
+          "orbitAngularSpeed": 0.16,
+          "radius": 0.248,
+          "spinSpeed": 0.4,
+          "color": 8226191
+        },
+        {
+          "index": 13,
+          "position": {
+            "x": 4.615915402171058,
+            "y": 2.665
+          },
+          "orbitRadius": 5.33,
+          "baseAngleDeg": 390,
+          "orbitAngularSpeed": 0.16,
+          "radius": 0.136,
+          "spinSpeed": -0.44000000000000006,
+          "color": 11709082
+        },
+        {
+          "index": 14,
+          "position": {
+            "x": 3.85320354888846,
+            "y": 3.233221676723292
+          },
+          "orbitRadius": 5.03,
+          "baseAngleDeg": 400,
+          "orbitAngularSpeed": 0.16,
+          "radius": 0.16,
+          "spinSpeed": 0.28,
+          "color": 10133674
+        },
+        {
+          "index": 15,
+          "position": {
+            "x": 3.291072561595083,
+            "y": 3.9221475487691664
+          },
+          "orbitRadius": 5.12,
+          "baseAngleDeg": 410,
+          "orbitAngularSpeed": 0.16,
+          "radius": 0.184,
+          "spinSpeed": -0.32,
+          "color": 8226191
+        },
+        {
+          "index": 16,
+          "position": {
+            "x": 2.6050000000000026,
+            "y": 4.5119923537169235
+          },
+          "orbitRadius": 5.21,
+          "baseAngleDeg": 420,
+          "orbitAngularSpeed": 0.16,
+          "radius": 0.208,
+          "spinSpeed": 0.36000000000000004,
+          "color": 11709082
+        },
+        {
+          "index": 17,
+          "position": {
+            "x": 1.812706759626044,
+            "y": 4.980370890165315
+          },
+          "orbitRadius": 5.300000000000001,
+          "baseAngleDeg": 430,
+          "orbitAngularSpeed": 0.16,
+          "radius": 0.232,
+          "spinSpeed": -0.4,
+          "color": 10133674
+        },
+        {
+          "index": 18,
+          "position": {
+            "x": 0.8682408883346567,
+            "y": 4.92403876506104
+          },
+          "orbitRadius": 5,
+          "baseAngleDeg": 440,
+          "orbitAngularSpeed": 0.16,
+          "radius": 0.256,
+          "spinSpeed": 0.44000000000000006,
+          "color": 8226191
+        },
+        {
+          "index": 19,
+          "position": {
+            "x": 1.5583630519150074e-15,
+            "y": 5.090000000000001
+          },
+          "orbitRadius": 5.090000000000001,
+          "baseAngleDeg": 450,
+          "orbitAngularSpeed": 0.16,
+          "radius": 0.144,
+          "spinSpeed": -0.28,
+          "color": 11709082
+        }
+      ]
+    },
+    {
+      "index": 12,
+      "id": "inner-slot",
+      "name": "Inner Slot",
+      "worldLevelNumber": 3,
+      "sun": {
+        "x": 0,
+        "y": 0
+      },
+      "sunGravityStrength": 0,
+      "sunCollisionRadius": 0.42,
+      "startPlanetIndex": 0,
+      "startAngleDeg": 90,
+      "startAnchor": {
+        "x": 1.8369701987210297e-16,
+        "y": 3
+      },
+      "startTimeSeconds": 0,
+      "goalCenter": {
+        "x": 4.623041666781258e-16,
+        "y": 7.55
+      },
+      "goalRadius": 0.56,
+      "goalPullRadius": 2.4,
+      "goalPullStrength": 5.8,
+      "goalOpenSeconds": 12,
+      "goalUnlockRequired": false,
+      "outBoundsX": 20,
+      "outBoundsY": 20,
+      "planets": [
+        {
+          "index": 0,
+          "name": "North Tee",
+          "basePosition": {
+            "x": 1.4328367550024033e-16,
+            "y": 2.34
+          },
+          "radius": 0.35,
+          "landingRadius": null,
+          "gravity": 4.9,
+          "falloff": 3.2,
+          "landable": true,
+          "orbitCenterIndex": null,
+          "orbitSemiMajor": 2.34,
+          "orbitSemiMinor": 2.34,
+          "orbitEccentricity": 0,
+          "orbitRotation": 1.5707963267948966,
+          "orbitPhase": 0,
+          "orbitSpeed": 0,
+          "spinSpeed": -0.05,
+          "core": 7783679,
+          "glow": 10675455
+        },
+        {
+          "index": 1,
+          "name": "Near Ledge",
+          "basePosition": {
+            "x": -2.3787518681910407,
+            "y": 5.887617476499099
+          },
+          "radius": 0.26,
+          "landingRadius": 0.43,
+          "gravity": 4.8,
+          "falloff": 3.1,
+          "landable": true,
+          "orbitCenterIndex": null,
+          "orbitSemiMajor": 6.35,
+          "orbitSemiMinor": 6.35,
+          "orbitEccentricity": 0,
+          "orbitRotation": 1.9547687622336491,
+          "orbitPhase": 0,
+          "orbitSpeed": -0.07,
+          "spinSpeed": 0.08,
+          "core": 15836006,
+          "glow": 16765578
+        },
+        {
+          "index": 2,
+          "name": "Far Ledge",
+          "basePosition": {
+            "x": 1.4553818357243156,
+            "y": 6.84703320513664
+          },
+          "radius": 0.22,
+          "landingRadius": 0.38,
+          "gravity": 4,
+          "falloff": 2.8,
+          "landable": true,
+          "orbitCenterIndex": null,
+          "orbitSemiMajor": 7,
+          "orbitSemiMinor": 7,
+          "orbitEccentricity": 0,
+          "orbitRotation": 1.3613568165555772,
+          "orbitPhase": 0,
+          "orbitSpeed": -0.07,
+          "spinSpeed": -0.08,
+          "core": 12634070,
+          "glow": 16054527
+        }
+      ],
+      "launchPresets": [
+        {
+          "angleDeg": 112,
+          "power": 2
+        },
+        {
+          "angleDeg": 78,
+          "power": 1.8
+        }
+      ],
+      "asteroids": [
+        {
+          "index": 0,
+          "position": {
+            "x": 3.738018472151293,
+            "y": 3.365726949985057
+          },
+          "orbitRadius": 5.03,
+          "baseAngleDeg": 42,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.184,
+          "spinSpeed": -0.4,
+          "color": 10133674
+        },
+        {
+          "index": 1,
+          "position": {
+            "x": 3.1521867536673702,
+            "y": 4.034615058466417
+          },
+          "orbitRadius": 5.12,
+          "baseAngleDeg": 52,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.208,
+          "spinSpeed": 0.44000000000000006,
+          "color": 8226191
+        },
+        {
+          "index": 2,
+          "position": {
+            "x": 2.2628529326279945,
+            "y": 4.255807397580028
+          },
+          "orbitRadius": 4.82,
+          "baseAngleDeg": 62,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.232,
+          "spinSpeed": -0.28,
+          "color": 11709082
+        },
+        {
+          "index": 3,
+          "position": {
+            "x": 1.517273442380992,
+            "y": 4.669687495009204
+          },
+          "orbitRadius": 4.91,
+          "baseAngleDeg": 72,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.256,
+          "spinSpeed": 0.32,
+          "color": 10133674
+        },
+        {
+          "index": 4,
+          "position": {
+            "x": 0.6958655048003275,
+            "y": 4.951340343707852
+          },
+          "orbitRadius": 5,
+          "baseAngleDeg": 82,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.144,
+          "spinSpeed": -0.36000000000000004,
+          "color": 8226191
+        },
+        {
+          "index": 5,
+          "position": {
+            "x": -0.1776384382157296,
+            "y": 5.0868993095271975
+          },
+          "orbitRadius": 5.09,
+          "baseAngleDeg": 92,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.168,
+          "spinSpeed": 0.4,
+          "color": 11709082
+        },
+        {
+          "index": 6,
+          "position": {
+            "x": -4.058255381074619,
+            "y": 3.170656597927141
+          },
+          "orbitRadius": 5.15,
+          "baseAngleDeg": 142,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.152,
+          "spinSpeed": -0.4,
+          "color": 8226191
+        },
+        {
+          "index": 7,
+          "position": {
+            "x": -4.282295825365796,
+            "y": 2.27693707951157
+          },
+          "orbitRadius": 4.85,
+          "baseAngleDeg": 152,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.176,
+          "spinSpeed": 0.44000000000000006,
+          "color": 11709082
+        },
+        {
+          "index": 8,
+          "position": {
+            "x": -4.698219190498059,
+            "y": 1.5265439522122408
+          },
+          "orbitRadius": 4.94,
+          "baseAngleDeg": 162,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.2,
+          "spinSpeed": -0.28,
+          "color": 10133674
+        },
+        {
+          "index": 9,
+          "position": {
+            "x": -4.240240480782131,
+            "y": -2.6495963211660234
+          },
+          "orbitRadius": 5,
+          "baseAngleDeg": 212,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.184,
+          "spinSpeed": 0.28,
+          "color": 11709082
+        },
+        {
+          "index": 10,
+          "position": {
+            "x": -3.7826071616799366,
+            "y": -3.4058747863665877
+          },
+          "orbitRadius": 5.09,
+          "baseAngleDeg": 222,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.208,
+          "spinSpeed": -0.32,
+          "color": 10133674
+        },
+        {
+          "index": 11,
+          "position": {
+            "x": -3.189126442186911,
+            "y": -4.081895703682819
+          },
+          "orbitRadius": 5.18,
+          "baseAngleDeg": 232,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.232,
+          "spinSpeed": 0.36000000000000004,
+          "color": 8226191
+        },
+        {
+          "index": 12,
+          "position": {
+            "x": -2.291021226395149,
+            "y": -4.308784253151562
+          },
+          "orbitRadius": 4.88,
+          "baseAngleDeg": 242,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.256,
+          "spinSpeed": -0.4,
+          "color": 11709082
+        },
+        {
+          "index": 13,
+          "position": {
+            "x": -1.5358144620434893,
+            "y": -4.726750885986913
+          },
+          "orbitRadius": 4.97,
+          "baseAngleDeg": 252,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.144,
+          "spinSpeed": 0.44000000000000006,
+          "color": 10133674
+        },
+        {
+          "index": 14,
+          "position": {
+            "x": 2.6654938990930197,
+            "y": -4.265681923666824
+          },
+          "orbitRadius": 5.03,
+          "baseAngleDeg": 302,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.264,
+          "spinSpeed": -0.44000000000000006,
+          "color": 11709082
+        },
+        {
+          "index": 15,
+          "position": {
+            "x": 3.425948704557354,
+            "y": -3.8049015064442586
+          },
+          "orbitRadius": 5.12,
+          "baseAngleDeg": 312,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.152,
+          "spinSpeed": 0.28,
+          "color": 10133674
+        },
+        {
+          "index": 16,
+          "position": {
+            "x": 3.7982118323844007,
+            "y": -2.9674883110696726
+          },
+          "orbitRadius": 4.82,
+          "baseAngleDeg": 322,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.176,
+          "spinSpeed": -0.32,
+          "color": 8226191
+        },
+        {
+          "index": 17,
+          "position": {
+            "x": 4.335272680937331,
+            "y": -2.305105373278724
+          },
+          "orbitRadius": 4.91,
+          "baseAngleDeg": 332,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.2,
+          "spinSpeed": 0.36000000000000004,
+          "color": 11709082
+        },
+        {
+          "index": 18,
+          "position": {
+            "x": 4.755282581475767,
+            "y": -1.545084971874738
+          },
+          "orbitRadius": 5,
+          "baseAngleDeg": 342,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.224,
+          "spinSpeed": -0.4,
+          "color": 10133674
+        },
+        {
+          "index": 19,
+          "position": {
+            "x": 4.291123366551515,
+            "y": 2.681391477020015
+          },
+          "orbitRadius": 5.06,
+          "baseAngleDeg": 392,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.208,
+          "spinSpeed": 0.4,
+          "color": 11709082
+        }
+      ]
+    },
+    {
+      "index": 13,
+      "id": "twin-gaps",
+      "name": "Twin Gaps",
+      "worldLevelNumber": 4,
+      "sun": {
+        "x": 0,
+        "y": 0
+      },
+      "sunGravityStrength": 0,
+      "sunCollisionRadius": 0.42,
+      "startPlanetIndex": 0,
+      "startAngleDeg": 94,
+      "startAnchor": {
+        "x": -0.21066455070725823,
+        "y": 3.012643431784669
+      },
+      "startTimeSeconds": 0,
+      "goalCenter": {
+        "x": 5.541526766141774e-16,
+        "y": 9.05
+      },
+      "goalRadius": 0.56,
+      "goalPullRadius": 2.4,
+      "goalPullStrength": 5.8,
+      "goalOpenSeconds": 12,
+      "goalUnlockRequired": false,
+      "outBoundsX": 20,
+      "outBoundsY": 20,
+      "planets": [
+        {
+          "index": 0,
+          "name": "Split Tee",
+          "basePosition": {
+            "x": -0.16462527803613555,
+            "y": 2.354251158613185
+          },
+          "radius": 0.35,
+          "landingRadius": null,
+          "gravity": 4.8,
+          "falloff": 3.1,
+          "landable": true,
+          "orbitCenterIndex": null,
+          "orbitSemiMajor": 2.3599999999999994,
+          "orbitSemiMinor": 2.3599999999999994,
+          "orbitEccentricity": 0,
+          "orbitRotation": 1.6406094968746698,
+          "orbitPhase": 0,
+          "orbitSpeed": 0,
+          "spinSpeed": 0.05,
+          "core": 7716863,
+          "glow": 10478079
+        },
+        {
+          "index": 1,
+          "name": "Upper Harbor",
+          "basePosition": {
+            "x": -2.827493896789549,
+            "y": 5.797221598629627
+          },
+          "radius": 0.27,
+          "landingRadius": 0.44,
+          "gravity": 4.8,
+          "falloff": 3.2,
+          "landable": true,
+          "orbitCenterIndex": null,
+          "orbitSemiMajor": 6.45,
+          "orbitSemiMinor": 6.45,
+          "orbitEccentricity": 0,
+          "orbitRotation": 2.0245819323134224,
+          "orbitPhase": 0,
+          "orbitSpeed": 0.07,
+          "spinSpeed": -0.08,
+          "core": 15901542,
+          "glow": 16765322
+        },
+        {
+          "index": 2,
+          "name": "Lower Harbor",
+          "basePosition": {
+            "x": 5.7618111292575405,
+            "y": 3.88639067912169
+          },
+          "radius": 0.27,
+          "landingRadius": 0.44,
+          "gravity": 4.8,
+          "falloff": 3.2,
+          "landable": true,
+          "orbitCenterIndex": null,
+          "orbitSemiMajor": 6.95,
+          "orbitSemiMinor": 6.95,
+          "orbitEccentricity": 0,
+          "orbitRotation": 0.5934119456780719,
+          "orbitPhase": 0,
+          "orbitSpeed": 0.07,
+          "spinSpeed": 0.08,
+          "core": 9405183,
+          "glow": 13222655
+        }
+      ],
+      "launchPresets": [
+        {
+          "angleDeg": 116,
+          "power": 2
+        },
+        {
+          "angleDeg": 34,
+          "power": 1.9
+        }
+      ],
+      "asteroids": [
+        {
+          "index": 0,
+          "position": {
+            "x": 2.417778548347338,
+            "y": 4.547180103223473
+          },
+          "orbitRadius": 5.1499999999999995,
+          "baseAngleDeg": 62,
+          "orbitAngularSpeed": 0.17,
+          "radius": 0.2,
+          "spinSpeed": 0.44000000000000006,
+          "color": 8226191
+        },
+        {
+          "index": 1,
+          "position": {
+            "x": 1.6192490505247243,
+            "y": 4.983536145386604
+          },
+          "orbitRadius": 5.239999999999999,
+          "baseAngleDeg": 72,
+          "orbitAngularSpeed": 0.17,
+          "radius": 0.224,
+          "spinSpeed": -0.28,
+          "color": 11709082
+        },
+        {
+          "index": 2,
+          "position": {
+            "x": 0.7417926281171491,
+            "y": 5.27812880639257
+          },
+          "orbitRadius": 5.33,
+          "baseAngleDeg": 82,
+          "orbitAngularSpeed": 0.17,
+          "radius": 0.248,
+          "spinSpeed": 0.32,
+          "color": 10133674
+        },
+        {
+          "index": 3,
+          "position": {
+            "x": -0.17554446841357954,
+            "y": 5.026935859906051
+          },
+          "orbitRadius": 5.029999999999999,
+          "baseAngleDeg": 92,
+          "orbitAngularSpeed": 0.17,
+          "radius": 0.136,
+          "spinSpeed": -0.36000000000000004,
+          "color": 8226191
+        },
+        {
+          "index": 4,
+          "position": {
+            "x": -4.010974735858215,
+            "y": 3.133716909407601
+          },
+          "orbitRadius": 5.09,
+          "baseAngleDeg": 142,
+          "orbitAngularSpeed": 0.17,
+          "radius": 0.256,
+          "spinSpeed": 0.36000000000000004,
+          "color": 10133674
+        },
+        {
+          "index": 5,
+          "position": {
+            "x": -4.573668531009241,
+            "y": 2.431862695230915
+          },
+          "orbitRadius": 5.18,
+          "baseAngleDeg": 152,
+          "orbitAngularSpeed": 0.17,
+          "radius": 0.144,
+          "spinSpeed": -0.4,
+          "color": 8226191
+        },
+        {
+          "index": 6,
+          "position": {
+            "x": -4.858443397929966,
+            "y": -1.9629385494993787
+          },
+          "orbitRadius": 5.239999999999999,
+          "baseAngleDeg": 202,
+          "orbitAngularSpeed": 0.17,
+          "radius": 0.264,
+          "spinSpeed": 0.4,
+          "color": 10133674
+        },
+        {
+          "index": 7,
+          "position": {
+            "x": -4.520096352513751,
+            "y": -2.824469678362981
+          },
+          "orbitRadius": 5.33,
+          "baseAngleDeg": 212,
+          "orbitAngularSpeed": 0.17,
+          "radius": 0.152,
+          "spinSpeed": -0.44000000000000006,
+          "color": 8226191
+        },
+        {
+          "index": 8,
+          "position": {
+            "x": -3.7380184721512926,
+            "y": -3.365726949985056
+          },
+          "orbitRadius": 5.029999999999999,
+          "baseAngleDeg": 222,
+          "orbitAngularSpeed": 0.17,
+          "radius": 0.176,
+          "spinSpeed": 0.28,
+          "color": 11709082
+        },
+        {
+          "index": 9,
+          "position": {
+            "x": -3.1521867536673716,
+            "y": -4.034615058466416
+          },
+          "orbitRadius": 5.12,
+          "baseAngleDeg": 232,
+          "orbitAngularSpeed": 0.17,
+          "radius": 0.2,
+          "spinSpeed": -0.32,
+          "color": 10133674
+        },
+        {
+          "index": 10,
+          "position": {
+            "x": -2.445946842114493,
+            "y": -4.600156958795009
+          },
+          "orbitRadius": 5.21,
+          "baseAngleDeg": 242,
+          "orbitAngularSpeed": 0.17,
+          "radius": 0.224,
+          "spinSpeed": 0.36000000000000004,
+          "color": 8226191
+        },
+        {
+          "index": 11,
+          "position": {
+            "x": 1.9741767473018514,
+            "y": -4.886258913566971
+          },
+          "orbitRadius": 5.27,
+          "baseAngleDeg": 292,
+          "orbitAngularSpeed": 0.17,
+          "radius": 0.208,
+          "spinSpeed": -0.36000000000000004,
+          "color": 10133674
+        },
+        {
+          "index": 12,
+          "position": {
+            "x": 2.840367256289977,
+            "y": -4.5455377953984435
+          },
+          "orbitRadius": 5.359999999999999,
+          "baseAngleDeg": 302,
+          "orbitAngularSpeed": 0.17,
+          "radius": 0.232,
+          "spinSpeed": 0.4,
+          "color": 8226191
+        },
+        {
+          "index": 13,
+          "position": {
+            "x": 3.385800868175822,
+            "y": -3.7603128169156146
+          },
+          "orbitRadius": 5.06,
+          "baseAngleDeg": 312,
+          "orbitAngularSpeed": 0.17,
+          "radius": 0.256,
+          "spinSpeed": -0.44000000000000006,
+          "color": 11709082
+        },
+        {
+          "index": 14,
+          "position": {
+            "x": 4.058255381074619,
+            "y": -3.170656597927139
+          },
+          "orbitRadius": 5.1499999999999995,
+          "baseAngleDeg": 322,
+          "orbitAngularSpeed": 0.17,
+          "radius": 0.144,
+          "spinSpeed": 0.28,
+          "color": 10133674
+        },
+        {
+          "index": 15,
+          "position": {
+            "x": 4.626645386580777,
+            "y": -2.4600309889980676
+          },
+          "orbitRadius": 5.239999999999999,
+          "baseAngleDeg": 332,
+          "orbitAngularSpeed": 0.17,
+          "radius": 0.168,
+          "spinSpeed": -0.32,
+          "color": 8226191
+        },
+        {
+          "index": 16,
+          "position": {
+            "x": 5.069131231853168,
+            "y": -1.6470605800184708
+          },
+          "orbitRadius": 5.33,
+          "baseAngleDeg": 342,
+          "orbitAngularSpeed": 0.17,
+          "radius": 0.192,
+          "spinSpeed": 0.36000000000000004,
+          "color": 11709082
+        },
+        {
+          "index": 17,
+          "position": {
+            "x": 4.981048385770098,
+            "y": -0.7000406978291269
+          },
+          "orbitRadius": 5.029999999999999,
+          "baseAngleDeg": 352,
+          "orbitAngularSpeed": 0.17,
+          "radius": 0.216,
+          "spinSpeed": -0.4,
+          "color": 10133674
+        },
+        {
+          "index": 18,
+          "position": {
+            "x": 5.11688103433777,
+            "y": 0.17868542311680627
+          },
+          "orbitRadius": 5.12,
+          "baseAngleDeg": 362,
+          "orbitAngularSpeed": 0.17,
+          "radius": 0.24,
+          "spinSpeed": 0.44000000000000006,
+          "color": 8226191
+        },
+        {
+          "index": 19,
+          "position": {
+            "x": 5.096148999823128,
+            "y": 1.083219909160522
+          },
+          "orbitRadius": 5.21,
+          "baseAngleDeg": 372,
+          "orbitAngularSpeed": 0.17,
+          "radius": 0.264,
+          "spinSpeed": -0.28,
+          "color": 11709082
+        }
+      ]
+    },
+    {
+      "index": 14,
+      "id": "narrow-orbit",
+      "name": "Narrow Orbit",
+      "worldLevelNumber": 5,
+      "sun": {
+        "x": 0,
+        "y": 0
+      },
+      "sunGravityStrength": 0,
+      "sunCollisionRadius": 0.42,
+      "startPlanetIndex": 0,
+      "startAngleDeg": 84,
+      "startAnchor": {
+        "x": 0.30522311274154823,
+        "y": 2.904003934475358
+      },
+      "startTimeSeconds": 0,
+      "goalCenter": {
+        "x": 5.449678256205722e-16,
+        "y": 8.9
+      },
+      "goalRadius": 0.56,
+      "goalPullRadius": 2.4,
+      "goalPullStrength": 5.8,
+      "goalOpenSeconds": 12,
+      "goalUnlockRequired": false,
+      "outBoundsX": 20,
+      "outBoundsY": 20,
+      "planets": [
+        {
+          "index": 0,
+          "name": "Tight Tee",
+          "basePosition": {
+            "x": 0.23623432698489694,
+            "y": 2.2476194835322976
+          },
+          "radius": 0.35,
+          "landingRadius": null,
+          "gravity": 4.9,
+          "falloff": 3.2,
+          "landable": true,
+          "orbitCenterIndex": null,
+          "orbitSemiMajor": 2.26,
+          "orbitSemiMinor": 2.26,
+          "orbitEccentricity": 0,
+          "orbitRotation": 1.4660765716752369,
+          "orbitPhase": 0,
+          "orbitSpeed": 0,
+          "spinSpeed": 0.05,
+          "core": 7980799,
+          "glow": 11003647
+        },
+        {
+          "index": 1,
+          "name": "Needle Catch",
+          "basePosition": {
+            "x": -2.4810935227623805,
+            "y": 5.572627291619865
+          },
+          "radius": 0.21,
+          "landingRadius": 0.37,
+          "gravity": 3.8,
+          "falloff": 2.7,
+          "landable": true,
+          "orbitCenterIndex": null,
+          "orbitSemiMajor": 6.099999999999999,
+          "orbitSemiMinor": 6.099999999999999,
+          "orbitEccentricity": 0,
+          "orbitRotation": 1.9896753472735358,
+          "orbitPhase": 0,
+          "orbitSpeed": 0.07,
+          "spinSpeed": 0.08,
+          "core": 12634070,
+          "glow": 16054527
+        },
+        {
+          "index": 2,
+          "name": "Wide Catch",
+          "basePosition": {
+            "x": 2.1322172611871375,
+            "y": 6.56228996243656
+          },
+          "radius": 0.28,
+          "landingRadius": 0.45,
+          "gravity": 5,
+          "falloff": 3.3,
+          "landable": true,
+          "orbitCenterIndex": null,
+          "orbitSemiMajor": 6.8999999999999995,
+          "orbitSemiMinor": 6.8999999999999995,
+          "orbitEccentricity": 0,
+          "orbitRotation": 1.2566370614359172,
+          "orbitPhase": 0,
+          "orbitSpeed": 0.07,
+          "spinSpeed": -0.08,
+          "core": 16164714,
+          "glow": 16766351
+        }
+      ],
+      "launchPresets": [
+        {
+          "angleDeg": 114,
+          "power": 1.95
+        },
+        {
+          "angleDeg": 72,
+          "power": 2
+        }
+      ],
+      "asteroids": [
+        {
+          "index": 0,
+          "position": {
+            "x": -3.6607001328495876,
+            "y": 3.1662082270998875
+          },
+          "orbitRadius": 4.84,
+          "baseAngleDeg": 139.14285714285714,
+          "orbitAngularSpeed": 0.2,
+          "radius": 0.274,
+          "spinSpeed": -0.36000000000000004,
+          "color": 8226191
+        },
+        {
+          "index": 1,
+          "position": {
+            "x": -4.167797539744607,
+            "y": 2.6333179959318995
+          },
+          "orbitRadius": 4.93,
+          "baseAngleDeg": 147.71428571428572,
+          "orbitAngularSpeed": 0.2,
+          "radius": 0.162,
+          "spinSpeed": 0.4,
+          "color": 11709082
+        },
+        {
+          "index": 2,
+          "position": {
+            "x": -4.239053662600693,
+            "y": 1.862075198694094
+          },
+          "orbitRadius": 4.63,
+          "baseAngleDeg": 156.28571428571428,
+          "orbitAngularSpeed": 0.2,
+          "radius": 0.186,
+          "spinSpeed": -0.44000000000000006,
+          "color": 10133674
+        },
+        {
+          "index": 3,
+          "position": {
+            "x": -4.43066124135246,
+            "y": -1.5379665030087886
+          },
+          "orbitRadius": 4.69,
+          "baseAngleDeg": 199.14285714285714,
+          "orbitAngularSpeed": 0.2,
+          "radius": 0.17,
+          "spinSpeed": 0.44000000000000006,
+          "color": 11709082
+        },
+        {
+          "index": 4,
+          "position": {
+            "x": -4.231627395908728,
+            "y": -2.2230001309479768
+          },
+          "orbitRadius": 4.78,
+          "baseAngleDeg": 207.71428571428572,
+          "orbitAngularSpeed": 0.2,
+          "radius": 0.194,
+          "spinSpeed": -0.28,
+          "color": 10133674
+        },
+        {
+          "index": 5,
+          "position": {
+            "x": -3.9255894648392022,
+            "y": -2.882125492330871
+          },
+          "orbitRadius": 4.87,
+          "baseAngleDeg": 216.28571428571428,
+          "orbitAngularSpeed": 0.2,
+          "radius": 0.218,
+          "spinSpeed": 0.32,
+          "color": 8226191
+        },
+        {
+          "index": 6,
+          "position": {
+            "x": -3.239525070091412,
+            "y": -3.2234108208928682
+          },
+          "orbitRadius": 4.57,
+          "baseAngleDeg": 224.85714285714283,
+          "orbitAngularSpeed": 0.2,
+          "radius": 0.242,
+          "spinSpeed": -0.36000000000000004,
+          "color": 11709082
+        },
+        {
+          "index": 7,
+          "position": {
+            "x": -0.18465671302711567,
+            "y": -4.62631623414721
+          },
+          "orbitRadius": 4.63,
+          "baseAngleDeg": 267.7142857142857,
+          "orbitAngularSpeed": 0.2,
+          "radius": 0.226,
+          "spinSpeed": 0.36000000000000004,
+          "color": 8226191
+        },
+        {
+          "index": 8,
+          "position": {
+            "x": 0.5167761887340665,
+            "y": -4.691624704807226
+          },
+          "orbitRadius": 4.72,
+          "baseAngleDeg": 276.2857142857143,
+          "orbitAngularSpeed": 0.2,
+          "radius": 0.25,
+          "spinSpeed": -0.4,
+          "color": 11709082
+        },
+        {
+          "index": 9,
+          "position": {
+            "x": 1.2333314923624557,
+            "y": -4.649192771863412
+          },
+          "orbitRadius": 4.81,
+          "baseAngleDeg": 284.8571428571429,
+          "orbitAngularSpeed": 0.2,
+          "radius": 0.274,
+          "spinSpeed": 0.44000000000000006,
+          "color": 10133674
+        },
+        {
+          "index": 10,
+          "position": {
+            "x": 1.9482669196532605,
+            "y": -4.496026691400396
+          },
+          "orbitRadius": 4.9,
+          "baseAngleDeg": 293.42857142857144,
+          "orbitAngularSpeed": 0.2,
+          "radius": 0.162,
+          "spinSpeed": -0.28,
+          "color": 8226191
+        },
+        {
+          "index": 11,
+          "position": {
+            "x": 2.4376286154727413,
+            "y": -3.9010212423195596
+          },
+          "orbitRadius": 4.6,
+          "baseAngleDeg": 302,
+          "orbitAngularSpeed": 0.2,
+          "radius": 0.186,
+          "spinSpeed": 0.32,
+          "color": 11709082
+        },
+        {
+          "index": 12,
+          "position": {
+            "x": 3.0503549604812012,
+            "y": -3.5625039810599133
+          },
+          "orbitRadius": 4.69,
+          "baseAngleDeg": 310.57142857142856,
+          "orbitAngularSpeed": 0.2,
+          "radius": 0.21,
+          "spinSpeed": -0.36000000000000004,
+          "color": 10133674
+        },
+        {
+          "index": 13,
+          "position": {
+            "x": 3.615319552690296,
+            "y": -3.1269577118879046
+          },
+          "orbitRadius": 4.78,
+          "baseAngleDeg": 319.14285714285717,
+          "orbitAngularSpeed": 0.2,
+          "radius": 0.234,
+          "spinSpeed": 0.4,
+          "color": 8226191
+        },
+        {
+          "index": 14,
+          "position": {
+            "x": 4.11707383743534,
+            "y": -2.6012695010524083
+          },
+          "orbitRadius": 4.87,
+          "baseAngleDeg": 327.71428571428567,
+          "orbitAngularSpeed": 0.2,
+          "radius": 0.258,
+          "spinSpeed": -0.44000000000000006,
+          "color": 11709082
+        },
+        {
+          "index": 15,
+          "position": {
+            "x": 4.184119921832649,
+            "y": -1.8379446345641504
+          },
+          "orbitRadius": 4.57,
+          "baseAngleDeg": 336.2857142857143,
+          "orbitAngularSpeed": 0.2,
+          "radius": 0.146,
+          "spinSpeed": 0.28,
+          "color": 10133674
+        },
+        {
+          "index": 16,
+          "position": {
+            "x": 4.373979007987608,
+            "y": 1.5182910253583588
+          },
+          "orbitRadius": 4.63,
+          "baseAngleDeg": 379.14285714285717,
+          "orbitAngularSpeed": 0.2,
+          "radius": 0.266,
+          "spinSpeed": -0.28,
+          "color": 11709082
+        },
+        {
+          "index": 17,
+          "position": {
+            "x": 4.178510734035395,
+            "y": 2.195096363613903
+          },
+          "orbitRadius": 4.72,
+          "baseAngleDeg": 387.7142857142857,
+          "orbitAngularSpeed": 0.2,
+          "radius": 0.154,
+          "spinSpeed": 0.32,
+          "color": 10133674
+        },
+        {
+          "index": 18,
+          "position": {
+            "x": 3.877224912910998,
+            "y": 2.846616759365808
+          },
+          "orbitRadius": 4.81,
+          "baseAngleDeg": 396.2857142857143,
+          "orbitAngularSpeed": 0.2,
+          "radius": 0.178,
+          "spinSpeed": -0.36000000000000004,
+          "color": 8226191
+        },
+        {
+          "index": 19,
+          "position": {
+            "x": 3.4734513880630025,
+            "y": 3.4561735278720027
+          },
+          "orbitRadius": 4.9,
+          "baseAngleDeg": 404.85714285714283,
+          "orbitAngularSpeed": 0.2,
+          "radius": 0.202,
+          "spinSpeed": 0.4,
+          "color": 11709082
+        },
+        {
+          "index": 20,
+          "position": {
+            "x": 2.740792531977029,
+            "y": 3.694327583831589
+          },
+          "orbitRadius": 4.6,
+          "baseAngleDeg": 413.42857142857144,
+          "orbitAngularSpeed": 0.2,
+          "radius": 0.226,
+          "spinSpeed": -0.44000000000000006,
+          "color": 10133674
+        },
+        {
+          "index": 21,
+          "position": {
+            "x": -0.5102069998942241,
+            "y": 4.63198540771222
+          },
+          "orbitRadius": 4.66,
+          "baseAngleDeg": 456.2857142857143,
+          "orbitAngularSpeed": 0.2,
+          "radius": 0.21,
+          "spinSpeed": 0.44000000000000006,
+          "color": 11709082
+        }
+      ]
+    },
+    {
+      "index": 15,
+      "id": "relay-through",
+      "name": "Relay Through",
+      "worldLevelNumber": 6,
+      "sun": {
+        "x": 0,
+        "y": 0
+      },
+      "sunGravityStrength": 0,
+      "sunCollisionRadius": 0.42,
+      "startPlanetIndex": 0,
+      "startAngleDeg": 24,
+      "startAnchor": {
+        "x": 2.6675527363163947,
+        "y": 1.1876709977813364
+      },
+      "startTimeSeconds": 0,
+      "goalCenter": {
+        "x": 4.207224601336517e-16,
+        "y": 9.2
+      },
+      "goalRadius": 0.56,
+      "goalPullRadius": 2.4,
+      "goalPullStrength": 5.8,
+      "goalOpenSeconds": 12,
+      "goalUnlockRequired": false,
+      "outBoundsX": 20,
+      "outBoundsY": 20,
+      "planets": [
+        {
+          "index": 0,
+          "name": "Belt Relay",
+          "basePosition": {
+            "x": 2.064612734272278,
+            "y": 0.9192248133513082
+          },
+          "radius": 0.35,
+          "landingRadius": 0.56,
+          "gravity": 5.2,
+          "falloff": 3.5,
+          "landable": true,
+          "orbitCenterIndex": null,
+          "orbitSemiMajor": 2.26,
+          "orbitSemiMinor": 2.26,
+          "orbitEccentricity": 0,
+          "orbitRotation": 0.418879020478639,
+          "orbitPhase": 0,
+          "orbitSpeed": 0,
+          "spinSpeed": -0.08,
+          "core": 15901542,
+          "glow": 16765322
+        },
+        {
+          "index": 1,
+          "name": "Exit Relay",
+          "basePosition": {
+            "x": 4.480546489460532,
+            "y": 4.639741712184301
+          },
+          "radius": 0.29,
+          "landingRadius": 0.46,
+          "gravity": 5.2,
+          "falloff": 3.4,
+          "landable": true,
+          "orbitCenterIndex": null,
+          "orbitSemiMajor": 6.45,
+          "orbitSemiMinor": 6.45,
+          "orbitEccentricity": 0,
+          "orbitRotation": 0.8028514559173917,
+          "orbitPhase": 0,
+          "orbitSpeed": 0.08,
+          "spinSpeed": 0.08,
+          "core": 9404927,
+          "glow": 13156607
+        },
+        {
+          "index": 2,
+          "name": "Far Dock",
+          "basePosition": {
+            "x": 3.2240145042850486e-16,
+            "y": 7.05
+          },
+          "radius": 0.23,
+          "landingRadius": 0.39,
+          "gravity": 4.2,
+          "falloff": 2.8,
+          "landable": true,
+          "orbitCenterIndex": null,
+          "orbitSemiMajor": 7.05,
+          "orbitSemiMinor": 7.05,
+          "orbitEccentricity": 0,
+          "orbitRotation": 1.5707963267948966,
+          "orbitPhase": 0,
+          "orbitSpeed": 0.08,
+          "spinSpeed": -0.08,
+          "core": 12634070,
+          "glow": 16054527
+        }
+      ],
+      "launchPresets": [
+        {
+          "angleDeg": 46,
+          "power": 2
+        },
+        {
+          "angleDeg": 90,
+          "power": 1.9
+        }
+      ],
+      "asteroids": [
+        {
+          "index": 0,
+          "position": {
+            "x": 0.6819481947043208,
+            "y": 4.8523135368336945
+          },
+          "orbitRadius": 4.8999999999999995,
+          "baseAngleDeg": 82,
+          "orbitAngularSpeed": 0.18,
+          "radius": 0.232,
+          "spinSpeed": 0.32,
+          "color": 10133674
+        },
+        {
+          "index": 1,
+          "position": {
+            "x": -0.1741484885454796,
+            "y": 4.986960226825288
+          },
+          "orbitRadius": 4.99,
+          "baseAngleDeg": 92,
+          "orbitAngularSpeed": 0.18,
+          "radius": 0.256,
+          "spinSpeed": -0.36000000000000004,
+          "color": 8226191
+        },
+        {
+          "index": 2,
+          "position": {
+            "x": -1.0561913893542172,
+            "y": 4.968989811727733
+          },
+          "orbitRadius": 5.08,
+          "baseAngleDeg": 102,
+          "orbitAngularSpeed": 0.18,
+          "radius": 0.144,
+          "spinSpeed": 0.4,
+          "color": 11709082
+        },
+        {
+          "index": 3,
+          "position": {
+            "x": -4.538350627294884,
+            "y": 2.4130838327194795
+          },
+          "orbitRadius": 5.14,
+          "baseAngleDeg": 152,
+          "orbitAngularSpeed": 0.18,
+          "radius": 0.264,
+          "spinSpeed": -0.4,
+          "color": 8226191
+        },
+        {
+          "index": 4,
+          "position": {
+            "x": -4.974025580223652,
+            "y": 1.6161588805809752
+          },
+          "orbitRadius": 5.2299999999999995,
+          "baseAngleDeg": 162,
+          "orbitAngularSpeed": 0.18,
+          "radius": 0.152,
+          "spinSpeed": 0.44000000000000006,
+          "color": 11709082
+        },
+        {
+          "index": 5,
+          "position": {
+            "x": -4.882021578895941,
+            "y": 0.6861233877331241
+          },
+          "orbitRadius": 4.93,
+          "baseAngleDeg": 172,
+          "orbitAngularSpeed": 0.18,
+          "radius": 0.176,
+          "spinSpeed": -0.28,
+          "color": 10133674
+        },
+        {
+          "index": 6,
+          "position": {
+            "x": -3.7082926791321973,
+            "y": -3.3389617257307025
+          },
+          "orbitRadius": 4.99,
+          "baseAngleDeg": 222,
+          "orbitAngularSpeed": 0.18,
+          "radius": 0.16,
+          "spinSpeed": 0.28,
+          "color": 11709082
+        },
+        {
+          "index": 7,
+          "position": {
+            "x": -3.1275602946543453,
+            "y": -4.003094628322147
+          },
+          "orbitRadius": 5.08,
+          "baseAngleDeg": 232,
+          "orbitAngularSpeed": 0.18,
+          "radius": 0.184,
+          "spinSpeed": -0.32,
+          "color": 10133674
+        },
+        {
+          "index": 8,
+          "position": {
+            "x": -2.427167979603057,
+            "y": -4.564839055080651
+          },
+          "orbitRadius": 5.17,
+          "baseAngleDeg": 242,
+          "orbitAngularSpeed": 0.18,
+          "radius": 0.208,
+          "spinSpeed": 0.36000000000000004,
+          "color": 8226191
+        },
+        {
+          "index": 9,
+          "position": {
+            "x": -1.5049127626059946,
+            "y": -4.631645234357398
+          },
+          "orbitRadius": 4.87,
+          "baseAngleDeg": 252,
+          "orbitAngularSpeed": 0.18,
+          "radius": 0.232,
+          "spinSpeed": -0.4,
+          "color": 11709082
+        },
+        {
+          "index": 10,
+          "position": {
+            "x": -0.6902985807619264,
+            "y": -4.911729620958188
+          },
+          "orbitRadius": 4.96,
+          "baseAngleDeg": 262,
+          "orbitAngularSpeed": 0.18,
+          "radius": 0.256,
+          "spinSpeed": 0.44000000000000006,
+          "color": 10133674
+        },
+        {
+          "index": 11,
+          "position": {
+            "x": 0.17624245834762922,
+            "y": -5.046923676446434
+          },
+          "orbitRadius": 5.05,
+          "baseAngleDeg": 272,
+          "orbitAngularSpeed": 0.18,
+          "radius": 0.144,
+          "spinSpeed": -0.28,
+          "color": 8226191
+        },
+        {
+          "index": 12,
+          "position": {
+            "x": 1.0686660908032812,
+            "y": -5.027678667771761
+          },
+          "orbitRadius": 5.14,
+          "baseAngleDeg": 282,
+          "orbitAngularSpeed": 0.18,
+          "radius": 0.168,
+          "spinSpeed": 0.32,
+          "color": 11709082
+        },
+        {
+          "index": 13,
+          "position": {
+            "x": 1.9591924835652195,
+            "y": -4.849171559384298
+          },
+          "orbitRadius": 5.2299999999999995,
+          "baseAngleDeg": 292,
+          "orbitAngularSpeed": 0.18,
+          "radius": 0.192,
+          "spinSpeed": -0.36000000000000004,
+          "color": 10133674
+        },
+        {
+          "index": 14,
+          "position": {
+            "x": 4.660176929846251,
+            "y": -1.514183272437243
+          },
+          "orbitRadius": 4.8999999999999995,
+          "baseAngleDeg": 342,
+          "orbitAngularSpeed": 0.18,
+          "radius": 0.176,
+          "spinSpeed": 0.36000000000000004,
+          "color": 11709082
+        },
+        {
+          "index": 15,
+          "position": {
+            "x": 4.941437663020436,
+            "y": -0.6944737737907244
+          },
+          "orbitRadius": 4.99,
+          "baseAngleDeg": 352,
+          "orbitAngularSpeed": 0.18,
+          "radius": 0.2,
+          "spinSpeed": -0.4,
+          "color": 10133674
+        },
+        {
+          "index": 16,
+          "position": {
+            "x": 5.076905401257006,
+            "y": 0.1772894432487062
+          },
+          "orbitRadius": 5.08,
+          "baseAngleDeg": 362,
+          "orbitAngularSpeed": 0.18,
+          "radius": 0.224,
+          "spinSpeed": 0.44000000000000006,
+          "color": 8226191
+        },
+        {
+          "index": 17,
+          "position": {
+            "x": 5.057023095793776,
+            "y": 1.0749034415278116
+          },
+          "orbitRadius": 5.17,
+          "baseAngleDeg": 372,
+          "orbitAngularSpeed": 0.18,
+          "radius": 0.248,
+          "spinSpeed": -0.28,
+          "color": 11709082
+        },
+        {
+          "index": 18,
+          "position": {
+            "x": 4.515385371740255,
+            "y": 1.824334109935491
+          },
+          "orbitRadius": 4.87,
+          "baseAngleDeg": 382,
+          "orbitAngularSpeed": 0.18,
+          "radius": 0.136,
+          "spinSpeed": 0.32,
+          "color": 10133674
+        },
+        {
+          "index": 19,
+          "position": {
+            "x": 1.523453782268492,
+            "y": 4.6887086253351065
+          },
+          "orbitRadius": 4.93,
+          "baseAngleDeg": 432,
+          "orbitAngularSpeed": 0.18,
+          "radius": 0.256,
+          "spinSpeed": -0.32,
+          "color": 11709082
+        }
+      ]
+    },
+    {
+      "index": 16,
+      "id": "double-ring",
+      "name": "Double Ring",
+      "worldLevelNumber": 7,
+      "sun": {
+        "x": 0,
+        "y": 0
+      },
+      "sunGravityStrength": 0,
+      "sunCollisionRadius": 0.42,
+      "startPlanetIndex": 0,
+      "startAngleDeg": 84,
+      "startAnchor": {
+        "x": 0.3135853898029605,
+        "y": 2.9835656861048196
+      },
+      "startTimeSeconds": 0,
+      "goalCenter": {
+        "x": 5.786456125971243e-16,
+        "y": 9.45
+      },
+      "goalRadius": 0.56,
+      "goalPullRadius": 2.4,
+      "goalPullStrength": 5.8,
+      "goalOpenSeconds": 12,
+      "goalUnlockRequired": false,
+      "outBoundsX": 20,
+      "outBoundsY": 20,
+      "planets": [
+        {
+          "index": 0,
+          "name": "Cross Tee",
+          "basePosition": {
+            "x": 0.2445966040463092,
+            "y": 2.3271812351617593
+          },
+          "radius": 0.35,
+          "landingRadius": null,
+          "gravity": 4.8,
+          "falloff": 3.1,
+          "landable": true,
+          "orbitCenterIndex": null,
+          "orbitSemiMajor": 2.34,
+          "orbitSemiMinor": 2.34,
+          "orbitEccentricity": 0,
+          "orbitRotation": 1.4660765716752369,
+          "orbitPhase": 0,
+          "orbitSpeed": 0,
+          "spinSpeed": 0.05,
+          "core": 7848447,
+          "glow": 10806527
+        },
+        {
+          "index": 1,
+          "name": "Inner-Ring Catch",
+          "basePosition": {
+            "x": -2.2558240589371157,
+            "y": 6.9427125689546205
+          },
+          "radius": 0.24,
+          "landingRadius": 0.41,
+          "gravity": 4.5,
+          "falloff": 3,
+          "landable": true,
+          "orbitCenterIndex": null,
+          "orbitSemiMajor": 7.299999999999999,
+          "orbitSemiMinor": 7.299999999999999,
+          "orbitEccentricity": 0,
+          "orbitRotation": 1.8849555921538759,
+          "orbitPhase": 0,
+          "orbitSpeed": 0.07,
+          "spinSpeed": -0.08,
+          "core": 16164714,
+          "glow": 16766351
+        },
+        {
+          "index": 2,
+          "name": "Outer-Ring Catch",
+          "basePosition": {
+            "x": 1.899086880457392,
+            "y": 7.616821451266572
+          },
+          "radius": 0.25,
+          "landingRadius": 0.42,
+          "gravity": 4.6,
+          "falloff": 3,
+          "landable": true,
+          "orbitCenterIndex": null,
+          "orbitSemiMajor": 7.85,
+          "orbitSemiMinor": 7.85,
+          "orbitEccentricity": 0,
+          "orbitRotation": 1.3264502315156905,
+          "orbitPhase": 0,
+          "orbitSpeed": 0.07,
+          "spinSpeed": 0.08,
+          "core": 10456319,
+          "glow": 13945855
+        },
+        {
+          "index": 3,
+          "name": "Side Shepherd",
+          "basePosition": {
+            "x": 6.922463730834598,
+            "y": 4.669260743980735
+          },
+          "radius": 0.19,
+          "landingRadius": 0.35,
+          "gravity": 3.6,
+          "falloff": 2.6,
+          "landable": true,
+          "orbitCenterIndex": null,
+          "orbitSemiMajor": 8.35,
+          "orbitSemiMinor": 8.35,
+          "orbitEccentricity": 0,
+          "orbitRotation": 0.593411945678072,
+          "orbitPhase": 0,
+          "orbitSpeed": 0.07,
+          "spinSpeed": 0.08,
+          "core": 12634070,
+          "glow": 16054527
+        }
+      ],
+      "launchPresets": [
+        {
+          "angleDeg": 108,
+          "power": 2
+        },
+        {
+          "angleDeg": 76,
+          "power": 1.9
+        }
+      ],
+      "asteroids": [
+        {
+          "index": 0,
+          "position": {
+            "x": 1.5080029325497435,
+            "y": 4.641155799520349
+          },
+          "orbitRadius": 4.88,
+          "baseAngleDeg": 72,
+          "orbitAngularSpeed": 0.16,
+          "radius": 0.228,
+          "spinSpeed": -0.36000000000000004,
+          "color": 8226191
+        },
+        {
+          "index": 1,
+          "position": {
+            "x": 0.6790475065202364,
+            "y": 4.529381247354726
+          },
+          "orbitRadius": 4.58,
+          "baseAngleDeg": 81.47368421052632,
+          "orbitAngularSpeed": 0.16,
+          "radius": 0.116,
+          "spinSpeed": 0.4,
+          "color": 11709082
+        },
+        {
+          "index": 2,
+          "position": {
+            "x": -3.532465586135048,
+            "y": 3.145566226098503
+          },
+          "orbitRadius": 4.73,
+          "baseAngleDeg": 138.31578947368422,
+          "orbitAngularSpeed": 0.16,
+          "radius": 0.124,
+          "spinSpeed": 0.44000000000000006,
+          "color": 11709082
+        },
+        {
+          "index": 3,
+          "position": {
+            "x": -4.7102194821534615,
+            "y": -1.2760221118546402
+          },
+          "orbitRadius": 4.88,
+          "baseAngleDeg": 195.1578947368421,
+          "orbitAngularSpeed": 0.16,
+          "radius": 0.132,
+          "spinSpeed": 0.28,
+          "color": 11709082
+        },
+        {
+          "index": 4,
+          "position": {
+            "x": -4.163249930525165,
+            "y": -1.9088609210684289
+          },
+          "orbitRadius": 4.58,
+          "baseAngleDeg": 204.6315789473684,
+          "orbitAngularSpeed": 0.16,
+          "radius": 0.156,
+          "spinSpeed": -0.32,
+          "color": 10133674
+        },
+        {
+          "index": 5,
+          "position": {
+            "x": -1.4338388538997568,
+            "y": -4.412902235609513
+          },
+          "orbitRadius": 4.640000000000001,
+          "baseAngleDeg": 252,
+          "orbitAngularSpeed": 0.16,
+          "radius": 0.14,
+          "spinSpeed": 0.32,
+          "color": 11709082
+        },
+        {
+          "index": 6,
+          "position": {
+            "x": -0.7012870536770153,
+            "y": -4.6777234279449456
+          },
+          "orbitRadius": 4.73,
+          "baseAngleDeg": 261.4736842105263,
+          "orbitAngularSpeed": 0.16,
+          "radius": 0.164,
+          "spinSpeed": -0.36000000000000004,
+          "color": 10133674
+        },
+        {
+          "index": 7,
+          "position": {
+            "x": 3.6444888076826696,
+            "y": -3.2453199119155816
+          },
+          "orbitRadius": 4.88,
+          "baseAngleDeg": 318.3157894736842,
+          "orbitAngularSpeed": 0.16,
+          "radius": 0.172,
+          "spinSpeed": -0.4,
+          "color": 10133674
+        },
+        {
+          "index": 8,
+          "position": {
+            "x": 4.478569343686899,
+            "y": 1.213266926025722
+          },
+          "orbitRadius": 4.640000000000001,
+          "baseAngleDeg": 375.1578947368421,
+          "orbitAngularSpeed": 0.16,
+          "radius": 0.18,
+          "spinSpeed": -0.44000000000000006,
+          "color": 10133674
+        },
+        {
+          "index": 9,
+          "position": {
+            "x": 4.299600910782538,
+            "y": 1.9713782001427242
+          },
+          "orbitRadius": 4.73,
+          "baseAngleDeg": 384.63157894736844,
+          "orbitAngularSpeed": 0.16,
+          "radius": 0.204,
+          "spinSpeed": 0.28,
+          "color": 8226191
+        },
+        {
+          "index": 10,
+          "position": {
+            "x": 1.028025096323579,
+            "y": 5.728487095327081
+          },
+          "orbitRadius": 5.82,
+          "baseAngleDeg": 79.82608695652173,
+          "orbitAngularSpeed": -0.13,
+          "radius": 0.132,
+          "spinSpeed": -0.44000000000000006,
+          "color": 10133674
+        },
+        {
+          "index": 11,
+          "position": {
+            "x": 0.2421080475201606,
+            "y": 5.905038839273284
+          },
+          "orbitRadius": 5.91,
+          "baseAngleDeg": 87.65217391304348,
+          "orbitAngularSpeed": -0.13,
+          "radius": 0.156,
+          "spinSpeed": 0.28,
+          "color": 8226191
+        },
+        {
+          "index": 12,
+          "position": {
+            "x": -4.874858377625278,
+            "y": 3.7494340637083683
+          },
+          "orbitRadius": 6.15,
+          "baseAngleDeg": 142.43478260869566,
+          "orbitAngularSpeed": -0.13,
+          "radius": 0.188,
+          "spinSpeed": -0.36000000000000004,
+          "color": 11709082
+        },
+        {
+          "index": 13,
+          "position": {
+            "x": -5.731131361317889,
+            "y": -1.7759879840017394
+          },
+          "orbitRadius": 6,
+          "baseAngleDeg": 197.2173913043478,
+          "orbitAngularSpeed": -0.13,
+          "radius": 0.22,
+          "spinSpeed": 0.44000000000000006,
+          "color": 10133674
+        },
+        {
+          "index": 14,
+          "position": {
+            "x": -5.517459776357916,
+            "y": -2.5779328184172003
+          },
+          "orbitRadius": 6.09,
+          "baseAngleDeg": 205.04347826086956,
+          "orbitAngularSpeed": -0.13,
+          "radius": 0.244,
+          "spinSpeed": -0.28,
+          "color": 8226191
+        },
+        {
+          "index": 15,
+          "position": {
+            "x": -1.0492214900622105,
+            "y": -5.846600231313206
+          },
+          "orbitRadius": 5.94,
+          "baseAngleDeg": 259.82608695652175,
+          "orbitAngularSpeed": -0.13,
+          "radius": 0.14,
+          "spinSpeed": 0.36000000000000004,
+          "color": 11709082
+        },
+        {
+          "index": 16,
+          "position": {
+            "x": -0.24702394696219573,
+            "y": -6.02493810504533
+          },
+          "orbitRadius": 6.03,
+          "baseAngleDeg": 267.6521739130435,
+          "orbitAngularSpeed": -0.13,
+          "radius": 0.164,
+          "spinSpeed": -0.4,
+          "color": 10133674
+        },
+        {
+          "index": 17,
+          "position": {
+            "x": 4.660840204949046,
+            "y": -3.58482476335044
+          },
+          "orbitRadius": 5.88,
+          "baseAngleDeg": 322.4347826086956,
+          "orbitAngularSpeed": -0.13,
+          "radius": 0.196,
+          "spinSpeed": 0.28,
+          "color": 8226191
+        },
+        {
+          "index": 18,
+          "position": {
+            "x": 5.845753988544247,
+            "y": 1.8115077436817733
+          },
+          "orbitRadius": 6.12,
+          "baseAngleDeg": 377.2173913043478,
+          "orbitAngularSpeed": -0.13,
+          "radius": 0.228,
+          "spinSpeed": -0.36000000000000004,
+          "color": 11709082
+        },
+        {
+          "index": 19,
+          "position": {
+            "x": 5.272843333071114,
+            "y": 2.463640230408553
+          },
+          "orbitRadius": 5.82,
+          "baseAngleDeg": 385.04347826086956,
+          "orbitAngularSpeed": -0.13,
+          "radius": 0.116,
+          "spinSpeed": 0.4,
+          "color": 10133674
+        }
+      ]
+    },
+    {
+      "index": 17,
+      "id": "sunward-slot",
+      "name": "Sunward Slot",
+      "worldLevelNumber": 8,
+      "sun": {
+        "x": 0,
+        "y": 0
+      },
+      "sunGravityStrength": 0,
+      "sunCollisionRadius": 0.42,
+      "startPlanetIndex": 0,
+      "startAngleDeg": 140,
+      "startAnchor": {
+        "x": -2.3134542182193134,
+        "y": 1.9412185812533491
+      },
+      "startTimeSeconds": 0,
+      "goalCenter": {
+        "x": 2.735730329965941e-16,
+        "y": 9.05
+      },
+      "goalRadius": 0.56,
+      "goalPullRadius": 2.4,
+      "goalPullStrength": 5.8,
+      "goalOpenSeconds": 12,
+      "goalUnlockRequired": false,
+      "outBoundsX": 20,
+      "outBoundsY": 20,
+      "planets": [
+        {
+          "index": 0,
+          "name": "High Tee",
+          "basePosition": {
+            "x": -1.807864885760788,
+            "y": 1.5169787588602328
+          },
+          "radius": 0.35,
+          "landingRadius": null,
+          "gravity": 4.8,
+          "falloff": 3.1,
+          "landable": true,
+          "orbitCenterIndex": null,
+          "orbitSemiMajor": 2.36,
+          "orbitSemiMinor": 2.36,
+          "orbitEccentricity": 0,
+          "orbitRotation": 2.443460952792061,
+          "orbitPhase": 0,
+          "orbitSpeed": 0,
+          "spinSpeed": -0.05,
+          "core": 7980287,
+          "glow": 10872319
+        },
+        {
+          "index": 1,
+          "name": "Sunward Catch",
+          "basePosition": {
+            "x": -2.206029924450563,
+            "y": 6.061017404069109
+          },
+          "radius": 0.25,
+          "landingRadius": 0.42,
+          "gravity": 4.7,
+          "falloff": 3,
+          "landable": true,
+          "orbitCenterIndex": null,
+          "orbitSemiMajor": 6.201923076923077,
+          "orbitSemiMinor": 6.196959552256872,
+          "orbitEccentricity": 0.04,
+          "orbitRotation": -1.2217304763960306,
+          "orbitPhase": 3.141592653589793,
+          "orbitSpeed": -0.11,
+          "spinSpeed": 0.08,
+          "core": 15836006,
+          "glow": 16765578
+        },
+        {
+          "index": 2,
+          "name": "Rim Catch",
+          "basePosition": {
+            "x": -5.932274015923404,
+            "y": 3.425000000000001
+          },
+          "radius": 0.27,
+          "landingRadius": 0.44,
+          "gravity": 4.8,
+          "falloff": 3.2,
+          "landable": true,
+          "orbitCenterIndex": null,
+          "orbitSemiMajor": 6.650485436893204,
+          "orbitSemiMinor": 6.647492044781768,
+          "orbitEccentricity": 0.03,
+          "orbitRotation": -0.5235987755982991,
+          "orbitPhase": 3.141592653589793,
+          "orbitSpeed": 0.07,
+          "spinSpeed": -0.08,
+          "core": 9405183,
+          "glow": 13222655
+        }
+      ],
+      "launchPresets": [
+        {
+          "angleDeg": 110,
+          "power": 2
+        },
+        {
+          "angleDeg": 150,
+          "power": 1.9
+        }
+      ],
+      "asteroids": [
+        {
+          "index": 0,
+          "position": {
+            "x": 1.089457259885059,
+            "y": 5.125493427845142
+          },
+          "orbitRadius": 5.24,
+          "baseAngleDeg": 78,
+          "orbitAngularSpeed": -0.18,
+          "radius": 0.264,
+          "spinSpeed": 0.4,
+          "color": 11709082
+        },
+        {
+          "index": 1,
+          "position": {
+            "x": 0.17240351371035498,
+            "y": 4.936990685474333
+          },
+          "orbitRadius": 4.94,
+          "baseAngleDeg": 88,
+          "orbitAngularSpeed": -0.18,
+          "radius": 0.152,
+          "spinSpeed": -0.44000000000000006,
+          "color": 10133674
+        },
+        {
+          "index": 2,
+          "position": {
+            "x": -3.715724127386971,
+            "y": 3.3456530317942916
+          },
+          "orbitRadius": 5,
+          "baseAngleDeg": 138,
+          "orbitAngularSpeed": -0.18,
+          "radius": 0.136,
+          "spinSpeed": 0.44000000000000006,
+          "color": 11709082
+        },
+        {
+          "index": 3,
+          "position": {
+            "x": -4.316564809436208,
+            "y": 2.697289054947013
+          },
+          "orbitRadius": 5.09,
+          "baseAngleDeg": 148,
+          "orbitAngularSpeed": -0.18,
+          "radius": 0.16,
+          "spinSpeed": -0.28,
+          "color": 10133674
+        },
+        {
+          "index": 4,
+          "position": {
+            "x": -4.802812366655958,
+            "y": 1.940462153894424
+          },
+          "orbitRadius": 5.18,
+          "baseAngleDeg": 158,
+          "orbitAngularSpeed": -0.18,
+          "radius": 0.184,
+          "spinSpeed": 0.32,
+          "color": 8226191
+        },
+        {
+          "index": 5,
+          "position": {
+            "x": -5.1548378558671555,
+            "y": 1.0956946106095926
+          },
+          "orbitRadius": 5.2700000000000005,
+          "baseAngleDeg": 168,
+          "orbitAngularSpeed": -0.18,
+          "radius": 0.208,
+          "spinSpeed": -0.36000000000000004,
+          "color": 11709082
+        },
+        {
+          "index": 6,
+          "position": {
+            "x": -3.892773122817207,
+            "y": -3.041367688108752
+          },
+          "orbitRadius": 4.94,
+          "baseAngleDeg": 218,
+          "orbitAngularSpeed": -0.18,
+          "radius": 0.192,
+          "spinSpeed": 0.36000000000000004,
+          "color": 8226191
+        },
+        {
+          "index": 7,
+          "position": {
+            "x": -3.365726949985058,
+            "y": -3.7380184721512926
+          },
+          "orbitRadius": 5.03,
+          "baseAngleDeg": 228,
+          "orbitAngularSpeed": -0.18,
+          "radius": 0.216,
+          "spinSpeed": -0.4,
+          "color": 11709082
+        },
+        {
+          "index": 8,
+          "position": {
+            "x": -2.7131866328740095,
+            "y": -4.342006252320901
+          },
+          "orbitRadius": 5.12,
+          "baseAngleDeg": 238,
+          "orbitAngularSpeed": -0.18,
+          "radius": 0.24,
+          "spinSpeed": 0.44000000000000006,
+          "color": 10133674
+        },
+        {
+          "index": 9,
+          "position": {
+            "x": -1.951700351696903,
+            "y": -4.830627882292962
+          },
+          "orbitRadius": 5.21,
+          "baseAngleDeg": 248,
+          "orbitAngularSpeed": -0.18,
+          "radius": 0.264,
+          "spinSpeed": -0.28,
+          "color": 8226191
+        },
+        {
+          "index": 10,
+          "position": {
+            "x": 2.4741151358816444,
+            "y": -4.653133814366545
+          },
+          "orbitRadius": 5.2700000000000005,
+          "baseAngleDeg": 298,
+          "orbitAngularSpeed": -0.18,
+          "radius": 0.248,
+          "spinSpeed": 0.28,
+          "color": 10133674
+        },
+        {
+          "index": 11,
+          "position": {
+            "x": 3.059837532368519,
+            "y": -3.9164134454254094
+          },
+          "orbitRadius": 4.97,
+          "baseAngleDeg": 308,
+          "orbitAngularSpeed": -0.18,
+          "radius": 0.136,
+          "spinSpeed": -0.32,
+          "color": 8226191
+        },
+        {
+          "index": 12,
+          "position": {
+            "x": 3.760312816915614,
+            "y": -3.3858008681758247
+          },
+          "orbitRadius": 5.0600000000000005,
+          "baseAngleDeg": 318,
+          "orbitAngularSpeed": -0.18,
+          "radius": 0.16,
+          "spinSpeed": 0.36000000000000004,
+          "color": 11709082
+        },
+        {
+          "index": 13,
+          "position": {
+            "x": 4.367447695205594,
+            "y": -2.7290842108010063
+          },
+          "orbitRadius": 5.15,
+          "baseAngleDeg": 328,
+          "orbitAngularSpeed": -0.18,
+          "radius": 0.184,
+          "spinSpeed": -0.4,
+          "color": 10133674
+        },
+        {
+          "index": 14,
+          "position": {
+            "x": 4.955004449897751,
+            "y": 1.6099785406934748
+          },
+          "orbitRadius": 5.21,
+          "baseAngleDeg": 378,
+          "orbitAngularSpeed": -0.18,
+          "radius": 0.168,
+          "spinSpeed": 0.4,
+          "color": 11709082
+        },
+        {
+          "index": 15,
+          "position": {
+            "x": 4.6796222421523135,
+            "y": 2.4881992827652186
+          },
+          "orbitRadius": 5.3,
+          "baseAngleDeg": 388,
+          "orbitAngularSpeed": -0.18,
+          "radius": 0.192,
+          "spinSpeed": -0.44000000000000006,
+          "color": 10133674
+        },
+        {
+          "index": 16,
+          "position": {
+            "x": 3.940053768033609,
+            "y": 3.0783073766282922
+          },
+          "orbitRadius": 5,
+          "baseAngleDeg": 398,
+          "orbitAngularSpeed": -0.18,
+          "radius": 0.216,
+          "spinSpeed": 0.28,
+          "color": 8226191
+        },
+        {
+          "index": 17,
+          "position": {
+            "x": 3.405874786366588,
+            "y": 3.7826071616799366
+          },
+          "orbitRadius": 5.09,
+          "baseAngleDeg": 408,
+          "orbitAngularSpeed": -0.18,
+          "radius": 0.24,
+          "spinSpeed": -0.32,
+          "color": 11709082
+        },
+        {
+          "index": 18,
+          "position": {
+            "x": 2.744981788728006,
+            "y": 4.3928891380902835
+          },
+          "orbitRadius": 5.18,
+          "baseAngleDeg": 418,
+          "orbitAngularSpeed": -0.18,
+          "radius": 0.264,
+          "spinSpeed": 0.36000000000000004,
+          "color": 10133674
+        },
+        {
+          "index": 19,
+          "position": {
+            "x": 1.9741767473018585,
+            "y": 4.886258913566969
+          },
+          "orbitRadius": 5.2700000000000005,
+          "baseAngleDeg": 428,
+          "orbitAngularSpeed": -0.18,
+          "radius": 0.152,
+          "spinSpeed": -0.4,
+          "color": 8226191
+        }
+      ]
+    },
+    {
+      "index": 18,
+      "id": "offset-maze",
+      "name": "Offset Maze",
+      "worldLevelNumber": 9,
+      "sun": {
+        "x": 0,
+        "y": 0
+      },
+      "sunGravityStrength": 0,
+      "sunCollisionRadius": 0.42,
+      "startPlanetIndex": 0,
+      "startAngleDeg": 80,
+      "startAnchor": {
+        "x": 0.5122621241174448,
+        "y": 2.905182871386014
+      },
+      "startTimeSeconds": 0,
+      "goalCenter": {
+        "x": 5.847688465928612e-16,
+        "y": 9.55
+      },
+      "goalRadius": 0.56,
+      "goalPullRadius": 2.4,
+      "goalPullStrength": 5.8,
+      "goalOpenSeconds": 12,
+      "goalUnlockRequired": false,
+      "outBoundsX": 20,
+      "outBoundsY": 20,
+      "planets": [
+        {
+          "index": 0,
+          "name": "Maze Tee",
+          "basePosition": {
+            "x": 0.3976543268572706,
+            "y": 2.2552097543979563
+          },
+          "radius": 0.35,
+          "landingRadius": null,
+          "gravity": 4.8,
+          "falloff": 3.1,
+          "landable": true,
+          "orbitCenterIndex": null,
+          "orbitSemiMajor": 2.2899999999999996,
+          "orbitSemiMinor": 2.2899999999999996,
+          "orbitEccentricity": 0,
+          "orbitRotation": 1.3962634015954636,
+          "orbitPhase": 0,
+          "orbitSpeed": 0,
+          "spinSpeed": 0.05,
+          "core": 7914239,
+          "glow": 10871807
+        },
+        {
+          "index": 1,
+          "name": "First Exit",
+          "basePosition": {
+            "x": -2.565151074942515,
+            "y": 7.047694655894313
+          },
+          "radius": 0.24,
+          "landingRadius": 0.41,
+          "gravity": 4.5,
+          "falloff": 3,
+          "landable": true,
+          "orbitCenterIndex": null,
+          "orbitSemiMajor": 7.499999999999999,
+          "orbitSemiMinor": 7.499999999999999,
+          "orbitEccentricity": 0,
+          "orbitRotation": 1.9198621771937625,
+          "orbitPhase": 0,
+          "orbitSpeed": 0.07,
+          "spinSpeed": -0.08,
+          "core": 16164714,
+          "glow": 16766351
+        },
+        {
+          "index": 2,
+          "name": "Second Exit",
+          "basePosition": {
+            "x": -6.512586804718327,
+            "y": 4.7316712809544095
+          },
+          "radius": 0.25,
+          "landingRadius": 0.42,
+          "gravity": 4.6,
+          "falloff": 3,
+          "landable": true,
+          "orbitCenterIndex": null,
+          "orbitSemiMajor": 8.05,
+          "orbitSemiMinor": 8.05,
+          "orbitEccentricity": 0,
+          "orbitRotation": 2.5132741228718345,
+          "orbitPhase": 0,
+          "orbitSpeed": 0.07,
+          "spinSpeed": 0.08,
+          "core": 10456319,
+          "glow": 13945855
+        },
+        {
+          "index": 3,
+          "name": "Outer Exit",
+          "basePosition": {
+            "x": -8.503162205398738,
+            "y": -0.8937183609384355
+          },
+          "radius": 0.22,
+          "landingRadius": 0.38,
+          "gravity": 4,
+          "falloff": 2.8,
+          "landable": true,
+          "orbitCenterIndex": null,
+          "orbitSemiMajor": 8.55,
+          "orbitSemiMinor": 8.55,
+          "orbitEccentricity": 0,
+          "orbitRotation": 3.2463124087094526,
+          "orbitPhase": 0,
+          "orbitSpeed": 0.07,
+          "spinSpeed": -0.08,
+          "core": 12634070,
+          "glow": 16054527
+        }
+      ],
+      "launchPresets": [
+        {
+          "angleDeg": 110,
+          "power": 1.95
+        },
+        {
+          "angleDeg": 144,
+          "power": 1.85
+        }
+      ],
+      "asteroids": [
+        {
+          "index": 0,
+          "position": {
+            "x": -4.0979693958862295,
+            "y": -1.048592785775229
+          },
+          "orbitRadius": 4.23,
+          "baseAngleDeg": 194.35294117647058,
+          "orbitAngularSpeed": 0.17,
+          "radius": 0.21,
+          "spinSpeed": -0.4,
+          "color": 8226191
+        },
+        {
+          "index": 1,
+          "position": {
+            "x": -3.917121968386642,
+            "y": -1.8216902823429566
+          },
+          "orbitRadius": 4.32,
+          "baseAngleDeg": 204.94117647058823,
+          "orbitAngularSpeed": 0.17,
+          "radius": 0.234,
+          "spinSpeed": 0.44000000000000006,
+          "color": 11709082
+        },
+        {
+          "index": 2,
+          "position": {
+            "x": -0.919448327562548,
+            "y": -4.2824075907067085
+          },
+          "orbitRadius": 4.38,
+          "baseAngleDeg": 257.88235294117646,
+          "orbitAngularSpeed": 0.17,
+          "radius": 0.218,
+          "spinSpeed": -0.44000000000000006,
+          "color": 8226191
+        },
+        {
+          "index": 3,
+          "position": {
+            "x": 3.2360250339307868,
+            "y": -2.58219712256312
+          },
+          "orbitRadius": 4.140000000000001,
+          "baseAngleDeg": 321.4117647058823,
+          "orbitAngularSpeed": 0.17,
+          "radius": 0.226,
+          "spinSpeed": -0.28,
+          "color": 8226191
+        },
+        {
+          "index": 4,
+          "position": {
+            "x": 4.068905783149447,
+            "y": 1.0411559575073235
+          },
+          "orbitRadius": 4.2,
+          "baseAngleDeg": 374.3529411764706,
+          "orbitAngularSpeed": 0.17,
+          "radius": 0.21,
+          "spinSpeed": 0.28,
+          "color": 10133674
+        },
+        {
+          "index": 5,
+          "position": {
+            "x": 3.889919732495066,
+            "y": 1.8090396553822463
+          },
+          "orbitRadius": 4.29,
+          "baseAngleDeg": 384.9411764705883,
+          "orbitAngularSpeed": 0.17,
+          "radius": 0.234,
+          "spinSpeed": -0.32,
+          "color": 8226191
+        },
+        {
+          "index": 6,
+          "position": {
+            "x": 0.9131507362778756,
+            "y": 4.253076031866252
+          },
+          "orbitRadius": 4.3500000000000005,
+          "baseAngleDeg": 437.88235294117646,
+          "orbitAngularSpeed": 0.17,
+          "radius": 0.218,
+          "spinSpeed": 0.32,
+          "color": 10133674
+        },
+        {
+          "index": 7,
+          "position": {
+            "x": -3.212575577163174,
+            "y": 2.5634855492112107
+          },
+          "orbitRadius": 4.11,
+          "baseAngleDeg": 501.4117647058824,
+          "orbitAngularSpeed": 0.17,
+          "radius": 0.226,
+          "spinSpeed": 0.36000000000000004,
+          "color": 10133674
+        },
+        {
+          "index": 8,
+          "position": {
+            "x": -4.853487850015502,
+            "y": -2.3672041926610183
+          },
+          "orbitRadius": 5.4,
+          "baseAngleDeg": 206,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.148,
+          "spinSpeed": 0.32,
+          "color": 8226191
+        },
+        {
+          "index": 9,
+          "position": {
+            "x": -0.8960245967613606,
+            "y": -5.081608005542994
+          },
+          "orbitRadius": 5.16,
+          "baseAngleDeg": 260,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.156,
+          "spinSpeed": 0.36000000000000004,
+          "color": 8226191
+        },
+        {
+          "index": 10,
+          "position": {
+            "x": -0.09162513379573838,
+            "y": -5.2492003995710546
+          },
+          "orbitRadius": 5.25,
+          "baseAngleDeg": 269,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.18,
+          "spinSpeed": -0.4,
+          "color": 11709082
+        },
+        {
+          "index": 11,
+          "position": {
+            "x": 4.312631754255381,
+            "y": -3.249801125021061
+          },
+          "orbitRadius": 5.4,
+          "baseAngleDeg": 323,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.188,
+          "spinSpeed": -0.44000000000000006,
+          "color": 11709082
+        },
+        {
+          "index": 12,
+          "position": {
+            "x": 4.718668743070627,
+            "y": 2.301448520642656
+          },
+          "orbitRadius": 5.25,
+          "baseAngleDeg": 386,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.22,
+          "spinSpeed": 0.32,
+          "color": 10133674
+        },
+        {
+          "index": 13,
+          "position": {
+            "x": 0.9377001594014293,
+            "y": 5.317961866265923
+          },
+          "orbitRadius": 5.4,
+          "baseAngleDeg": 440,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.228,
+          "spinSpeed": 0.36000000000000004,
+          "color": 10133674
+        },
+        {
+          "index": 14,
+          "position": {
+            "x": 0.08900727283015099,
+            "y": 5.099223245297595
+          },
+          "orbitRadius": 5.1,
+          "baseAngleDeg": 449,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.116,
+          "spinSpeed": -0.4,
+          "color": 8226191
+        },
+        {
+          "index": 15,
+          "position": {
+            "x": -4.192836427748287,
+            "y": 3.1595288715482543
+          },
+          "orbitRadius": 5.25,
+          "baseAngleDeg": 503,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.124,
+          "spinSpeed": -0.44000000000000006,
+          "color": 8226191
+        },
+        {
+          "index": 16,
+          "position": {
+            "x": -5.465445599796758,
+            "y": 2.906028973644665
+          },
+          "orbitRadius": 6.19,
+          "baseAngleDeg": 152,
+          "orbitAngularSpeed": 0.12,
+          "radius": 0.146,
+          "spinSpeed": -0.32,
+          "color": 11709082
+        },
+        {
+          "index": 17,
+          "position": {
+            "x": -5.851050971736173,
+            "y": -2.6664775502796147
+          },
+          "orbitRadius": 6.43,
+          "baseAngleDeg": 204.5,
+          "orbitAngularSpeed": 0.12,
+          "radius": 0.178,
+          "spinSpeed": 0.4,
+          "color": 10133674
+        },
+        {
+          "index": 18,
+          "position": {
+            "x": -5.198534829438891,
+            "y": -3.2484050897495447
+          },
+          "orbitRadius": 6.13,
+          "baseAngleDeg": 212,
+          "orbitAngularSpeed": 0.12,
+          "radius": 0.202,
+          "spinSpeed": -0.44000000000000006,
+          "color": 8226191
+        },
+        {
+          "index": 19,
+          "position": {
+            "x": -0.6105374435538267,
+            "y": -6.3406737835989295
+          },
+          "orbitRadius": 6.37,
+          "baseAngleDeg": 264.5,
+          "orbitAngularSpeed": 0.12,
+          "radius": 0.234,
+          "spinSpeed": 0.32,
+          "color": 11709082
+        },
+        {
+          "index": 20,
+          "position": {
+            "x": 0.2118399449841801,
+            "y": -6.066302320005912
+          },
+          "orbitRadius": 6.07,
+          "baseAngleDeg": 272,
+          "orbitAngularSpeed": 0.12,
+          "radius": 0.122,
+          "spinSpeed": -0.36000000000000004,
+          "color": 10133674
+        },
+        {
+          "index": 21,
+          "position": {
+            "x": 5.137068920828371,
+            "y": -3.6642356505360336
+          },
+          "orbitRadius": 6.31,
+          "baseAngleDeg": 324.5,
+          "orbitAngularSpeed": 0.12,
+          "radius": 0.154,
+          "spinSpeed": 0.44000000000000006,
+          "color": 8226191
+        },
+        {
+          "index": 22,
+          "position": {
+            "x": 5.650864594297133,
+            "y": -3.0046180018297015
+          },
+          "orbitRadius": 6.4,
+          "baseAngleDeg": 332,
+          "orbitAngularSpeed": 0.12,
+          "radius": 0.178,
+          "spinSpeed": -0.28,
+          "color": 11709082
+        },
+        {
+          "index": 23,
+          "position": {
+            "x": 5.687257942978396,
+            "y": 2.5918327666014926
+          },
+          "orbitRadius": 6.25,
+          "baseAngleDeg": 384.5,
+          "orbitAngularSpeed": 0.12,
+          "radius": 0.21,
+          "spinSpeed": 0.36000000000000004,
+          "color": 10133674
+        },
+        {
+          "index": 24,
+          "position": {
+            "x": 5.376624929631741,
+            "y": 3.359688135238517
+          },
+          "orbitRadius": 6.34,
+          "baseAngleDeg": 392,
+          "orbitAngularSpeed": 0.12,
+          "radius": 0.234,
+          "spinSpeed": -0.4,
+          "color": 8226191
+        },
+        {
+          "index": 25,
+          "position": {
+            "x": 0.5932852081001899,
+            "y": 6.161502467892837
+          },
+          "orbitRadius": 6.19,
+          "baseAngleDeg": 444.5,
+          "orbitAngularSpeed": 0.12,
+          "radius": 0.13,
+          "spinSpeed": 0.28,
+          "color": 11709082
+        },
+        {
+          "index": 26,
+          "position": {
+            "x": -0.2191688392917017,
+            "y": 6.276174393679922
+          },
+          "orbitRadius": 6.28,
+          "baseAngleDeg": 452,
+          "orbitAngularSpeed": 0.12,
+          "radius": 0.154,
+          "spinSpeed": -0.32,
+          "color": 10133674
+        },
+        {
+          "index": 27,
+          "position": {
+            "x": -4.990528127524237,
+            "y": 3.5597091185080605
+          },
+          "orbitRadius": 6.13,
+          "baseAngleDeg": 504.5,
+          "orbitAngularSpeed": 0.12,
+          "radius": 0.186,
+          "spinSpeed": 0.4,
+          "color": 8226191
+        }
+      ]
+    },
+    {
+      "index": 19,
+      "id": "belt-gauntlet",
+      "name": "Belt Gauntlet",
+      "worldLevelNumber": 10,
+      "sun": {
+        "x": 0,
+        "y": 0
+      },
+      "sunGravityStrength": 0,
+      "sunCollisionRadius": 0.42,
+      "startPlanetIndex": 0,
+      "startAngleDeg": 104,
+      "startAnchor": {
+        "x": -0.725765686799003,
+        "y": 2.9108871788279895
+      },
+      "startTimeSeconds": 0,
+      "goalCenter": {
+        "x": 5.878304635907295e-16,
+        "y": 9.6
+      },
+      "goalRadius": 0.56,
+      "goalPullRadius": 2.4,
+      "goalPullStrength": 5.8,
+      "goalOpenSeconds": 12,
+      "goalUnlockRequired": false,
+      "outBoundsX": 20,
+      "outBoundsY": 20,
+      "planets": [
+        {
+          "index": 0,
+          "name": "Gauntlet Tee",
+          "basePosition": {
+            "x": -0.5660972357032223,
+            "y": 2.2704919994858317
+          },
+          "radius": 0.35,
+          "landingRadius": null,
+          "gravity": 4.9,
+          "falloff": 3.2,
+          "landable": true,
+          "orbitCenterIndex": null,
+          "orbitSemiMajor": 2.34,
+          "orbitSemiMinor": 2.34,
+          "orbitEccentricity": 0,
+          "orbitRotation": 1.8151424220741026,
+          "orbitPhase": 0,
+          "orbitSpeed": 0,
+          "spinSpeed": -0.05,
+          "core": 7585023,
+          "glow": 9756159
+        },
+        {
+          "index": 1,
+          "name": "Gate Relay",
+          "basePosition": {
+            "x": 1.2936789236186315,
+            "y": 7.33681775994095
+          },
+          "radius": 0.26,
+          "landingRadius": 0.43,
+          "gravity": 4.8,
+          "falloff": 3.1,
+          "landable": true,
+          "orbitCenterIndex": null,
+          "orbitSemiMajor": 7.449999999999999,
+          "orbitSemiMinor": 7.449999999999999,
+          "orbitEccentricity": 0,
+          "orbitRotation": 1.3962634015954636,
+          "orbitPhase": 0,
+          "orbitSpeed": 0.07,
+          "spinSpeed": 0.08,
+          "core": 15901542,
+          "glow": 16765322
+        },
+        {
+          "index": 2,
+          "name": "Crown Relay",
+          "basePosition": {
+            "x": -2.719060139439066,
+            "y": 7.470556335247972
+          },
+          "radius": 0.25,
+          "landingRadius": 0.42,
+          "gravity": 4.6,
+          "falloff": 3,
+          "landable": true,
+          "orbitCenterIndex": null,
+          "orbitSemiMajor": 7.949999999999999,
+          "orbitSemiMinor": 7.949999999999999,
+          "orbitEccentricity": 0,
+          "orbitRotation": 1.9198621771937625,
+          "orbitPhase": 0,
+          "orbitSpeed": 0.07,
+          "spinSpeed": -0.08,
+          "core": 9404927,
+          "glow": 13156607
+        },
+        {
+          "index": 3,
+          "name": "Far Shepherd",
+          "basePosition": {
+            "x": 6.078421312861601,
+            "y": 5.869863230378527
+          },
+          "radius": 0.2,
+          "landingRadius": 0.36,
+          "gravity": 3.7,
+          "falloff": 2.6,
+          "landable": true,
+          "orbitCenterIndex": null,
+          "orbitSemiMajor": 8.45,
+          "orbitSemiMinor": 8.45,
+          "orbitEccentricity": 0,
+          "orbitRotation": 0.7679448708775051,
+          "orbitPhase": 0,
+          "orbitSpeed": 0.07,
+          "spinSpeed": 0.08,
+          "core": 12634070,
+          "glow": 16054527
+        }
+      ],
+      "launchPresets": [
+        {
+          "angleDeg": 80,
+          "power": 2
+        },
+        {
+          "angleDeg": 110,
+          "power": 1.85
+        }
+      ],
+      "asteroids": [
+        {
+          "index": 0,
+          "position": {
+            "x": -1.450163655424774,
+            "y": 4.743271589576656
+          },
+          "orbitRadius": 4.96,
+          "baseAngleDeg": 107,
+          "orbitAngularSpeed": 0.18,
+          "radius": 0.124,
+          "spinSpeed": -0.28,
+          "color": 10133674
+        },
+        {
+          "index": 1,
+          "position": {
+            "x": -2.2137742912848406,
+            "y": 4.538909933810794
+          },
+          "orbitRadius": 5.050000000000001,
+          "baseAngleDeg": 116,
+          "orbitAngularSpeed": 0.18,
+          "radius": 0.148,
+          "spinSpeed": 0.32,
+          "color": 8226191
+        },
+        {
+          "index": 2,
+          "position": {
+            "x": -2.7244880726674676,
+            "y": 3.890972210372712
+          },
+          "orbitRadius": 4.75,
+          "baseAngleDeg": 125,
+          "orbitAngularSpeed": 0.18,
+          "radius": 0.172,
+          "spinSpeed": -0.36000000000000004,
+          "color": 11709082
+        },
+        {
+          "index": 3,
+          "position": {
+            "x": -3.362146513021547,
+            "y": 3.4816046336390722
+          },
+          "orbitRadius": 4.840000000000001,
+          "baseAngleDeg": 134,
+          "orbitAngularSpeed": 0.18,
+          "radius": 0.196,
+          "spinSpeed": 0.4,
+          "color": 10133674
+        },
+        {
+          "index": 4,
+          "position": {
+            "x": -3.937273064533154,
+            "y": 2.966948064139599
+          },
+          "orbitRadius": 4.930000000000001,
+          "baseAngleDeg": 143,
+          "orbitAngularSpeed": 0.18,
+          "radius": 0.22,
+          "spinSpeed": -0.44000000000000006,
+          "color": 8226191
+        },
+        {
+          "index": 5,
+          "position": {
+            "x": -4.85802816029222,
+            "y": -1.485248259991502
+          },
+          "orbitRadius": 5.08,
+          "baseAngleDeg": 197,
+          "orbitAngularSpeed": 0.18,
+          "radius": 0.228,
+          "spinSpeed": -0.28,
+          "color": 8226191
+        },
+        {
+          "index": 6,
+          "position": {
+            "x": -4.296235541310018,
+            "y": -2.09541408165179
+          },
+          "orbitRadius": 4.78,
+          "baseAngleDeg": 206,
+          "orbitAngularSpeed": 0.18,
+          "radius": 0.116,
+          "spinSpeed": 0.32,
+          "color": 11709082
+        },
+        {
+          "index": 7,
+          "position": {
+            "x": -3.9892704556873912,
+            "y": -2.7933172450295927
+          },
+          "orbitRadius": 4.87,
+          "baseAngleDeg": 215,
+          "orbitAngularSpeed": 0.18,
+          "radius": 0.14,
+          "spinSpeed": -0.36000000000000004,
+          "color": 10133674
+        },
+        {
+          "index": 8,
+          "position": {
+            "x": -3.567925409679711,
+            "y": -3.4455055174766254
+          },
+          "orbitRadius": 4.96,
+          "baseAngleDeg": 224,
+          "orbitAngularSpeed": 0.18,
+          "radius": 0.164,
+          "spinSpeed": 0.4,
+          "color": 8226191
+        },
+        {
+          "index": 9,
+          "position": {
+            "x": -3.039165866917844,
+            "y": -4.03310932573883
+          },
+          "orbitRadius": 5.050000000000001,
+          "baseAngleDeg": 233,
+          "orbitAngularSpeed": 0.18,
+          "radius": 0.188,
+          "spinSpeed": -0.44000000000000006,
+          "color": 11709082
+        },
+        {
+          "index": 10,
+          "position": {
+            "x": 1.4063078997163618,
+            "y": -4.5998258761822015
+          },
+          "orbitRadius": 4.8100000000000005,
+          "baseAngleDeg": 287,
+          "orbitAngularSpeed": 0.18,
+          "radius": 0.196,
+          "spinSpeed": -0.28,
+          "color": 11709082
+        },
+        {
+          "index": 11,
+          "position": {
+            "x": 2.148018619266477,
+            "y": -4.404090826865919
+          },
+          "orbitRadius": 4.9,
+          "baseAngleDeg": 296,
+          "orbitAngularSpeed": 0.18,
+          "radius": 0.22,
+          "spinSpeed": 0.32,
+          "color": 10133674
+        },
+        {
+          "index": 12,
+          "position": {
+            "x": 2.8621464173917217,
+            "y": -4.087568701002067
+          },
+          "orbitRadius": 4.99,
+          "baseAngleDeg": 305,
+          "orbitAngularSpeed": 0.18,
+          "radius": 0.244,
+          "spinSpeed": -0.36000000000000004,
+          "color": 8226191
+        },
+        {
+          "index": 13,
+          "position": {
+            "x": 3.5288645219317027,
+            "y": -3.6542461857203508
+          },
+          "orbitRadius": 5.08,
+          "baseAngleDeg": 314,
+          "orbitAngularSpeed": 0.18,
+          "radius": 0.132,
+          "spinSpeed": 0.4,
+          "color": 11709082
+        },
+        {
+          "index": 14,
+          "position": {
+            "x": 3.81747773802606,
+            "y": -2.876675810666791
+          },
+          "orbitRadius": 4.78,
+          "baseAngleDeg": 323,
+          "orbitAngularSpeed": 0.18,
+          "radius": 0.156,
+          "spinSpeed": -0.44000000000000006,
+          "color": 10133674
+        },
+        {
+          "index": 15,
+          "position": {
+            "x": 4.714582446897765,
+            "y": 1.441392504283092
+          },
+          "orbitRadius": 4.930000000000001,
+          "baseAngleDeg": 377,
+          "orbitAngularSpeed": 0.18,
+          "radius": 0.164,
+          "spinSpeed": -0.28,
+          "color": 10133674
+        },
+        {
+          "index": 16,
+          "position": {
+            "x": 4.5119461124218185,
+            "y": 2.2006231568811683
+          },
+          "orbitRadius": 5.0200000000000005,
+          "baseAngleDeg": 386,
+          "orbitAngularSpeed": 0.18,
+          "radius": 0.188,
+          "spinSpeed": 0.32,
+          "color": 8226191
+        },
+        {
+          "index": 17,
+          "position": {
+            "x": 3.8663976490440417,
+            "y": 2.707280779576937
+          },
+          "orbitRadius": 4.720000000000001,
+          "baseAngleDeg": 395,
+          "orbitAngularSpeed": 0.18,
+          "radius": 0.212,
+          "spinSpeed": -0.36000000000000004,
+          "color": 11709082
+        },
+        {
+          "index": 18,
+          "position": {
+            "x": 3.4600244396289153,
+            "y": 3.341306761907774
+          },
+          "orbitRadius": 4.8100000000000005,
+          "baseAngleDeg": 404,
+          "orbitAngularSpeed": 0.18,
+          "radius": 0.236,
+          "spinSpeed": 0.4,
+          "color": 10133674
+        },
+        {
+          "index": 19,
+          "position": {
+            "x": 2.948893613445037,
+            "y": 3.913313999231735
+          },
+          "orbitRadius": 4.9,
+          "baseAngleDeg": 413,
+          "orbitAngularSpeed": 0.18,
+          "radius": 0.124,
+          "spinSpeed": -0.44000000000000006,
+          "color": 8226191
+        },
+        {
+          "index": 20,
+          "position": {
+            "x": 2.859081817366076,
+            "y": 5.377150840510866
+          },
+          "orbitRadius": 6.090000000000001,
+          "baseAngleDeg": 62,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.156,
+          "spinSpeed": -0.32,
+          "color": 11709082
+        },
+        {
+          "index": 21,
+          "position": {
+            "x": 2.164281616183509,
+            "y": 5.788634129555098
+          },
+          "orbitRadius": 6.180000000000001,
+          "baseAngleDeg": 69.5,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.18,
+          "spinSpeed": 0.36000000000000004,
+          "color": 10133674
+        },
+        {
+          "index": 22,
+          "position": {
+            "x": 1.410443110736034,
+            "y": 6.1093003062034255
+          },
+          "orbitRadius": 6.2700000000000005,
+          "baseAngleDeg": 77,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.204,
+          "spinSpeed": -0.4,
+          "color": 8226191
+        },
+        {
+          "index": 23,
+          "position": {
+            "x": 0.5721991425457376,
+            "y": 5.942515304252058
+          },
+          "orbitRadius": 5.970000000000001,
+          "baseAngleDeg": 84.5,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.228,
+          "spinSpeed": 0.44000000000000006,
+          "color": 11709082
+        },
+        {
+          "index": 24,
+          "position": {
+            "x": -4.541706487055048,
+            "y": 4.2352098159881155
+          },
+          "orbitRadius": 6.21,
+          "baseAngleDeg": 137,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.124,
+          "spinSpeed": -0.32,
+          "color": 10133674
+        },
+        {
+          "index": 25,
+          "position": {
+            "x": -5.128927765644811,
+            "y": 3.6584286209789223
+          },
+          "orbitRadius": 6.300000000000001,
+          "baseAngleDeg": 144.5,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.148,
+          "spinSpeed": 0.36000000000000004,
+          "color": 8226191
+        },
+        {
+          "index": 26,
+          "position": {
+            "x": -5.297685557153561,
+            "y": 2.816829376715346
+          },
+          "orbitRadius": 6,
+          "baseAngleDeg": 152,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.172,
+          "spinSpeed": -0.4,
+          "color": 11709082
+        },
+        {
+          "index": 27,
+          "position": {
+            "x": -5.704333632522742,
+            "y": 2.1327629518701574
+          },
+          "orbitRadius": 6.090000000000001,
+          "baseAngleDeg": 159.5,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.196,
+          "spinSpeed": 0.44000000000000006,
+          "color": 10133674
+        },
+        {
+          "index": 28,
+          "position": {
+            "x": -6.021607000372755,
+            "y": 1.3901975158450859
+          },
+          "orbitRadius": 6.180000000000001,
+          "baseAngleDeg": 167,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.22,
+          "spinSpeed": -0.28,
+          "color": 8226191
+        },
+        {
+          "index": 29,
+          "position": {
+            "x": -6.2411341637622115,
+            "y": 0.6009528683018054
+          },
+          "orbitRadius": 6.2700000000000005,
+          "baseAngleDeg": 174.5,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.244,
+          "spinSpeed": 0.32,
+          "color": 11709082
+        },
+        {
+          "index": 30,
+          "position": {
+            "x": -4.173829963582492,
+            "y": -4.475884653909323
+          },
+          "orbitRadius": 6.12,
+          "baseAngleDeg": 227,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.14,
+          "spinSpeed": -0.4,
+          "color": 10133674
+        },
+        {
+          "index": 31,
+          "position": {
+            "x": -3.6061653549649373,
+            "y": -5.055657368992741
+          },
+          "orbitRadius": 6.21,
+          "baseAngleDeg": 234.5,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.164,
+          "spinSpeed": 0.44000000000000006,
+          "color": 8226191
+        },
+        {
+          "index": 32,
+          "position": {
+            "x": -2.9576708455511147,
+            "y": -5.56256983501124
+          },
+          "orbitRadius": 6.300000000000001,
+          "baseAngleDeg": 242,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.188,
+          "spinSpeed": -0.28,
+          "color": 11709082
+        },
+        {
+          "index": 33,
+          "position": {
+            "x": -2.101244287556806,
+            "y": -5.620033135490385
+          },
+          "orbitRadius": 6,
+          "baseAngleDeg": 249.5,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.212,
+          "spinSpeed": 0.32,
+          "color": 10133674
+        },
+        {
+          "index": 34,
+          "position": {
+            "x": -1.369951920954137,
+            "y": -5.933913694542083
+          },
+          "orbitRadius": 6.090000000000001,
+          "baseAngleDeg": 257,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.236,
+          "spinSpeed": -0.36000000000000004,
+          "color": 8226191
+        },
+        {
+          "index": 35,
+          "position": {
+            "x": -0.5923267505749842,
+            "y": -6.151548505909166
+          },
+          "orbitRadius": 6.180000000000001,
+          "baseAngleDeg": 264.5,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.124,
+          "spinSpeed": 0.4,
+          "color": 11709082
+        },
+        {
+          "index": 36,
+          "position": {
+            "x": 4.410062820763596,
+            "y": -4.1124501111768685
+          },
+          "orbitRadius": 6.03,
+          "baseAngleDeg": 317,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.156,
+          "spinSpeed": -0.28,
+          "color": 10133674
+        },
+        {
+          "index": 37,
+          "position": {
+            "x": 4.982386972340671,
+            "y": -3.5539020889509554
+          },
+          "orbitRadius": 6.12,
+          "baseAngleDeg": 324.5,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.18,
+          "spinSpeed": 0.32,
+          "color": 8226191
+        },
+        {
+          "index": 38,
+          "position": {
+            "x": 5.483104551653937,
+            "y": -2.915418404900382
+          },
+          "orbitRadius": 6.21,
+          "baseAngleDeg": 332,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.204,
+          "spinSpeed": -0.36000000000000004,
+          "color": 11709082
+        },
+        {
+          "index": 39,
+          "position": {
+            "x": 5.901034792264905,
+            "y": -2.2063065019346464
+          },
+          "orbitRadius": 6.300000000000001,
+          "baseAngleDeg": 339.5,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.228,
+          "spinSpeed": 0.4,
+          "color": 10133674
+        },
+        {
+          "index": 40,
+          "position": {
+            "x": 5.84622038871141,
+            "y": -1.3497063260631919
+          },
+          "orbitRadius": 6,
+          "baseAngleDeg": 347,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.116,
+          "spinSpeed": -0.44000000000000006,
+          "color": 8226191
+        },
+        {
+          "index": 41,
+          "position": {
+            "x": 6.061962848056119,
+            "y": -0.5837006328481671
+          },
+          "orbitRadius": 6.090000000000001,
+          "baseAngleDeg": 354.5,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.14,
+          "spinSpeed": 0.28,
+          "color": 11709082
+        },
+        {
+          "index": 42,
+          "position": {
+            "x": 4.317049619195614,
+            "y": 4.629468931249351
+          },
+          "orbitRadius": 6.33,
+          "baseAngleDeg": 407,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.172,
+          "spinSpeed": -0.36000000000000004,
+          "color": 10133674
+        },
+        {
+          "index": 43,
+          "position": {
+            "x": 3.501638822936967,
+            "y": 4.909116575688606
+          },
+          "orbitRadius": 6.03,
+          "baseAngleDeg": 414.5,
+          "orbitAngularSpeed": -0.15,
+          "radius": 0.196,
+          "spinSpeed": 0.4,
+          "color": 8226191
+        }
+      ]
+    }
+  ]
+}

@@ -5,7 +5,11 @@ using Newtonsoft.Json.Linq;
 const double AbsTol = 1e-6;
 
 var repoRoot = FindRepoRoot(AppContext.BaseDirectory);
-var worldPath = Path.Combine(repoRoot, "unity/Assets/StreamingAssets/levels/world-1.json");
+var worldPaths = new[]
+{
+    Path.Combine(repoRoot, "unity/Assets/StreamingAssets/levels/world-1.json"),
+    Path.Combine(repoRoot, "unity/Assets/StreamingAssets/levels/world-2.json"),
+};
 var fixtureDir = Path.Combine(repoRoot, "unity/tests/fixtures");
 var fixtureFiles = Directory.GetFiles(fixtureDir, "level-*.json").OrderBy(path => path).ToList();
 var reverseFixtureDir = Path.Combine(fixtureDir, "reverse");
@@ -15,9 +19,9 @@ var reverseFixtureFiles = Directory.Exists(reverseFixtureDir)
 
 var failures = new List<string>();
 var summaries = new List<LevelSummary>();
-var worldJson = File.ReadAllText(worldPath);
-RunNegativeLoaderTests(worldJson, failures);
-var world = LevelLoader.LoadWorldFromJson(worldJson, worldPath);
+var firstWorldJson = File.ReadAllText(worldPaths[0]);
+RunNegativeLoaderTests(firstWorldJson, failures);
+var levelsByIndex = LoadLevelsByGlobalIndex(worldPaths);
 
 foreach (var fixtureFile in fixtureFiles)
 {
@@ -32,7 +36,7 @@ foreach (var fixtureFile in fixtureFiles)
     var levelSummary = new LevelSummary(fixture.LevelIndex, fixture.LevelId);
     foreach (var shot in fixture.Shots)
     {
-        var result = RunShot(world.Levels[fixture.LevelIndex], shot.Input, fixture.Delta, fixture.MaxTime, null);
+        var result = RunShot(GetLevel(levelsByIndex, fixture.LevelIndex, fixtureFile, failures), shot.Input, fixture.Delta, fixture.MaxTime, null);
         CompareShot($"{fixture.LevelId}/{shot.ShotKind}", shot, result, levelSummary, failures);
         levelSummary.Shots += 1;
     }
@@ -43,7 +47,7 @@ foreach (var fixtureFile in fixtureFiles)
         for (var i = 0; i < sequence.Shots.Count; i += 1)
         {
             var expected = sequence.Shots[i];
-            var result = RunShot(world.Levels[fixture.LevelIndex], expected.Input, fixture.Delta, fixture.MaxTime, chainOptions);
+            var result = RunShot(GetLevel(levelsByIndex, fixture.LevelIndex, fixtureFile, failures), expected.Input, fixture.Delta, fixture.MaxTime, chainOptions);
             CompareShot($"{fixture.LevelId}/{sequence.Label}/shot{i}", expected, result, levelSummary, failures);
 
             if (result.Outcome != "landed")
@@ -92,7 +96,7 @@ foreach (var reverseFixtureFile in reverseFixtureFiles)
 
     foreach (var sequence in fixture.Sequences)
     {
-        RunReverseSequence(world.Levels[fixture.LevelIndex], fixture, sequence, levelSummary, failures);
+        RunReverseSequence(GetLevel(levelsByIndex, fixture.LevelIndex, reverseFixtureFile, failures), fixture, sequence, levelSummary, failures);
     }
 }
 
@@ -117,6 +121,32 @@ if (failures.Count > 0)
 
 Console.WriteLine();
 Console.WriteLine("ALL fixtures passed.");
+
+static Dictionary<int, LevelRuntime> LoadLevelsByGlobalIndex(IEnumerable<string> worldPaths)
+{
+    var levels = new Dictionary<int, LevelRuntime>();
+    foreach (var worldPath in worldPaths)
+    {
+        var world = LevelLoader.LoadWorldFromJson(File.ReadAllText(worldPath), worldPath);
+        foreach (var level in world.Levels)
+        {
+            levels.Add(level.Index, level);
+        }
+    }
+
+    return levels;
+}
+
+static LevelRuntime GetLevel(Dictionary<int, LevelRuntime> levelsByIndex, int levelIndex, string sourceFile, List<string> failures)
+{
+    if (levelsByIndex.TryGetValue(levelIndex, out var level))
+    {
+        return level;
+    }
+
+    failures.Add($"{Path.GetFileName(sourceFile)}: levelIndex {levelIndex} not found in loaded worlds");
+    return levelsByIndex.Values.First();
+}
 
 static void RunNegativeLoaderTests(string worldJson, List<string> failures)
 {
@@ -175,6 +205,11 @@ static void CompareShot(string label, FixtureShot expected, SimulateShotResult a
     if (actual.Reason != expected.Reason)
     {
         failures.Add($"{label}: reason expected {expected.Reason}, got {actual.Reason}");
+    }
+
+    if (expected.Outcome == "crash" && expected.Reason == "asteroid")
+    {
+        summary.AsteroidCrashes += 1;
     }
 
     if (actual.LandingCount != expected.LandingCount)
@@ -262,11 +297,11 @@ static void RunReverseSequence(LevelRuntime sourceLevel, ReverseFixtureFile fixt
 
 static void PrintSummary(IEnumerable<LevelSummary> summaries)
 {
-    Console.WriteLine("Level | Shots | Seq | RevSeq | RevFrames | Fwd Max |dPos| | Fwd Max |dVel| | Rev Max |dPos| | Rev Max |dVel|");
-    Console.WriteLine("----- | ----- | --- | ------ | --------- | -------------- | -------------- | -------------- | --------------");
+    Console.WriteLine("Level | Shots | AstCrash | Seq | RevSeq | RevFrames | Fwd Max |dPos| | Fwd Max |dVel| | Rev Max |dPos| | Rev Max |dVel|");
+    Console.WriteLine("----- | ----- | -------- | --- | ------ | --------- | -------------- | -------------- | -------------- | --------------");
     foreach (var s in summaries.OrderBy(summary => summary.LevelIndex))
     {
-        Console.WriteLine($"{s.LevelIndex:00} {s.LevelId,-15} {s.Shots,5} {s.Sequences,3} {s.ReverseSequences,6} {s.ReverseFrames,9} {s.MaxPositionDelta,16:G6} {s.MaxVelocityDelta,16:G6} {s.ReverseMaxPositionDelta,16:G6} {s.ReverseMaxVelocityDelta,16:G6}");
+        Console.WriteLine($"{s.LevelIndex:00} {s.LevelId,-15} {s.Shots,5} {s.AsteroidCrashes,8} {s.Sequences,3} {s.ReverseSequences,6} {s.ReverseFrames,9} {s.MaxPositionDelta,16:G6} {s.MaxVelocityDelta,16:G6} {s.ReverseMaxPositionDelta,16:G6} {s.ReverseMaxVelocityDelta,16:G6}");
     }
 }
 
@@ -288,6 +323,7 @@ static string FindRepoRoot(string start)
 sealed record LevelSummary(int LevelIndex, string LevelId)
 {
     public int Shots { get; set; }
+    public int AsteroidCrashes { get; set; }
     public int Sequences { get; set; }
     public int ReverseSequences { get; set; }
     public int ReverseFrames { get; set; }

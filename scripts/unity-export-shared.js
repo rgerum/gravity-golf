@@ -12,11 +12,8 @@ import {
   simulateShot,
 } from '../src/game-core.js';
 
-export const UNITY_LEVEL_COUNT = 10;
-export const WORLD_INDEX = 0;
-export const WORLD_NUMBER = WORLD_INDEX + 1;
-export const WORLD_DEFINITION = WORLD_DEFINITIONS[WORLD_INDEX];
-export const WORLD_FILE_PATH = 'unity/Assets/StreamingAssets/levels/world-1.json';
+export const UNITY_LEVEL_COUNT = WORLD_SIZE;
+export const UNITY_WORLD_INDICES = [0, 1];
 export const FIXTURE_DIR = 'unity/tests/fixtures';
 export const REVERSE_FIXTURE_DIR = 'unity/tests/fixtures/reverse';
 export const FIXTURE_SAMPLE_EVERY_N_FRAMES = 15;
@@ -42,7 +39,6 @@ const LEVEL_OUT_OF_SCOPE_KEYS = [
   'extraSuns',
   'portals',
   'dustClouds',
-  'asteroids',
   'meteorImpacts',
   'pulsarJets',
   'redGiant',
@@ -62,9 +58,17 @@ const PLANET_OUT_OF_SCOPE_KEYS = [
   'fallIntoSunRadius',
 ];
 
-export function createUnityLevels() {
-  return Array.from({ length: UNITY_LEVEL_COUNT }, (_, index) => {
-    return createUnityLevel(index);
+export function worldFilePath(worldIndex) {
+  return `unity/Assets/StreamingAssets/levels/world-${worldIndex + 1}.json`;
+}
+
+export function globalLevelIndex(worldIndex, levelInWorld) {
+  return worldIndex * WORLD_SIZE + levelInWorld;
+}
+
+export function createUnityLevels(worldIndex = 0) {
+  return Array.from({ length: UNITY_LEVEL_COUNT }, (_, levelInWorld) => {
+    return createUnityLevel(globalLevelIndex(worldIndex, levelInWorld));
   });
 }
 
@@ -113,20 +117,25 @@ export function rotateRuntimeAboutSun(runtime, degrees = UNITY_EXPORT_ROTATION_D
   return runtime;
 }
 
-export function buildWorldExport(levels) {
+export function buildWorldExport(levels, worldIndex = 0) {
+  const worldDefinition = WORLD_DEFINITIONS[worldIndex];
+  if (!worldDefinition) {
+    throw new Error(`World ${worldIndex}: no world definition`);
+  }
+
   return {
     schemaVersion: 1,
     generatedFrom: 'game-core.js',
-    worldId: WORLD_DEFINITION.id,
-    worldName: WORLD_DEFINITION.name,
-    worldNumber: WORLD_NUMBER,
+    worldId: worldDefinition.id,
+    worldName: worldDefinition.name,
+    worldNumber: worldIndex + 1,
     worldSize: WORLD_SIZE,
-    levels: levels.map((level, index) => serializeLevel(level, index)),
+    levels: levels.map((level, levelInWorld) => serializeLevel(level, globalLevelIndex(worldIndex, levelInWorld))),
   };
 }
 
 export function serializeLevel(level, index) {
-  return {
+  const serialized = {
     index,
     id: level.id,
     name: level.name,
@@ -149,6 +158,12 @@ export function serializeLevel(level, index) {
     planets: level.planets.map(serializePlanet),
     launchPresets: level.launchPresets.map(serializeLaunchPreset),
   };
+
+  if (Array.isArray(level.asteroids) && level.asteroids.length > 0) {
+    serialized.asteroids = level.asteroids.map(serializeAsteroid);
+  }
+
+  return serialized;
 }
 
 function serializePlanet(planet) {
@@ -188,6 +203,26 @@ function serializeLaunchPreset(preset) {
   };
 }
 
+function serializeAsteroid(asteroid) {
+  const serialized = {
+    index: asteroid.index,
+    position: serializeVec2(asteroid.position),
+    orbitRadius: asteroid.orbitRadius,
+    baseAngleDeg: asteroid.baseAngleDeg,
+    orbitAngularSpeed: asteroid.orbitAngularSpeed,
+    radius: asteroid.radius,
+  };
+
+  if (asteroid.spinSpeed !== undefined) {
+    serialized.spinSpeed = asteroid.spinSpeed;
+  }
+  if (asteroid.color !== undefined) {
+    serialized.color = asteroid.color;
+  }
+
+  return serialized;
+}
+
 export function buildFixtureExport(level, levelIndex) {
   let coveragePowerGrid = DEFAULT_COVERAGE_POWER_GRID;
   let shots = buildFixtureShots(level, levelIndex, coveragePowerGrid);
@@ -197,6 +232,10 @@ export function buildFixtureExport(level, levelIndex) {
     coveragePowerGrid = WIDE_COVERAGE_POWER_GRID;
     shots = buildFixtureShots(level, levelIndex, coveragePowerGrid);
     serializedShots = shots.map((shot) => serializeShotFixture(levelIndex, shot));
+  }
+
+  if ((level.asteroids?.length ?? 0) > 0 && !serializedShots.some((shot) => shot.outcome === 'crash' && shot.reason === 'asteroid')) {
+    throw new Error(`Level ${levelIndex} (${level.id}): fixture selection did not keep an asteroid crash`);
   }
 
   return {
@@ -806,6 +845,11 @@ function validateRuntimeLevel(level, index) {
 
   level.planets.forEach((planet, planetIndex) => validateRuntimePlanet(planet, index, planetIndex));
 
+  if (!Array.isArray(level.asteroids)) {
+    throw new Error(`Level ${index} (${level.id}): asteroids must be an array`);
+  }
+  level.asteroids.forEach((asteroid, asteroidIndex) => validateRuntimeAsteroid(asteroid, index, asteroidIndex));
+
   if (!Array.isArray(level.launchPresets) || level.launchPresets.length === 0) {
     throw new Error(`Level ${index} (${level.id}): launchPresets must be a non-empty array`);
   }
@@ -813,6 +857,22 @@ function validateRuntimeLevel(level, index) {
     assertFiniteNumber(preset.angleDeg, `level ${index}.launchPresets[${presetIndex}].angleDeg`);
     assertFiniteNumber(preset.power, `level ${index}.launchPresets[${presetIndex}].power`);
   });
+}
+
+function validateRuntimeAsteroid(asteroid, levelIndex, asteroidIndex) {
+  const prefix = `level ${levelIndex}.asteroids[${asteroidIndex}]`;
+
+  assertInteger(asteroid.index, `${prefix}.index`);
+  if (asteroid.index !== asteroidIndex) {
+    throw new Error(`${prefix}.index must equal its array index`);
+  }
+  assertVec2(asteroid.position, `${prefix}.position`);
+  assertFiniteNumber(asteroid.orbitRadius, `${prefix}.orbitRadius`);
+  assertFiniteNumber(asteroid.baseAngleDeg, `${prefix}.baseAngleDeg`);
+  assertFiniteNumber(asteroid.orbitAngularSpeed, `${prefix}.orbitAngularSpeed`);
+  assertFiniteNumber(asteroid.radius, `${prefix}.radius`);
+  assertOptionalFiniteNumber(asteroid.spinSpeed, `${prefix}.spinSpeed`);
+  assertOptionalInteger(asteroid.color, `${prefix}.color`);
 }
 
 function validateRuntimePlanet(planet, levelIndex, planetIndex) {

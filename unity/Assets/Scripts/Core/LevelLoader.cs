@@ -11,7 +11,7 @@ namespace GravityGolf.Core
     {
         private static readonly HashSet<string> LevelMechanicKeys = new HashSet<string>
         {
-            "binarySystem", "extraSuns", "portals", "dustClouds", "asteroids",
+            "binarySystem", "extraSuns", "portals", "dustClouds",
             "meteorImpacts", "pulsarJets", "redGiant"
         };
 
@@ -45,7 +45,8 @@ namespace GravityGolf.Core
 
             for (var i = 0; i < levelsToken.Count; i += 1)
             {
-                ValidateLevelTokens((JObject)levelsToken[i]!, i);
+                var expectedGlobalIndex = ExpectedGlobalLevelIndex(root, i);
+                ValidateLevelTokens((JObject)levelsToken[i]!, expectedGlobalIndex);
             }
 
             var world = root.ToObject<WorldDefinition>() ?? throw new InvalidDataException($"Could not parse world file {sourceName}");
@@ -56,7 +57,8 @@ namespace GravityGolf.Core
 
             for (var i = 0; i < world.Levels.Count; i += 1)
             {
-                ValidateLevel(world.Levels[i], (JObject)root["levels"]![i]!, i);
+                var expectedGlobalIndex = (world.WorldNumber - 1) * world.WorldSize + i;
+                ValidateLevel(world.Levels[i], (JObject)root["levels"]![i]!, expectedGlobalIndex);
             }
 
             return world;
@@ -101,6 +103,28 @@ namespace GravityGolf.Core
                 RequiredNumber(preset, "angleDeg", presetLabel);
                 RequiredNumber(preset, "power", presetLabel);
             }
+
+            if (source.TryGetValue("asteroids", out var asteroidsToken))
+            {
+                if (asteroidsToken is not JArray asteroids)
+                {
+                    throw new InvalidDataException($"asteroids: not an array on {label}");
+                }
+
+                for (var i = 0; i < asteroids.Count; i += 1)
+                {
+                    var asteroid = asteroids[i] as JObject
+                        ?? throw new InvalidDataException($"asteroids[{i}]: missing object on level {levelId}");
+                    ValidateAsteroidTokens(asteroid, levelId, i);
+                }
+            }
+        }
+
+        private static int ExpectedGlobalLevelIndex(JObject root, int worldLevelIndex)
+        {
+            var worldNumber = (int?)root["worldNumber"] ?? 1;
+            var worldSize = (int?)root["worldSize"] ?? 10;
+            return (worldNumber - 1) * worldSize + worldLevelIndex;
         }
 
         private static void ValidatePlanetTokens(JObject source, string levelId, int expectedIndex)
@@ -122,6 +146,22 @@ namespace GravityGolf.Core
             RequiredNumber(source, "orbitPhase", label);
             RequiredNumber(source, "orbitSpeed", label);
             RequiredNumber(source, "spinSpeed", label);
+        }
+
+        private static void ValidateAsteroidTokens(JObject source, string levelId, int expectedIndex)
+        {
+            var label = $"level {levelId} asteroids[{expectedIndex}]";
+            RequiredInteger(source, "index", label);
+            RequiredVec(source, "position", label);
+            RequiredNumber(source, "orbitRadius", label);
+            RequiredNumber(source, "baseAngleDeg", label);
+            RequiredNumber(source, "orbitAngularSpeed", label);
+            RequiredNumber(source, "radius", label);
+            OptionalNumberOrNull(source, "spinSpeed", label);
+            if (source.TryGetValue("color", out var color) && color.Type != JTokenType.Null && color.Type != JTokenType.Integer)
+            {
+                throw new InvalidDataException($"color: not an integer on {label}");
+            }
         }
 
         private static void ValidateLevel(LevelRuntime level, JObject source, int expectedIndex)
@@ -166,6 +206,7 @@ namespace GravityGolf.Core
             level.SystemCenter = level.Sun;
             level.Time = level.StartTimeSeconds;
             level.GoalUnlocked = true;
+            level.Asteroids ??= new List<AsteroidRuntime>();
 
             var planetSources = (JArray?)source["planets"] ?? throw new InvalidDataException($"planets: missing on {label}");
             for (var i = 0; i < level.Planets.Count; i += 1)
@@ -177,6 +218,11 @@ namespace GravityGolf.Core
             {
                 RequireFinite(level.LaunchPresets[i].AngleDeg, $"launchPresets[{i}].angleDeg", label);
                 RequireFinite(level.LaunchPresets[i].Power, $"launchPresets[{i}].power", label);
+            }
+
+            for (var i = 0; i < level.Asteroids.Count; i += 1)
+            {
+                ValidateAsteroid(level.Asteroids[i], label, i);
             }
 
             Orbits.SetLevelTime(level, level.Time);
@@ -228,6 +274,23 @@ namespace GravityGolf.Core
             planet.Active = true;
             planet.OrbitCenter = new Vec2(0, 0);
             planet.Position = planet.BasePosition;
+        }
+
+        private static void ValidateAsteroid(AsteroidRuntime asteroid, string levelLabel, int expectedIndex)
+        {
+            var label = $"{levelLabel} asteroid {expectedIndex}";
+            if (asteroid.Index != expectedIndex)
+            {
+                throw new InvalidDataException($"asteroid.index: {label} expected {expectedIndex}, got {asteroid.Index}");
+            }
+
+            RequireFinite(asteroid.Position.X, "asteroid.position.x", label);
+            RequireFinite(asteroid.Position.Y, "asteroid.position.y", label);
+            RequireFinite(asteroid.OrbitRadius, "asteroid.orbitRadius", label);
+            RequireFinite(asteroid.BaseAngleDeg, "asteroid.baseAngleDeg", label);
+            RequireFinite(asteroid.OrbitAngularSpeed, "asteroid.orbitAngularSpeed", label);
+            RequireFinite(asteroid.Radius, "asteroid.radius", label);
+            RequireFinite(asteroid.SpinSpeed, "asteroid.spinSpeed", label);
         }
 
         private static bool IsPresentMechanic(JToken token) => token.Type switch

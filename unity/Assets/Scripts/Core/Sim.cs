@@ -139,6 +139,12 @@ namespace GravityGolf.Core
                 return planetContact;
             }
 
+            var asteroidContact = ResolveAsteroidContact(level, ball);
+            if (asteroidContact is not null)
+            {
+                return asteroidContact;
+            }
+
             var friction = Math.Pow(Constants.BallFrictionBase, delta * 60);
             ball.Velocity = new Vec2(ball.Velocity.X * friction, ball.Velocity.Y * friction);
 
@@ -415,6 +421,21 @@ namespace GravityGolf.Core
                 {
                     ball.Velocity = new Vec2(0, 0);
                     return new StepResult { Type = "crash", Reason = "planet", PlanetIndex = index, PlanetName = planet.Name };
+                }
+            }
+
+            return null;
+        }
+
+        private static StepResult? ResolveAsteroidContact(LevelRuntime level, BallState ball)
+        {
+            foreach (var asteroid in level.Asteroids)
+            {
+                var touchRadius = asteroid.Radius + Constants.BallRadius * Constants.PlanetCollisionPadding;
+                if (VecMath.Distance(ball.Position, asteroid.Position) <= touchRadius)
+                {
+                    ball.Velocity = new Vec2(0, 0);
+                    return new StepResult { Type = "crash", Reason = "asteroid", AsteroidIndex = asteroid.Index };
                 }
             }
 
