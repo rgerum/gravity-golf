@@ -52,10 +52,15 @@ namespace GravityGolf.Game
         private Text _streakLine;
         private GameObject _titleScreen;
         private Text _titleStats;
-        private WorldDefinition _world;
+        private Campaign _campaign;
 
-        private readonly Pill[] _levelPills = new Pill[10];
-        private readonly Outline[] _levelOutlines = new Outline[10];
+        // The level grid spans every world (world 1 → tiles 0-9, world 2 → 10-19, …); it is
+        // built lazily once the campaign is known (the panel is constructed before load).
+        private RectTransform _settingsCardRect;
+        private Transform _settingsCardTransform;
+        private bool _levelGridBuilt;
+        private Pill[] _levelPills = new Pill[0];
+        private Outline[] _levelOutlines = new Outline[0];
         private int _activeLevelIndex;
 
         // ---- Web palette (src/style.css :root). ----
@@ -227,9 +232,8 @@ namespace GravityGolf.Game
                 }
 
                 var active = i == levelIndex;
-                var done = _world != null
-                    && i < _world.Levels.Count
-                    && SaveStore.Instance.IsCompleted(_world.Levels[i].Id);
+                var level = _campaign != null ? _campaign.LevelAt(i) : null;
+                var done = level != null && SaveStore.Instance.IsCompleted(level.Id);
                 pill.Fill.color = active ? ActiveTileFill : TileFill;
                 pill.Border.color = active ? ActiveTileBorder : (done ? DoneTileBorder : LineBorder);
                 pill.Label.color = active ? AccentTeal : (done ? DoneTileLabel : MutedColor);
@@ -281,14 +285,16 @@ namespace GravityGolf.Game
             }
         }
 
-        public void OnLevelLoaded(WorldDefinition world, LevelRuntime level, int levelIndex, int par)
+        public void OnLevelLoaded(Campaign campaign, WorldDefinition world, LevelRuntime level, int levelIndex, int par)
         {
-            _world = world;
+            _campaign = campaign;
+            EnsureLevelGrid();
             _banner.SetActive(false);
             _bannerTimer = 0f;
             _kicker.text = $"WORLD {world.WorldNumber} · {world.WorldName}".ToUpperInvariant();
             _levelName.text = level.Name;
-            _levelLabel.text = $"Level {levelIndex + 1} / {world.Levels.Count}";
+            // "Level k / 10" is the hole's position WITHIN its world, not the global index.
+            _levelLabel.text = $"Level {level.WorldLevelNumber} / {world.Levels.Count}";
             _parPill.text = $"PAR {par}";
 
             SelectSpeed(2); // each level starts at 1x
@@ -503,13 +509,13 @@ namespace GravityGolf.Game
         private void OnTitlePlay()
         {
             _titleScreen.SetActive(false);
-            if (_world != null)
+            if (_campaign != null)
             {
-                // Resume at the first hole without a recorded completion.
+                // Resume at the first hole without a recorded completion, across ALL worlds.
                 var target = 0;
-                for (var i = 0; i < _world.Levels.Count; i += 1)
+                for (var i = 0; i < _campaign.LevelCount; i += 1)
                 {
-                    if (!SaveStore.Instance.IsCompleted(_world.Levels[i].Id))
+                    if (!SaveStore.Instance.IsCompleted(_campaign.LevelAt(i).Id))
                     {
                         target = i;
                         break;
@@ -542,6 +548,8 @@ namespace GravityGolf.Game
             card.rectTransform.sizeDelta = new Vector2(500f, 600f);
             // The card must eat clicks so the close-catcher behind it doesn't fire.
             card.raycastTarget = true;
+            _settingsCardTransform = card.transform;
+            _settingsCardRect = card.rectTransform;
 
             var kicker = MakeText(card.transform, "SettingsKicker", 15, TextAnchor.MiddleCenter, AccentBlue, FontLibrary.MonoSemiBold);
             Anchor(kicker.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
@@ -553,7 +561,8 @@ namespace GravityGolf.Game
             _hapticsPill = BuildToggleRow(card.transform, "Haptics", -140f, out _hapticsValue, ToggleHaptics);
             _motionPill = BuildToggleRow(card.transform, "Reduced motion", -210f, out _motionValue, ToggleMotion);
 
-            BuildLevelGrid(card.transform, -276f);
+            // The level grid is built lazily by EnsureLevelGrid once the campaign is loaded
+            // (its world count decides the tile count and the card's height).
 
             _streakLine = MakeText(card.transform, "StreakLine", 14, TextAnchor.MiddleCenter, MutedColor, FontLibrary.MonoSemiBold);
             Anchor(_streakLine.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
@@ -587,26 +596,66 @@ namespace GravityGolf.Game
             return pill;
         }
 
-        // Compact level picker inside the settings card: two rows of five tiles reusing the
-        // old play-strip tile look (completed = teal border/label, active = teal fill + glow
-        // via HighlightLevel). Tapping a tile loads that hole and closes the menu. `top` is
-        // the header's offset from the card top; the grid stacks just below it.
-        private void BuildLevelGrid(Transform card, float top)
+        // Level picker inside the settings card, once per campaign world: a small mono world
+        // header ("STARTER BELT", "ASTEROID BELTS", …) over two rows of five tiles each. The
+        // card grows to fit however many worlds loaded, and the tile array is sized to the
+        // total level count. Idempotent — safe to call from both OnLevelLoaded and ShowTitle.
+        private void EnsureLevelGrid()
+        {
+            if (_levelGridBuilt || _campaign == null || _settingsCardTransform == null)
+            {
+                return;
+            }
+
+            _levelGridBuilt = true;
+
+            var total = _campaign.LevelCount;
+            _levelPills = new Pill[total];
+            _levelOutlines = new Outline[total];
+
+            // Grow the card vertically so the (bottom-anchored) streak line and Close button
+            // never collide with the (top-anchored) world sections.
+            _settingsCardRect.sizeDelta = new Vector2(500f, CardHeight(_campaign.WorldCount));
+
+            // First world section sits below the three toggle rows; each further world stacks
+            // one section-height lower.
+            var top = FirstSectionTop;
+            for (var w = 0; w < _campaign.WorldCount; w += 1)
+            {
+                var world = _campaign.Worlds[w];
+                var startIndex = _campaign.WorldStartIndex(w);
+                BuildWorldSection(_settingsCardTransform, top, world, startIndex);
+                top -= SectionHeight;
+            }
+        }
+
+        private const float FirstSectionTop = -262f;
+        private const float SectionHeight = 160f;
+        private const float SectionBaseCardHeight = 600f;
+
+        // The card needs room for one full world section beyond the first; each extra world
+        // adds a section's height. Keeps the bottom controls clear of the tiles.
+        private static float CardHeight(int worldCount) =>
+            SectionBaseCardHeight + Mathf.Max(0, worldCount - 1) * SectionHeight;
+
+        // One world's picker block: a centered mono header plus two rows of five tiles. Global
+        // indices run startIndex..startIndex+9; tile labels show the 1-10 within-world number.
+        private void BuildWorldSection(Transform card, float top, WorldDefinition world, int startIndex)
         {
             const float tile = 46f;
             const float radius = 13f;
             const float sideMargin = 40f;
             const float rowGap = 10f;
 
-            var header = MakeText(card, "LevelsHeader", 15, TextAnchor.MiddleCenter, AccentBlue, FontLibrary.MonoSemiBold);
+            var header = MakeText(card, $"WorldHeader{startIndex}", 14, TextAnchor.MiddleCenter, AccentBlue, FontLibrary.MonoSemiBold);
             Anchor(header.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
             header.rectTransform.anchoredPosition = new Vector2(0f, top);
             header.rectTransform.sizeDelta = new Vector2(500f, 20f);
-            header.text = "LEVELS";
+            header.text = world.WorldName.ToUpperInvariant();
 
             for (var row = 0; row < 2; row += 1)
             {
-                var rowGo = new GameObject($"LevelRow{row}", typeof(RectTransform));
+                var rowGo = new GameObject($"LevelRow{startIndex}_{row}", typeof(RectTransform));
                 rowGo.transform.SetParent(card, false);
                 var rowRect = (RectTransform)rowGo.transform;
                 rowRect.anchorMin = new Vector2(0f, 1f);
@@ -618,20 +667,21 @@ namespace GravityGolf.Game
 
                 for (var col = 0; col < 5; col += 1)
                 {
-                    var index = row * 5 + col;
-                    var pill = MakePill(rowGo.transform, $"Level{index + 1}", (index + 1).ToString(), () => OnLevelTile(index), TileFill, LineBorder, MutedColor, 18);
+                    var local = row * 5 + col;
+                    var global = startIndex + local;
+                    var pill = MakePill(rowGo.transform, $"Level{global + 1}", (local + 1).ToString(), () => OnLevelTile(global), TileFill, LineBorder, MutedColor, 18);
                     var slot = (col + 0.5f) / 5f;
                     Anchor(pill.Rect, new Vector2(slot, 0.5f), new Vector2(slot, 0.5f), new Vector2(0.5f, 0.5f));
                     pill.Rect.anchoredPosition = Vector2.zero;
                     pill.Rect.sizeDelta = new Vector2(tile, tile);
                     SetCorner(pill, radius);
-                    _levelPills[index] = pill;
+                    _levelPills[global] = pill;
 
                     var outline = pill.Fill.gameObject.AddComponent<Outline>();
                     outline.effectColor = ActiveTileGlow;
                     outline.effectDistance = new Vector2(2f, -2f);
                     outline.enabled = false;
-                    _levelOutlines[index] = outline;
+                    _levelOutlines[global] = outline;
                 }
             }
         }
@@ -703,21 +753,23 @@ namespace GravityGolf.Game
         /// <summary>Tour hook: open/close the settings panel for a capture.</summary>
         public void SetSettingsVisible(bool open) => SetSettingsOpen(open);
 
-        /// <summary>Shows the boot title screen with saved-progress stats.</summary>
-        public void ShowTitle(WorldDefinition world)
+        /// <summary>Shows the boot title screen with saved-progress stats (across all worlds).</summary>
+        public void ShowTitle(Campaign campaign)
         {
-            _world = world;
+            _campaign = campaign;
+            EnsureLevelGrid();
+            var total = campaign.LevelCount;
             var done = 0;
-            for (var i = 0; i < world.Levels.Count; i += 1)
+            for (var i = 0; i < total; i += 1)
             {
-                if (SaveStore.Instance.IsCompleted(world.Levels[i].Id))
+                if (SaveStore.Instance.IsCompleted(campaign.LevelAt(i).Id))
                 {
                     done += 1;
                 }
             }
 
             _titleStats.text = done > 0
-                ? $"{done} / {world.Levels.Count} HOLES · BEST STREAK {SaveStore.Instance.BestParStreak}"
+                ? $"{done} / {total} HOLES · BEST STREAK {SaveStore.Instance.BestParStreak}"
                 : "DRAG ANYWHERE · RELEASE TO LAUNCH";
             _titleScreen.SetActive(true);
         }

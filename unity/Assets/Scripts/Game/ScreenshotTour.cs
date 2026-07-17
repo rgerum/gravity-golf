@@ -92,7 +92,7 @@ namespace GravityGolf.Game
             yield return Capture("settings.png");
             _controller.SetSettingsVisible(false);
 
-            var levelCount = _controller.World.Levels.Count;
+            var levelCount = _controller.Campaign.LevelCount;
             var settle = _quick ? QuickSettleSeconds : SettleSeconds;
             for (var i = 0; i < levelCount; i++)
             {

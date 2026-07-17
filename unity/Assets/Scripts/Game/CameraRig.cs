@@ -79,6 +79,13 @@ namespace GravityGolf.Game
                 }
             }
 
+            // Asteroids orbit the system center on a fixed-radius ring; include the full ring
+            // reach (plus the rock radius) so a belt never clips off the fitted view.
+            foreach (var asteroid in level.Asteroids)
+            {
+                Include(level.SystemCenter, asteroid.OrbitRadius + asteroid.Radius);
+            }
+
             if (double.IsInfinity(minX))
             {
                 // No content (shouldn't happen): fall back to the default framing.

@@ -32,6 +32,8 @@ namespace GravityGolf.Game
         public const float LandingRing = 3.6f;
         public const float Planet = 3f;
         public const float PlanetAccent = 2.9f;
+        public const float Asteroid = 2.7f;
+        public const float AsteroidRim = 2.72f;
         public const float Ball = 1f;
         public const float BallTrail = 1.05f;
         public const float AimBand = 0.6f;

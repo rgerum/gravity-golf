@@ -54,8 +54,9 @@ namespace GravityGolf.Game
         private const double DeathDrag = 0.9;              // fraction of velocity kept per 1/60s
         private const double DeathFallbackSpeed = 3.0;     // drift-in speed when no pre-impact velocity
 
-        private WorldDefinition _world;
-        private int _levelIndex;
+        private Campaign _campaign;
+        private WorldDefinition _world;   // the world that owns the currently loaded level
+        private int _levelIndex;          // GLOBAL level index (0-based across all worlds)
         private LevelRuntime _level;
         private BallState _ball;
         private LevelRuntime _previewLevel;
@@ -95,6 +96,8 @@ namespace GravityGolf.Game
         private AudioManager _audio;
 
         public bool Ready { get; private set; }
+
+        internal Campaign Campaign => _campaign;
 
         internal WorldDefinition World => _world;
 
@@ -150,17 +153,17 @@ namespace GravityGolf.Game
         private void Start()
         {
             _hud.SetStatus("Loading levels…", string.Empty);
-            StartCoroutine(LevelData.Load(OnWorldLoaded, OnWorldError));
+            StartCoroutine(LevelData.Load(OnCampaignLoaded, OnWorldError));
         }
 
-        private void OnWorldLoaded(WorldDefinition world)
+        private void OnCampaignLoaded(Campaign campaign)
         {
-            _world = world;
+            _campaign = campaign;
             LoadLevel(0);
             Ready = true;
             // Boot into the title screen; PLAY dismisses it and jumps to the first
             // uncompleted hole (the level keeps running behind the backdrop).
-            _hud.ShowTitle(world);
+            _hud.ShowTitle(campaign);
         }
 
         /// <summary>Tour hook: dismiss the boot title so captures show gameplay.</summary>
@@ -274,7 +277,7 @@ namespace GravityGolf.Game
             }
             else if (Input.GetKeyDown(KeyCode.N))
             {
-                LoadLevel(Math.Min(_levelIndex + 1, _world.Levels.Count - 1));
+                LoadLevel(Math.Min(_levelIndex + 1, _campaign.LevelCount - 1));
             }
             else if (Input.GetKeyDown(KeyCode.P))
             {
@@ -418,15 +421,16 @@ namespace GravityGolf.Game
                 "sun" => "Burned in the sun.",
                 "planet" => "Planet impact.",
                 "planet-consumed" => "The planet gave way.",
+                "asteroid" => "Struck an asteroid.",
                 "bounds" => "Lost in open space.",
                 _ => "Crashed.",
             };
             const string hint = "Undo the shot, or retry the hole.";
 
-            // Lethal-body crashes (the sun and non-landable planets) play a short burn/drown
-            // animation into the body center FIRST, then show the drawer. Bounds and other
-            // outcomes have no body to fall into, so they show the drawer immediately.
-            var burns = reason == "sun" || reason == "planet" || reason == "planet-consumed";
+            // Lethal-body crashes (the sun, non-landable planets, and asteroids) play a short
+            // burn/drown animation into the body center FIRST, then show the drawer. Bounds and
+            // other outcomes have no body to fall into, so they show the drawer immediately.
+            var burns = reason == "sun" || reason == "planet" || reason == "planet-consumed" || reason == "asteroid";
             if (!burns)
             {
                 _state = GameState.Crashed;
@@ -443,10 +447,22 @@ namespace GravityGolf.Game
                 && result.PlanetIndex.HasValue
                 && result.PlanetIndex.Value >= 0
                 && result.PlanetIndex.Value < _level.Planets.Count;
+            var hasAsteroid = reason == "asteroid"
+                && result.AsteroidIndex.HasValue
+                && result.AsteroidIndex.Value >= 0
+                && result.AsteroidIndex.Value < _level.Asteroids.Count;
             if (reason == "sun")
             {
                 _deathCenter = _level.Sun;
                 _deathRadius = _level.SunCollisionRadius;
+            }
+            else if (hasAsteroid)
+            {
+                // Drown into the asteroid's CURRENT (orbiting) position; its small radius makes
+                // the coast-in end quickly via the radius-proportional threshold.
+                var asteroid = _level.Asteroids[result.AsteroidIndex.Value];
+                _deathCenter = asteroid.Position;
+                _deathRadius = asteroid.Radius;
             }
             else if (hasPlanet)
             {
@@ -633,11 +649,11 @@ namespace GravityGolf.Game
 
         public void RestartLevel() => LoadLevel(_levelIndex);
 
-        private void AdvanceLevel() => LoadLevel((_levelIndex + 1) % _world.Levels.Count);
+        private void AdvanceLevel() => LoadLevel((_levelIndex + 1) % _campaign.LevelCount);
 
         public void LoadLevel(int index)
         {
-            if (_world == null || index < 0 || index >= _world.Levels.Count)
+            if (_campaign == null || index < 0 || index >= _campaign.LevelCount)
             {
                 return;
             }
@@ -650,7 +666,8 @@ namespace GravityGolf.Game
             _checkpoints.Clear();
             _rewindAccumulator = 0;
             _timeScale = 1.0;
-            _level = _world.Levels[index].Clone();
+            _world = _campaign.WorldOf(index);
+            _level = _campaign.LevelAt(index).Clone();
             _cameraRig.SetLevel(_level);
             Orbits.SetLevelTime(_level, _level.StartTimeSeconds);
             _ball = CreateBall(_level);
@@ -665,7 +682,7 @@ namespace GravityGolf.Game
             BuildLevelViews();
             _aim.SetContext(_level, _ball, _previewLevel);
             _hud.HideGameOver();
-            _hud.OnLevelLoaded(_world, _level, _levelIndex, Math.Max(1, _level.LaunchPresets.Count));
+            _hud.OnLevelLoaded(_campaign, _world, _level, _levelIndex, Math.Max(1, _level.LaunchPresets.Count));
             _hud.SetStatus("Stretch and release.", "Point the pull where you want the launch to go.");
         }
 
@@ -716,6 +733,13 @@ namespace GravityGolf.Game
                 var planet = new GameObject($"Planet{i}").AddComponent<PlanetView>();
                 planet.transform.SetParent(_levelRoot, false);
                 planet.Init(_level, i);
+            }
+
+            if (_level.Asteroids.Count > 0)
+            {
+                var asteroids = new GameObject("Asteroids").AddComponent<AsteroidFieldView>();
+                asteroids.transform.SetParent(_levelRoot, false);
+                asteroids.Init(_level);
             }
 
             var goal = new GameObject("Goal").AddComponent<GoalView>();
