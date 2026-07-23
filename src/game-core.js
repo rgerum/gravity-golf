@@ -2963,6 +2963,37 @@ for (const proto of VISIT_ALL_PROTOTYPES) {
   CAMPAIGN_LEVEL_ORDER.push(clone.id);
 }
 
+// --- Prototype: clockwork scrub level ----------------------------------------
+// Purpose-built for the time-scrub prototype: three "wheels" on ratioed orbits
+// (0.9 / 0.6 / 0.3 rad/s, so chain alignments recur roughly every 21 seconds)
+// inside a bounded clock (timeWindowSeconds). The footer scrubber winds the
+// clock; the puzzle is spotting the moment one launch can graze every wheel.
+// Phases are tuned with scripts/solve-clockwork.js.
+const CLOCKWORK_PROTOTYPE_LEVEL = {
+  id: 'proto-clockwork-orrery',
+  name: 'Clockwork Orrery',
+  summary: 'Wind the clock until the wheels line up, then graze all three in one launch.',
+  visitAll: true,
+  timeWindowSeconds: 60,
+  sun: [0, 0],
+  startPlanetIndex: 0,
+  launchPresets: [
+    { angleDeg: 30, power: 1.6 },
+    { angleDeg: 75, power: 2.2 },
+  ],
+  startAnchor: polar(2.7, -150),
+  goalCenter: polar(8.9, 30),
+  goalOpenSeconds: 14,
+  planets: [
+    { name: 'Mainspring', position: polar(2.0, -150), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
+    { name: 'Minute Wheel', position: polar(3.4, 40), radius: 0.72, gravity: 8.6, falloff: 5.6, core: 0x74bbff, glow: 0x94dbff, landable: true, landingRadius: 1.22, orbitAngularSpeed: 0.9, spinAngularSpeed: -0.4 },
+    { name: 'Hour Wheel', position: polar(4.9, 160), radius: 0.8, gravity: 9.6, falloff: 6.0, core: 0xf39a66, glow: 0xffcf86, landable: true, landingRadius: 1.3, orbitAngularSpeed: 0.6, spinAngularSpeed: 0.35 },
+    { name: 'Bell Wheel', position: polar(6.5, 260), radius: 0.86, gravity: 10.4, falloff: 6.4, core: 0xff7fa2, glow: 0xffb8c9, landable: true, landingRadius: 1.36, orbitAngularSpeed: 0.3, spinAngularSpeed: -0.2 },
+  ],
+};
+LEVEL_DEFINITIONS.push(CLOCKWORK_PROTOTYPE_LEVEL);
+CAMPAIGN_LEVEL_ORDER.push(CLOCKWORK_PROTOTYPE_LEVEL.id);
+
 const campaignOrderIndex = new Map(
   CAMPAIGN_LEVEL_ORDER.map((levelId, index) => [levelId, index]),
 );
@@ -4569,6 +4600,7 @@ export function createLevelRuntime(index) {
     startPlanetIndex,
     startAngleDeg,
     startTimeSeconds: source.startTimeSeconds ?? 0,
+    timeWindowSeconds: source.timeWindowSeconds ?? null,
     time: source.startTimeSeconds ?? 0,
     sunGravityStrength: source.sunGravityStrength ?? FIXED_SOLAR_GRAVITY_STRENGTH,
     goalOpenSeconds: source.goalOpenSeconds ?? DEFAULT_GOAL_OPEN_SECONDS,
@@ -5286,7 +5318,9 @@ export function simulateShot(level, shot, options = {}) {
     }
   }
 
-  if (!isGoalOpen(level, ball.time ?? startTime + waitTime)) {
+  // A still-locked gated goal can unlock mid-flight (monolith, checkpoint
+  // grazes), so only refuse to launch once the goal window has actually closed.
+  if (getGoalCloseTime(level) <= (ball.time ?? startTime + waitTime) + 0.000001) {
     return {
       outcome: 'crash',
       reason: 'goal-closed',

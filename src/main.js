@@ -121,6 +121,12 @@ app.innerHTML = `
                   <span>2</span>
                 </div>
               </div>
+              <div class="clock-control" id="clockControl" hidden>
+                <label class="time-control-label" for="clockScrubSlider">
+                  Clockwork <strong id="clockScrubValue">0.0s</strong>
+                </label>
+                <input id="clockScrubSlider" type="range" min="0" max="60" step="0.05" value="0" />
+              </div>
             </div>
             <div class="action-row">
               <button id="retryButton" class="hud-button" type="button"><span>Retry</span><kbd>R</kbd></button>
@@ -367,6 +373,9 @@ const runStatusPill = document.querySelector('#runStatusPill');
 const windowStatusPill = document.querySelector('#windowStatusPill');
 const timeSpeedSlider = document.querySelector('#timeSpeedSlider');
 const timeSpeedValue = document.querySelector('#timeSpeedValue');
+const clockControl = document.querySelector('#clockControl');
+const clockScrubSlider = document.querySelector('#clockScrubSlider');
+const clockScrubValue = document.querySelector('#clockScrubValue');
 const powerFill = document.querySelector('#powerFill');
 const fpsPanel = document.querySelector('#fpsPanel');
 const fpsValue = document.querySelector('#fpsValue');
@@ -4911,6 +4920,85 @@ function syncTimeControl() {
   timeSpeedValue.textContent = formatTimeSpeedValue(value);
 }
 
+// --- Clockwork scrubber -------------------------------------------------------
+// Levels with timeWindowSeconds freeze automatically while the ball is anchored;
+// the scrubber is the only way to spend anchored time. After a landing, the
+// reachable range shrinks to [landing moment, window end] — undo buys time back.
+
+function getClockworkWindowSeconds() {
+  const seconds = state.level?.timeWindowSeconds;
+  return Number.isFinite(seconds) && seconds > 0 ? seconds : null;
+}
+
+function getClockScrubMinTime() {
+  return state.ball.anchorSinceTime ?? state.level.startTimeSeconds ?? 0;
+}
+
+function canScrubClock() {
+  const windowSeconds = getClockworkWindowSeconds();
+  return windowSeconds !== null
+    && !state.adminReplay.active
+    && !state.undo.active
+    && !state.gameOver.open
+    && !state.goalCloseAnimation.active
+    && !state.rewindPlayback.active
+    && state.ball.anchorPlanetIndex !== null
+    && state.ball.anchorPlanetIndex !== undefined
+    && !state.ball.crashed
+    && !state.ball.goaling
+    && getClockScrubMinTime() < windowSeconds - 0.0001;
+}
+
+function scrubClockTo(targetTime) {
+  const windowSeconds = getClockworkWindowSeconds();
+  if (windowSeconds === null || !canScrubClock()) {
+    return;
+  }
+  const clampedTime = clamp(targetTime, getClockScrubMinTime(), windowSeconds);
+  const currentTime = state.ball.time ?? state.level.time ?? 0;
+  const appliedDelta = clampedTime - currentTime;
+  if (Math.abs(appliedDelta) < 0.000001) {
+    return;
+  }
+  setLevelTime(state.level, clampedTime);
+  state.ball.time = clampedTime;
+  advanceBallAnchor(state.level, state.ball, appliedDelta);
+  if (state.dragActive) {
+    updateDragState(state.dragPointerWorld);
+  }
+  syncHud();
+}
+
+let clockScrubPointerActive = false;
+
+function syncClockControl() {
+  const windowSeconds = getClockworkWindowSeconds();
+  if (windowSeconds === null) {
+    clockControl.hidden = true;
+    return;
+  }
+  clockControl.hidden = false;
+  if (clockScrubSlider.max !== String(windowSeconds)) {
+    clockScrubSlider.min = '0';
+    clockScrubSlider.max = String(windowSeconds);
+    clockScrubSlider.step = '0.05';
+  }
+  const time = clamp(state.ball.time ?? state.level.time ?? 0, 0, windowSeconds);
+  if (!clockScrubPointerActive) {
+    clockScrubSlider.value = String(time);
+  }
+  clockScrubSlider.disabled = !canScrubClock();
+  const minPercent = (clamp(getClockScrubMinTime(), 0, windowSeconds) / windowSeconds) * 100;
+  const nowPercent = (time / windowSeconds) * 100;
+  clockScrubSlider.style.background = `linear-gradient(to right,
+    rgba(255, 208, 122, 0.14) 0%,
+    rgba(255, 208, 122, 0.14) ${minPercent}%,
+    rgba(255, 208, 122, 0.6) ${minPercent}%,
+    rgba(255, 208, 122, 0.6) ${nowPercent}%,
+    rgba(237, 243, 255, 0.16) ${nowPercent}%)`;
+  clockScrubValue.textContent = `${time.toFixed(1)}s / ${Math.round(windowSeconds)}s`;
+}
+
 function setControlShot(stageIndex, angleDeg, power) {
   state.controlShots[stageIndex] = clampControlShot({ angleDeg, power });
   syncActionButtons();
@@ -7767,6 +7855,20 @@ worldMapNodes.addEventListener('click', (event) => {
   state.worldMap.selectedWorldIndex = clamp(selectedWorldIndex, 0, WORLD_DEFINITIONS.length - 1);
   syncWorldMap();
 });
+clockScrubSlider.addEventListener('pointerdown', () => {
+  clockScrubPointerActive = true;
+});
+clockScrubSlider.addEventListener('input', (event) => {
+  scrubClockTo(Number.parseFloat(event.target.value));
+});
+clockScrubSlider.addEventListener('change', (event) => {
+  clockScrubPointerActive = false;
+  scrubClockTo(Number.parseFloat(event.target.value));
+});
+window.addEventListener('pointerup', () => {
+  clockScrubPointerActive = false;
+});
+
 timeSpeedSlider.addEventListener('input', (event) => {
   const nextIndex = clamp(Number.parseInt(event.target.value, 10), 0, TIME_SPEED_VALUES.length - 1);
   state.timeSpeedIndex = nextIndex;
@@ -8341,7 +8443,13 @@ function updatePhysics(delta) {
         return;
       }
       const currentTime = state.ball.time ?? state.level.time ?? 0;
-      const timeSpeed = state.adminReplay.active ? 1 : getEffectiveTimeSpeedValue();
+      // Clockwork levels: anchored time is frozen — only the scrubber (or the
+      // ball flying) spends the window, so aiming never silently burns it.
+      const timeSpeed = state.adminReplay.active
+        ? 1
+        : getClockworkWindowSeconds() !== null
+          ? 0
+          : getEffectiveTimeSpeedValue();
       const minTime = state.level.startTimeSeconds ?? 0;
       const nextTime = Math.max(minTime, currentTime + delta * timeSpeed);
       const appliedDelta = nextTime - currentTime;
@@ -8991,6 +9099,7 @@ function animate() {
   updateScreenShake(delta);
   updateGoalBursts(delta);
   updateAimPreview();
+  syncClockControl();
 
   const flightSpeed = length(state.ball.velocity);
   const inFreeFlight = state.ball.anchorPlanetIndex === null

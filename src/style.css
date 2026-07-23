@@ -329,6 +329,52 @@ h1 {
   text-align: right;
 }
 
+.clock-control {
+  margin-top: 12px;
+  pointer-events: auto;
+}
+
+.clock-control[hidden] {
+  display: none;
+}
+
+.clock-control input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  margin: 10px 0 2px;
+  border-radius: 999px;
+  background: rgba(237, 243, 255, 0.16);
+  outline: none;
+  cursor: pointer;
+}
+
+.clock-control input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ffd07a;
+  border: 2px solid rgba(10, 14, 26, 0.85);
+  box-shadow: 0 0 10px rgba(255, 208, 122, 0.55);
+}
+
+.clock-control input[type='range']::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ffd07a;
+  border: 2px solid rgba(10, 14, 26, 0.85);
+  box-shadow: 0 0 10px rgba(255, 208, 122, 0.55);
+}
+
+.clock-control input[type='range']:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+
 .status-pill {
   display: inline-flex;
   align-items: center;
