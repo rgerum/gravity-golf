@@ -329,50 +329,112 @@ h1 {
   text-align: right;
 }
 
-.clock-control {
-  margin-top: 12px;
+.clock-dock {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: min(620px, calc(100% - 44px));
+  padding: 9px 18px;
+  border-radius: 999px;
+  background: rgba(10, 14, 26, 0.62);
+  border: 1px solid rgba(255, 208, 122, 0.24);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   pointer-events: auto;
 }
 
-.clock-control[hidden] {
+.clock-dock[hidden] {
   display: none;
 }
 
-.clock-control input[type='range'] {
+.clock-dock-time,
+.clock-dock-end {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  min-width: 46px;
+  text-align: center;
+  color: #ffd07a;
+}
+
+.clock-dock-end {
+  color: rgba(237, 243, 255, 0.55);
+}
+
+.clock-dock-bar {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.clock-ruler {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 12px;
+  transform: translateY(-50%);
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+.clock-dock input[type='range'] {
   -webkit-appearance: none;
   appearance: none;
+  position: relative;
   width: 100%;
-  height: 6px;
-  margin: 10px 0 2px;
+  height: 8px;
+  margin: 6px 0;
   border-radius: 999px;
-  background: rgba(237, 243, 255, 0.16);
+  background: rgba(237, 243, 255, 0.12);
   outline: none;
   cursor: pointer;
 }
 
-.clock-control input[type='range']::-webkit-slider-thumb {
+.clock-dock input[type='range']::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ffd07a;
+  border: 2px solid rgba(10, 14, 26, 0.85);
+  box-shadow: 0 0 12px rgba(255, 208, 122, 0.6);
+}
+
+.clock-dock input[type='range']::-moz-range-thumb {
   width: 16px;
   height: 16px;
   border-radius: 50%;
   background: #ffd07a;
   border: 2px solid rgba(10, 14, 26, 0.85);
-  box-shadow: 0 0 10px rgba(255, 208, 122, 0.55);
+  box-shadow: 0 0 12px rgba(255, 208, 122, 0.6);
 }
 
-.clock-control input[type='range']::-moz-range-thumb {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: #ffd07a;
-  border: 2px solid rgba(10, 14, 26, 0.85);
-  box-shadow: 0 0 10px rgba(255, 208, 122, 0.55);
-}
-
-.clock-control input[type='range']:disabled {
+.clock-dock input[type='range']:disabled {
   opacity: 0.42;
   cursor: default;
+}
+
+@media (max-width: 560px) {
+  .clock-dock {
+    bottom: 10px;
+    gap: 8px;
+    padding: 7px 12px;
+    width: calc(100% - 20px);
+  }
+
+  .clock-dock-time,
+  .clock-dock-end {
+    font-size: 0.62rem;
+    min-width: 38px;
+  }
 }
 
 .status-pill {

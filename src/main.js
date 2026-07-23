@@ -121,12 +121,6 @@ app.innerHTML = `
                   <span>2</span>
                 </div>
               </div>
-              <div class="clock-control" id="clockControl" hidden>
-                <label class="time-control-label" for="clockScrubSlider">
-                  Clockwork <strong id="clockScrubValue">0.0s</strong>
-                </label>
-                <input id="clockScrubSlider" type="range" min="0" max="60" step="0.05" value="0" />
-              </div>
             </div>
             <div class="action-row">
               <button id="retryButton" class="hud-button" type="button"><span>Retry</span><kbd>R</kbd></button>
@@ -179,6 +173,14 @@ app.innerHTML = `
               <strong id="fpsValue">--</strong>
             </div>
           </div>
+        </div>
+        <div class="clock-dock" id="clockControl" hidden>
+          <span class="clock-dock-time" id="clockScrubValue">0.0s</span>
+          <div class="clock-dock-bar">
+            <div class="clock-ruler" id="clockRuler" aria-hidden="true"></div>
+            <input id="clockScrubSlider" type="range" min="0" max="60" step="0.05" value="0" aria-label="Clockwork time" />
+          </div>
+          <span class="clock-dock-end" id="clockWindowEnd">60s</span>
         </div>
         <div class="tutorial-overlay" aria-live="polite">
           <div class="tutorial-card" id="tutorialCard" hidden>
@@ -376,6 +378,8 @@ const timeSpeedValue = document.querySelector('#timeSpeedValue');
 const clockControl = document.querySelector('#clockControl');
 const clockScrubSlider = document.querySelector('#clockScrubSlider');
 const clockScrubValue = document.querySelector('#clockScrubValue');
+const clockRuler = document.querySelector('#clockRuler');
+const clockWindowEnd = document.querySelector('#clockWindowEnd');
 const powerFill = document.querySelector('#powerFill');
 const fpsPanel = document.querySelector('#fpsPanel');
 const fpsValue = document.querySelector('#fpsValue');
@@ -5085,10 +5089,19 @@ function syncClockControl() {
     return;
   }
   clockControl.hidden = false;
-  if (clockScrubSlider.max !== String(windowSeconds)) {
+  if (clockControl.dataset.window !== String(windowSeconds)) {
+    clockControl.dataset.window = String(windowSeconds);
     clockScrubSlider.min = '0';
     clockScrubSlider.max = String(windowSeconds);
     clockScrubSlider.step = '0.05';
+    clockWindowEnd.textContent = `${Math.round(windowSeconds)}s`;
+    // Movie-bar ruler: a faint tick every 5s, a brighter one every 15s, so a
+    // found moment ("around 28s") stays a navigable landmark on long clocks.
+    const minorPercent = (5 / windowSeconds) * 100;
+    const majorPercent = (15 / windowSeconds) * 100;
+    clockRuler.style.background = `
+      repeating-linear-gradient(90deg, rgba(237, 243, 255, 0.4) 0 1px, transparent 1px ${majorPercent}%),
+      repeating-linear-gradient(90deg, rgba(237, 243, 255, 0.16) 0 1px, transparent 1px ${minorPercent}%)`;
   }
   const time = clamp(state.ball.time ?? state.level.time ?? 0, 0, windowSeconds);
   if (!clockScrubPointerActive) {
@@ -5102,8 +5115,8 @@ function syncClockControl() {
     rgba(255, 208, 122, 0.14) ${minPercent}%,
     rgba(255, 208, 122, 0.6) ${minPercent}%,
     rgba(255, 208, 122, 0.6) ${nowPercent}%,
-    rgba(237, 243, 255, 0.16) ${nowPercent}%)`;
-  clockScrubValue.textContent = `${time.toFixed(1)}s / ${Math.round(windowSeconds)}s`;
+    rgba(237, 243, 255, 0.12) ${nowPercent}%)`;
+  clockScrubValue.textContent = `${time.toFixed(1)}s`;
 }
 
 function setControlShot(stageIndex, angleDeg, power) {
