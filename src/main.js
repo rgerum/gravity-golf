@@ -1034,6 +1034,65 @@ const aimPreviewPoints = new THREE.Points(
 aimPreviewPoints.visible = false;
 aimPreviewPoints.renderOrder = 12;
 world.add(aimPreviewPoints);
+
+// Gold ghost rings: where a checkpoint planet WILL BE at the moment the
+// previewed shot grazes it. The preview line shows your future — these show
+// theirs, so frozen-clock aiming stops being a guess (see updateAimPreview).
+const AIM_GHOST_RING_COUNT = 4;
+const aimGhostRings = Array.from({ length: AIM_GHOST_RING_COUNT }, () => {
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(0.86, 1, 48),
+    new THREE.MeshBasicMaterial({
+      color: 0xffd07a,
+      transparent: true,
+      opacity: 0.55,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    }),
+  );
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.07;
+  ring.renderOrder = 7;
+  ring.visible = false;
+  world.add(ring);
+  return ring;
+});
+
+function syncAimGhostRings(grazeEvents) {
+  for (let ringIndex = 0; ringIndex < aimGhostRings.length; ringIndex += 1) {
+    const ring = aimGhostRings[ringIndex];
+    const event = grazeEvents[ringIndex];
+    if (!event) {
+      ring.visible = false;
+      continue;
+    }
+    ring.visible = true;
+    ring.position.set(event.position.x, 0.07, event.position.y);
+    ring.scale.setScalar(event.radius);
+  }
+}
+
+// The preview level must mirror the live level's graze progress each drag,
+// otherwise preview grazes from earlier drags stick and the simulated goal
+// gate diverges from the real one.
+function resetPreviewVisitState() {
+  const requiredIndices = aimPreviewLevel?.requiredVisitIndices ?? [];
+  if (requiredIndices.length === 0) {
+    return;
+  }
+  for (const planetIndex of requiredIndices) {
+    const previewPlanet = aimPreviewLevel.planets[planetIndex];
+    const livePlanet = state.level.planets[planetIndex];
+    if (previewPlanet && livePlanet) {
+      previewPlanet.visited = Boolean(livePlanet.visited);
+      previewPlanet.visitedTime = livePlanet.visitedTime;
+    }
+  }
+  aimPreviewLevel.goalUnlocked = state.level.goalUnlocked;
+  aimPreviewLevel.goalUnlockTime = state.level.goalUnlockTime;
+  aimPreviewLevel.pendingVisitEvents = [];
+}
 let aimPreviewLevel = null;
 
 const ghostGroup = new THREE.Group();
@@ -4971,6 +5030,54 @@ function scrubClockTo(targetTime) {
 
 let clockScrubPointerActive = false;
 
+const FUTURE_ARC_SAMPLES = 9;
+const FUTURE_ARC_SECONDS = 2.4;
+let lastFutureArcTime = null;
+
+function updateFutureArcs() {
+  if (getClockworkWindowSeconds() === null || !aimPreviewLevel) {
+    return;
+  }
+  const anchored = state.ball.anchorPlanetIndex !== null && state.ball.anchorPlanetIndex !== undefined;
+  const show = anchored
+    && !state.undo.active
+    && !state.rewindPlayback.active
+    && !state.ball.crashed
+    && !state.ball.goaling;
+  for (const visual of planetVisuals) {
+    if (visual.futureArc) {
+      visual.futureArc.visible = show;
+    }
+  }
+  if (!show) {
+    lastFutureArcTime = null;
+    return;
+  }
+  const now = state.level.time ?? 0;
+  if (lastFutureArcTime === now) {
+    return;
+  }
+  lastFutureArcTime = now;
+  for (let sampleIndex = 0; sampleIndex < FUTURE_ARC_SAMPLES; sampleIndex += 1) {
+    setLevelTime(aimPreviewLevel, now + (sampleIndex / (FUTURE_ARC_SAMPLES - 1)) * FUTURE_ARC_SECONDS);
+    for (const visual of planetVisuals) {
+      if (!visual.futureArc) {
+        continue;
+      }
+      const previewPlanet = aimPreviewLevel.planets[visual.planet.index];
+      const positions = visual.futureArc.geometry.attributes.position;
+      positions.array[sampleIndex * 3] = previewPlanet.position.x;
+      positions.array[sampleIndex * 3 + 1] = 0;
+      positions.array[sampleIndex * 3 + 2] = previewPlanet.position.y;
+    }
+  }
+  for (const visual of planetVisuals) {
+    if (visual.futureArc) {
+      visual.futureArc.geometry.attributes.position.needsUpdate = true;
+    }
+  }
+}
+
 function syncClockControl() {
   const windowSeconds = getClockworkWindowSeconds();
   if (windowSeconds === null) {
@@ -6930,6 +7037,40 @@ function rebuildPlanets() {
       group.add(checkpointGlow);
     }
 
+    // Clockwork levels freeze while anchored, so a planet's speed is invisible
+    // at the moment it matters most. The arc traces its next few seconds of
+    // travel in its own glow color — arc length IS speed.
+    let futureArc = null;
+    if (getClockworkWindowSeconds() !== null) {
+      const arcGeometry = new THREE.BufferGeometry();
+      const arcPositions = new Float32Array(FUTURE_ARC_SAMPLES * 3);
+      const arcColors = new Float32Array(FUTURE_ARC_SAMPLES * 3);
+      arcGeometry.setAttribute('position', new THREE.BufferAttribute(arcPositions, 3));
+      arcGeometry.setAttribute('color', new THREE.BufferAttribute(arcColors, 3));
+      const arcColor = new THREE.Color(planet.glow);
+      for (let sampleIndex = 0; sampleIndex < FUTURE_ARC_SAMPLES; sampleIndex += 1) {
+        const fade = (1 - sampleIndex / (FUTURE_ARC_SAMPLES - 1)) * 0.55;
+        arcColors[sampleIndex * 3] = arcColor.r * fade;
+        arcColors[sampleIndex * 3 + 1] = arcColor.g * fade;
+        arcColors[sampleIndex * 3 + 2] = arcColor.b * fade;
+      }
+      futureArc = new THREE.Line(
+        arcGeometry,
+        new THREE.LineBasicMaterial({
+          vertexColors: true,
+          transparent: true,
+          opacity: 0.85,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        }),
+      );
+      futureArc.position.y = 0.04;
+      futureArc.renderOrder = 4;
+      futureArc.visible = false;
+      // Absolute world coordinates — attach at the root, not the planet group.
+      planetsRoot.add(futureArc);
+    }
+
     group.position.set(planet.position.x, 0, planet.position.y);
     planetsRoot.add(group);
 
@@ -6937,6 +7078,7 @@ function rebuildPlanets() {
       group,
       checkpointRing,
       checkpointGlow,
+      futureArc,
       orbitPath,
       body,
       glow,
@@ -7040,6 +7182,7 @@ function applyLevel(index) {
   // Independent runtime clone for aim-preview simulation: stepBall mutates
   // level time and hazard flags, so the live level can't be reused.
   aimPreviewLevel = createLevelRuntime(state.levelIndex);
+  lastFutureArcTime = null;
 
   if (audio.isUnlocked() && state.lastMusicWorldIndex !== state.level.worldIndex) {
     state.lastMusicWorldIndex = state.level.worldIndex;
@@ -7159,11 +7302,13 @@ function updateAimPreview() {
     && aimPreviewLevel;
   if (!active) {
     aimPreviewPoints.visible = false;
+    syncAimGhostRings([]);
     return;
   }
 
   const startTime = state.ball.time ?? state.level.time ?? 0;
   setLevelTime(aimPreviewLevel, startTime);
+  resetPreviewVisitState();
   const launchPlanetIndex = state.ball.anchorPlanetIndex;
   const direction = constrainLaunchDirection(state.aimDirection, state.dragPower);
   const relativeVelocity = launchVelocity(direction, state.dragPower);
@@ -7189,12 +7334,32 @@ function updateAimPreview() {
     heat: state.ball.heat ?? 0,
   };
 
-  const horizonSeconds = mode === 'full' ? 3.0 : 1.05;
+  // Clockwork chains take longer than 3s to read — show the whole flight.
+  const horizonSeconds = mode === 'full'
+    ? (getClockworkWindowSeconds() !== null ? 5.0 : 3.0)
+    : 1.05;
   const step = 1 / 60;
   const totalSteps = Math.floor(horizonSeconds / step);
+  const requiredIndices = aimPreviewLevel.requiredVisitIndices ?? [];
+  const grazeEvents = [];
   let pointCount = 0;
   for (let stepIndex = 0; stepIndex < totalSteps && pointCount < AIM_PREVIEW_MAX_POINTS; stepIndex += 1) {
     const result = stepBall(aimPreviewLevel, previewBall, step);
+    for (const planetIndex of requiredIndices) {
+      const previewPlanet = aimPreviewLevel.planets[planetIndex];
+      if (
+        previewPlanet?.visited
+        && !state.level.planets[planetIndex]?.visited
+        && !grazeEvents.some((event) => event.planetIndex === planetIndex)
+      ) {
+        grazeEvents.push({
+          planetIndex,
+          pointIndex: pointCount,
+          position: { x: previewPlanet.position.x, y: previewPlanet.position.y },
+          radius: previewPlanet.radius,
+        });
+      }
+    }
     if (stepIndex % 2 === 0) {
       const offset = pointCount * 3;
       aimPreviewPositions[offset] = previewBall.position.x;
@@ -7210,6 +7375,14 @@ function updateAimPreview() {
   for (let pointIndex = 0; pointIndex < pointCount; pointIndex += 1) {
     const offset = pointIndex * 3;
     const progress = pointIndex / Math.max(1, pointCount - 1);
+    const nearGraze = grazeEvents.some((event) => Math.abs(event.pointIndex - pointIndex) <= 2);
+    if (nearGraze) {
+      // Gold beads mark the exact stretch of line where a graze registers.
+      aimPreviewColors[offset] = 1.0;
+      aimPreviewColors[offset + 1] = 0.82;
+      aimPreviewColors[offset + 2] = 0.48;
+      continue;
+    }
     // Additive blending: fading to black fades the dot out.
     const fade = mode === 'full'
       ? 1 - progress * 0.72
@@ -7223,6 +7396,7 @@ function updateAimPreview() {
   aimPreviewGeometry.attributes.position.needsUpdate = true;
   aimPreviewGeometry.attributes.color.needsUpdate = true;
   aimPreviewPoints.visible = pointCount > 1;
+  syncAimGhostRings(grazeEvents);
 }
 
 function getGhostTime() {
@@ -9099,6 +9273,7 @@ function animate() {
   updateScreenShake(delta);
   updateGoalBursts(delta);
   updateAimPreview();
+  updateFutureArcs();
   syncClockControl();
 
   const flightSpeed = length(state.ball.velocity);
