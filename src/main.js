@@ -25,6 +25,7 @@ import {
   getLavaOverheatRemaining,
   getPrimarySunVisualRadius,
   getRedGiantProgress,
+  getVisitProgress,
   getPlanetSplitAxis,
   getPulsarJetState,
   getPlanetSlideAngularSpeed,
@@ -2537,6 +2538,9 @@ function cloneCheckpoint(checkpoint) {
     anchorSinceTime: checkpoint.anchorSinceTime ?? checkpoint.levelTime,
     goalUnlocked: checkpoint.goalUnlocked ?? false,
     goalUnlockTime: checkpoint.goalUnlockTime ?? null,
+    visitedPlanetIndices: Array.isArray(checkpoint.visitedPlanetIndices)
+      ? [...checkpoint.visitedPlanetIndices]
+      : [],
     controlShots: Array.isArray(checkpoint.controlShots)
       ? checkpoint.controlShots.map((shot) => ({ angleDeg: shot.angleDeg, power: shot.power }))
       : [],
@@ -2576,6 +2580,8 @@ function createCurrentCheckpoint() {
     anchorSinceTime: state.ball.anchorSinceTime ?? (state.level.time ?? state.ball.time ?? 0),
     goalUnlocked: state.level.goalUnlocked ?? false,
     goalUnlockTime: state.level.goalUnlockTime ?? null,
+    visitedPlanetIndices: (state.level.requiredVisitIndices ?? [])
+      .filter((planetIndex) => state.level.planets[planetIndex]?.visited),
     heat: state.ball.heat ?? 0,
     shots: state.shots,
     resets: state.resets,
@@ -2614,6 +2620,18 @@ function saveUndoCheckpoint() {
 function applyCheckpointState(checkpoint) {
   state.level.goalUnlocked = checkpoint.goalUnlocked ?? !state.level.goalUnlockRequired;
   state.level.goalUnlockTime = checkpoint.goalUnlockTime ?? (state.level.goalUnlocked ? checkpoint.levelTime : null);
+  if (state.level.requiredVisitIndices?.length) {
+    const restored = new Set(checkpoint.visitedPlanetIndices ?? []);
+    for (const planetIndex of state.level.requiredVisitIndices) {
+      const planet = state.level.planets[planetIndex];
+      if (planet) {
+        planet.visited = restored.has(planetIndex);
+        if (!planet.visited) {
+          planet.visitedTime = null;
+        }
+      }
+    }
+  }
   setLevelTime(state.level, checkpoint.levelTime);
   rebuildGravityField();
   lastGravityFieldRefreshTime = state.level.time ?? 0;
@@ -4341,6 +4359,10 @@ function getWindowStatusText() {
   }
 
   if (isGoalLocked(state.level)) {
+    if (state.level.visitGoalGate) {
+      const { visited, total } = getVisitProgress(state.level);
+      return `Grazed ${visited}/${total}`;
+    }
     return 'Goal locked';
   }
   const remaining = getGoalRemainingTime(state.level, state.ball.time ?? state.level.time ?? 0);
@@ -5113,6 +5135,31 @@ function addFlair(points, label) {
   }
   state.flair.holePoints += points;
   spawnFlairPopup(`${label} +${points}`);
+}
+
+// Drain checkpoint grazes queued by the sim this frame (see resolveCheckpointVisits).
+function handleVisitEvents() {
+  const events = state.level.pendingVisitEvents;
+  if (!events || events.length === 0) {
+    return;
+  }
+  for (const event of events) {
+    if (event.type === 'unlocked') {
+      audio.play('portal');
+      addFlair(60, 'Black Hole Open');
+      state.message = 'Every planet grazed.';
+      state.hint = 'Black hole open — finish in the goal.';
+    } else {
+      audio.play('land', { speed: 1.35 });
+      const { visited, total } = getVisitProgress(state.level);
+      addFlair(20, `Grazed ${visited}/${total}`);
+      if (visited < total) {
+        state.message = `Grazed ${event.planetName}.`;
+        state.hint = `${visited}/${total} grazed — ${total - visited} more to open the black hole.`;
+      }
+    }
+  }
+  events.length = 0;
 }
 
 function spawnSunShockwave(strength = 1) {
@@ -6759,11 +6806,49 @@ function rebuildPlanets() {
       turretVisuals.push({ group: turretGroup, sightLine, sightGlow, turret });
     }
 
+    let checkpointRing = null;
+    let checkpointGlow = null;
+    if (planet.mustVisit) {
+      const flybyR = planet.flybyRadius ?? planet.radius + 1.2;
+      checkpointRing = new THREE.Mesh(
+        new THREE.RingGeometry(flybyR - 0.09, flybyR, 80),
+        new THREE.MeshBasicMaterial({
+          color: 0xffd07a,
+          transparent: true,
+          opacity: 0.42,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+        }),
+      );
+      checkpointRing.rotation.x = -Math.PI / 2;
+      checkpointRing.position.y = 0.05;
+      checkpointRing.renderOrder = 6;
+      group.add(checkpointRing);
+
+      checkpointGlow = new THREE.Mesh(
+        new THREE.CircleGeometry(flybyR, 64),
+        new THREE.MeshBasicMaterial({
+          color: 0xffd07a,
+          transparent: true,
+          opacity: 0.06,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+        }),
+      );
+      checkpointGlow.rotation.x = -Math.PI / 2;
+      checkpointGlow.position.y = 0.04;
+      checkpointGlow.renderOrder = 5;
+      group.add(checkpointGlow);
+    }
+
     group.position.set(planet.position.x, 0, planet.position.y);
     planetsRoot.add(group);
 
     return {
       group,
+      checkpointRing,
+      checkpointGlow,
       orbitPath,
       body,
       glow,
@@ -8341,6 +8426,7 @@ function updatePhysics(delta) {
   }
   recordAttemptTrailPoint();
   maybeTriggerNearMiss();
+  handleVisitEvents();
   if (maybeEnterVibeJamPortal()) {
     return;
   }
@@ -8736,6 +8822,26 @@ function updateDecor(time, delta = 0) {
         Math.PI / 2,
         Math.max(0.0001, Math.PI * 2 * countdownFraction),
       );
+    }
+    if (visual.checkpointRing) {
+      const planet = visual.planet;
+      const visited = Boolean(planet.visited);
+      const popAge = visited && Number.isFinite(planet.visitedTime)
+        ? worldTime - planet.visitedTime
+        : Number.POSITIVE_INFINITY;
+      const pop = popAge < 0.6 ? 1 - popAge / 0.6 : 0;
+      const tint = visited ? 0x7df3d1 : 0xffd07a;
+      visual.checkpointRing.material.color.setHex(tint);
+      visual.checkpointGlow.material.color.setHex(tint);
+      if (visited) {
+        visual.checkpointRing.material.opacity = (0.16 + pop * 0.62) * planetVisibility;
+        visual.checkpointGlow.material.opacity = (0.03 + pop * 0.24) * planetVisibility;
+        visual.checkpointRing.scale.setScalar(1 + pop * 0.13);
+      } else {
+        visual.checkpointRing.material.opacity = (0.4 + Math.sin(time * 3 + index) * 0.12) * planetVisibility;
+        visual.checkpointGlow.material.opacity = (0.06 + Math.sin(time * 2 + index) * 0.02) * planetVisibility;
+        visual.checkpointRing.scale.setScalar(1 + Math.sin(time * 2.4 + index) * 0.02);
+      }
     }
     if (visual.monolith) {
       const unlocked = state.level.goalUnlocked;

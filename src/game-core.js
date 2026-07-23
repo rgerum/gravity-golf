@@ -64,6 +64,9 @@ const DUST_CLOUD_DRAG_MULTIPLIER = 3.2;
 const DEFAULT_METEOR_RADIUS = 0.18;
 const DEFAULT_METEOR_WARNING_SECONDS = 4.2;
 const DEFAULT_METEOR_IMPACT_RADIUS = 0.58;
+// Grazing zone for "visit all" levels: comfortably outside the crash surface,
+// inside the gravity well, so threading a flyby is a skill, not a landing.
+const DEFAULT_FLYBY_MARGIN = 1.2;
 
 function polar(radius, angleDeg) {
   return { radius, angleDeg };
@@ -2931,6 +2934,35 @@ const CAMPAIGN_LEVEL_ORDER = [
   'meteor-circuit',
 ];
 
+// --- Prototype: "visit all planets" mode -------------------------------------
+// Clones of proven multi-planet layouts, re-gated so the black hole only opens
+// once the ball has grazed every landable planet (a flyby counts — you do not
+// need to land). Appended to the campaign so they are reachable via ?level=<n>
+// for playtesting. Layout-diverse on purpose (clean relay, asteroid ring, heavy
+// belt, ice) to gauge whether the mechanic stays fresh across levels.
+const VISIT_ALL_PROTOTYPES = [
+  { source: 'forked-harbor', id: 'proto-visit-harbor', name: 'Visit · Forked Harbor' },
+  { source: 'double-ring', id: 'proto-visit-ring', name: 'Visit · Double Ring' },
+  { source: 'belt-gauntlet', id: 'proto-visit-belt', name: 'Visit · Belt Gauntlet' },
+  { source: 'aurora-harbor', id: 'proto-visit-aurora', name: 'Visit · Aurora Harbor' },
+];
+
+for (const proto of VISIT_ALL_PROTOTYPES) {
+  const base = LEVEL_DEFINITIONS.find((level) => level.id === proto.source);
+  if (!base) {
+    continue;
+  }
+  const clone = structuredClone(base);
+  clone.id = proto.id;
+  clone.name = proto.name;
+  clone.visitAll = true;
+  clone.summary = 'Graze every landable planet to open the black hole, then finish in the goal.';
+  delete clone.tutorial;
+  delete clone.adminSolutions;
+  LEVEL_DEFINITIONS.push(clone);
+  CAMPAIGN_LEVEL_ORDER.push(clone.id);
+}
+
 const campaignOrderIndex = new Map(
   CAMPAIGN_LEVEL_ORDER.map((levelId, index) => [levelId, index]),
 );
@@ -3902,6 +3934,51 @@ export function isGoalLocked(level) {
   return Boolean(level.goalUnlockRequired && !level.goalUnlocked);
 }
 
+export function getVisitProgress(level) {
+  const required = level.requiredVisitIndices ?? [];
+  let visited = 0;
+  for (const index of required) {
+    if (level.planets[index]?.visited) {
+      visited += 1;
+    }
+  }
+  return { visited, total: required.length };
+}
+
+// "Visit all" levels: mark checkpoint planets grazed as the ball passes through
+// their flyby zone, and open the goal once every checkpoint is visited. Never
+// halts the ball — a graze is a pickup, not a collision.
+function resolveCheckpointVisits(level, ball) {
+  const required = level.requiredVisitIndices;
+  if (!required || required.length === 0) {
+    return;
+  }
+  let newlyVisited = false;
+  for (const index of required) {
+    const planet = level.planets[index];
+    if (!planet || planet.visited || planet.active === false) {
+      continue;
+    }
+    const radius = (planet.flybyRadius ?? planet.radius + DEFAULT_FLYBY_MARGIN) + COURSE.ballRadius;
+    if (distanceBetween(ball.position, planet.position) <= radius) {
+      planet.visited = true;
+      planet.visitedTime = ball.time ?? level.time ?? 0;
+      newlyVisited = true;
+      (level.pendingVisitEvents ??= []).push({
+        type: 'visit',
+        planetIndex: index,
+        planetName: planet.name ?? 'planet',
+        time: planet.visitedTime,
+      });
+    }
+  }
+  if (newlyVisited && !level.goalUnlocked && required.every((index) => level.planets[index]?.visited)) {
+    level.goalUnlocked = true;
+    level.goalUnlockTime = ball.time ?? level.time ?? 0;
+    (level.pendingVisitEvents ??= []).push({ type: 'unlocked', time: level.goalUnlockTime });
+  }
+}
+
 export function getBallSurfaceRadius(planet) {
   return planet.radius + COURSE.ballRadius + PLANET_LANDING_PADDING
     + (planet?.surfaceType === 'ice' ? ICE_PLANET_LANDING_PADDING : 0);
@@ -4333,6 +4410,7 @@ export function createLevelRuntime(index) {
       collisionRadius: source.binarySystem.secondarySun.collisionRadius ?? DEFAULT_EXTRA_SUN_COLLISION_RADIUS,
     }
     : null;
+  const visitAll = Boolean(source.visitAll);
   const planets = source.planets.map((planet, planetIndex) => {
     const orbitCenterIndex = resolveOrbitCenterIndex(planet, source.planets.length, planetIndex);
     const basePosition = basePositions[planetIndex];
@@ -4347,6 +4425,7 @@ export function createLevelRuntime(index) {
       ...planet,
       index: planetIndex,
       radius: scaledRadius,
+      visitedTime: null,
       landingRadius: planet.landingRadius ? planet.landingRadius * PLANET_RADIUS_SCALE : planet.landingRadius,
       turrets: Array.isArray(planet.turrets)
         ? planet.turrets.map((turret, turretIndex) => ({
@@ -4448,6 +4527,23 @@ export function createLevelRuntime(index) {
     : [];
   const startPlanetIndex = inferStartPlanetIndex(source, planets);
   const startPlanet = planets[startPlanetIndex];
+  // Resolve "visit all" checkpoints now that the real launch planet is known.
+  // A checkpoint is a landable planet (other than the start) the ball must
+  // graze before the goal opens; `mustVisit: true` can also flag one explicitly.
+  planets.forEach((planet) => {
+    const required = planet.mustVisit === true
+      || (visitAll && planet.landable === true && planet.index !== startPlanetIndex);
+    planet.mustVisit = required;
+    planet.visited = !required;
+    planet.visitedTime = null;
+    planet.flybyRadius = required
+      ? (planet.flybyRadius ?? planet.radius + DEFAULT_FLYBY_MARGIN)
+      : null;
+  });
+  const requiredVisitIndices = planets.filter((planet) => planet.mustVisit).map((planet) => planet.index);
+  const visitGoalGate = requiredVisitIndices.length > 0;
+  const goalGateRequired = Boolean(source.goalUnlockRequired) || visitGoalGate;
+  const goalGateOpenAtStart = !goalGateRequired;
   const startAngleDeg = source.startAngleDeg
     ?? (source.startAnchor
       ? angleDegBetween(startPlanet.basePosition, pointFromPolar(source.startAnchor))
@@ -4479,9 +4575,12 @@ export function createLevelRuntime(index) {
     goalRadius: source.goalRadius ?? COURSE.goalRadius,
     goalPullRadius: source.goalPullRadius ?? COURSE.goalPullRadius,
     goalPullStrength: source.goalPullStrength ?? COURSE.goalPullStrength,
-    goalUnlockRequired: Boolean(source.goalUnlockRequired),
-    goalUnlocked: !source.goalUnlockRequired,
-    goalUnlockTime: source.goalUnlockRequired ? null : (source.startTimeSeconds ?? 0),
+    goalUnlockRequired: goalGateRequired,
+    goalUnlocked: goalGateOpenAtStart,
+    goalUnlockTime: goalGateOpenAtStart ? (source.startTimeSeconds ?? 0) : null,
+    requiredVisitIndices,
+    visitGoalGate,
+    pendingVisitEvents: [],
     planets,
     extraSuns,
     portals,
@@ -4964,6 +5063,8 @@ export function stepBall(level, ball, delta) {
   addScaledVec(ball.position, ball.velocity, delta);
 
   const portalEvent = resolvePortalContact(level, ball);
+
+  resolveCheckpointVisits(level, ball);
 
   const postPortalGoalDistance = Math.max(distanceBetween(ball.position, level.goalCenter), 0.001);
   if (isGoalOpen(level, ball.time) && postPortalGoalDistance < level.goalRadius * GOAL_CAPTURE_RATIO) {
