@@ -151,7 +151,54 @@ function mergeMisses(target, source) {
   }
 }
 
+// Visit-gated levels mutate planet.visited / goalUnlocked on the shared level
+// runtime during simulateShot; without snapshot/restore, one candidate's
+// grazes leak into the next attempt and fake an unlocked goal.
+function captureVisitState(level) {
+  const required = level.requiredVisitIndices ?? [];
+  if (required.length === 0) {
+    return null;
+  }
+  return {
+    goalUnlocked: level.goalUnlocked,
+    goalUnlockTime: level.goalUnlockTime,
+    visited: required.map((index) => ({
+      index,
+      visited: level.planets[index].visited,
+      visitedTime: level.planets[index].visitedTime,
+    })),
+  };
+}
+
+function applyVisitState(level, snapshot) {
+  if (!snapshot) {
+    return;
+  }
+  level.goalUnlocked = snapshot.goalUnlocked;
+  level.goalUnlockTime = snapshot.goalUnlockTime;
+  level.pendingVisitEvents = [];
+  for (const entry of snapshot.visited) {
+    level.planets[entry.index].visited = entry.visited;
+    level.planets[entry.index].visitedTime = entry.visitedTime;
+  }
+}
+
+function resetVisitStateToInitial(level) {
+  const required = level.requiredVisitIndices ?? [];
+  if (required.length === 0) {
+    return;
+  }
+  for (const index of required) {
+    level.planets[index].visited = false;
+    level.planets[index].visitedTime = null;
+  }
+  level.goalUnlocked = !level.goalUnlockRequired;
+  level.goalUnlockTime = level.goalUnlocked ? (level.startTimeSeconds ?? 0) : null;
+  level.pendingVisitEvents = [];
+}
+
 function simulateSequence(level, shots, options) {
+  resetVisitStateToInitial(level);
   let startPosition = level.startAnchor;
   let startTime = 0;
   let anchorPlanetIndex = level.startPlanetIndex ?? null;
@@ -315,6 +362,7 @@ function searchSolutions(
   const misses = createMisses();
   const directSolutions = [];
   const landingCandidates = [];
+  const entryVisitState = captureVisitState(level);
 
   for (let angleIndex = 0; angleIndex < options.angles; angleIndex += 1) {
     const angle = sampleValue(angleIndex, options.angles, 0, Math.PI * 2);
@@ -330,6 +378,7 @@ function searchSolutions(
       for (let waitIndex = 0; waitIndex < options.waits; waitIndex += 1) {
         const waitTime = sampleValue(waitIndex, options.waits, 0, options.maxWait);
         const shot = buildShot(angle, dragPower, waitTime);
+        applyVisitState(level, entryVisitState);
         const result = simulateShot(level, shot, {
           maxTime: options.maxTime,
           startPosition,
@@ -348,7 +397,7 @@ function searchSolutions(
             result.planetIndex !== null &&
             !visitedPlanets.has(result.planetIndex)
           ) {
-            landingCandidates.push({ shot, result });
+            landingCandidates.push({ shot, result, visitState: captureVisitState(level) });
           }
         } else if (result.outcome === 'crash') {
           if (result.reason === 'goal-closed') {
@@ -369,6 +418,7 @@ function searchSolutions(
   for (const candidate of chooseLandingCandidates(landingCandidates, options)) {
     const nextVisitedPlanets = new Set(visitedPlanets);
     nextVisitedPlanets.add(candidate.result.planetIndex);
+    applyVisitState(level, candidate.visitState);
     const nested = searchSolutions(
       level,
       candidate.result.finalPosition,

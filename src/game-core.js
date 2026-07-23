@@ -2969,30 +2969,115 @@ for (const proto of VISIT_ALL_PROTOTYPES) {
 // inside a bounded clock (timeWindowSeconds). The footer scrubber winds the
 // clock; the puzzle is spotting the moment one launch can graze every wheel.
 // Phases are tuned with scripts/solve-clockwork.js.
-const CLOCKWORK_PROTOTYPE_LEVEL = {
-  id: 'proto-clockwork-orrery',
-  name: 'Clockwork Orrery',
-  summary: 'Wind the clock until the wheels line up, then graze all three in one launch.',
-  visitAll: true,
-  timeWindowSeconds: 60,
-  sun: [0, 0],
-  startPlanetIndex: 0,
-  launchPresets: [
-    { angleDeg: 30, power: 1.6 },
-    { angleDeg: 75, power: 2.2 },
-  ],
-  startAnchor: polar(2.7, -150),
-  goalCenter: polar(8.9, 30),
-  goalOpenSeconds: 14,
-  planets: [
-    { name: 'Mainspring', position: polar(2.0, -150), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
-    { name: 'Minute Wheel', position: polar(3.4, 40), radius: 0.72, gravity: 8.6, falloff: 5.6, core: 0x74bbff, glow: 0x94dbff, landable: true, landingRadius: 1.22, orbitAngularSpeed: 0.9, spinAngularSpeed: -0.4 },
-    { name: 'Hour Wheel', position: polar(4.9, 160), radius: 0.8, gravity: 9.6, falloff: 6.0, core: 0xf39a66, glow: 0xffcf86, landable: true, landingRadius: 1.3, orbitAngularSpeed: 0.6, spinAngularSpeed: 0.35 },
-    { name: 'Bell Wheel', position: polar(6.5, 260), radius: 0.86, gravity: 10.4, falloff: 6.4, core: 0xff7fa2, glow: 0xffb8c9, landable: true, landingRadius: 1.36, orbitAngularSpeed: 0.3, spinAngularSpeed: -0.2 },
-  ],
-};
-LEVEL_DEFINITIONS.push(CLOCKWORK_PROTOTYPE_LEVEL);
-CAMPAIGN_LEVEL_ORDER.push(CLOCKWORK_PROTOTYPE_LEVEL.id);
+const CLOCKWORK_PROTOTYPE_LEVELS = [
+  {
+    id: 'proto-clockwork-orrery',
+    name: 'Clockwork Orrery',
+    summary: 'Wind the clock until the wheels line up, then graze all three in one launch.',
+    visitAll: true,
+    timeWindowSeconds: 60,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 30, power: 1.6 },
+      { angleDeg: 75, power: 2.2 },
+    ],
+    startAnchor: polar(2.7, -150),
+    goalCenter: polar(8.9, 30),
+    goalOpenSeconds: 14,
+    planets: [
+      { name: 'Mainspring', position: polar(2.0, -150), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
+      { name: 'Minute Wheel', position: polar(3.4, 40), radius: 0.72, gravity: 8.6, falloff: 5.6, core: 0x74bbff, glow: 0x94dbff, landable: true, landingRadius: 1.22, orbitAngularSpeed: 0.9, spinAngularSpeed: -0.4 },
+      { name: 'Hour Wheel', position: polar(4.9, 160), radius: 0.8, gravity: 9.6, falloff: 6.0, core: 0xf39a66, glow: 0xffcf86, landable: true, landingRadius: 1.3, orbitAngularSpeed: 0.6, spinAngularSpeed: 0.35 },
+      { name: 'Bell Wheel', position: polar(6.5, 260), radius: 0.86, gravity: 10.4, falloff: 6.4, core: 0xff7fa2, glow: 0xffb8c9, landable: true, landingRadius: 1.36, orbitAngularSpeed: 0.3, spinAngularSpeed: -0.2 },
+    ],
+  },
+  {
+    // Hypothesis: the launch pad itself is the clock hand. A fast eccentric
+    // start orbit means scrubbing mostly changes YOUR inherited velocity —
+    // the golden moment is when the pad slings you through both wheels.
+    id: 'proto-clockwork-sling',
+    name: 'Sling Window',
+    summary: 'Your launch world is the fastest wheel — wait for the moment it throws you true.',
+    visitAll: true,
+    timeWindowSeconds: 50,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 20, power: 1.8 },
+      { angleDeg: 60, power: 2.4 },
+    ],
+    startAnchor: polar(3.1, -120),
+    goalCenter: polar(7.4, 310),
+    goalOpenSeconds: 14,
+    planets: [
+      { name: 'Flywheel', position: polar(2.4, -120), radius: 0.6, gravity: 7.2, falloff: 4.9, core: 0x8b85ff, glow: 0xc6beff, landable: true, orbitAngularSpeed: 0.8, orbitEccentricity: 0.2, spinAngularSpeed: 0.2 },
+      { name: 'Cam', position: polar(4.4, 70), radius: 0.76, gravity: 9.0, falloff: 5.8, core: 0x74bbff, glow: 0x94dbff, landable: true, landingRadius: 1.26, orbitAngularSpeed: 0.35, spinAngularSpeed: -0.3 },
+      { name: 'Rocker', position: polar(6.2, 200), radius: 0.84, gravity: 10.0, falloff: 6.3, core: 0xf39a66, glow: 0xffcf86, landable: true, landingRadius: 1.34, orbitAngularSpeed: 0.18, spinAngularSpeed: 0.25 },
+    ],
+  },
+  {
+    // Hypothesis: occlusion timing. The grazes are approachable, but a heavy
+    // non-landable Warden sweeps across the goal lane — the clock decides
+    // whether the finish is open, not whether the chain exists.
+    id: 'proto-clockwork-eclipse',
+    name: 'Warden Eclipse',
+    summary: 'The wheels are willing, but the Warden crosses the goal lane — finish while it looks away.',
+    visitAll: true,
+    timeWindowSeconds: 60,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 40, power: 1.7 },
+      { angleDeg: 85, power: 2.3 },
+    ],
+    startAnchor: polar(2.65, -155),
+    goalCenter: polar(9.0, 158),
+    goalRadius: 0.72,
+    goalPullRadius: 5.4,
+    goalPullStrength: 7.4,
+    goalOpenSeconds: 14,
+    planets: [
+      { name: 'Keeper', position: polar(2.0, -155), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.12, spinAngularSpeed: 0.12 },
+      { name: 'West Gong', position: polar(3.9, 95), radius: 0.74, gravity: 8.8, falloff: 5.7, core: 0x74bbff, glow: 0x94dbff, landable: true, landingRadius: 1.24, orbitAngularSpeed: 0.45, spinAngularSpeed: -0.35 },
+      { name: 'East Gong', position: polar(5.4, 140), radius: 0.8, gravity: 9.6, falloff: 6.0, core: 0xff7fa2, glow: 0xffb8c9, landable: true, landingRadius: 1.3, orbitAngularSpeed: 0.45, spinAngularSpeed: 0.3 },
+      { name: 'Warden', position: polar(7.3, 55), radius: 1.15, gravity: 13.0, falloff: 7.0, core: 0xff8f74, glow: 0xffcfad, landable: false, orbitAngularSpeed: 0.25, spinAngularSpeed: -0.05 },
+    ],
+  },
+  {
+    // Hypothesis: the window as a spendable resource across TWO shots. No
+    // single launch can chain all three checkpoints; catch an early alignment,
+    // land on the Balance Wheel, then find the second alignment with whatever
+    // clock remains. Undo literally buys time back.
+    id: 'proto-clockwork-escapement',
+    name: 'Escapement',
+    summary: 'Two beats, one spring: graze what you can, land on the Balance Wheel, spend what is left.',
+    visitAll: true,
+    timeWindowSeconds: 75,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 15, power: 1.6 },
+      { angleDeg: 55, power: 2.3 },
+    ],
+    startAnchor: polar(2.75, -140),
+    goalCenter: polar(9.1, -35),
+    goalRadius: 0.72,
+    goalPullRadius: 5.4,
+    goalPullStrength: 7.4,
+    goalOpenSeconds: 16,
+    planets: [
+      { name: 'Anchor', position: polar(2.1, -140), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.08, spinAngularSpeed: 0.1 },
+      { name: 'Pallet One', position: polar(3.6, 30), radius: 0.72, gravity: 8.7, falloff: 5.6, core: 0x8b85ff, glow: 0xc6beff, landable: true, landingRadius: 1.22, orbitAngularSpeed: 0.75, spinAngularSpeed: -0.4 },
+      { name: 'Balance Wheel', position: polar(5.2, 150), radius: 0.86, gravity: 9.8, falloff: 6.2, core: 0xf39a66, glow: 0xffcf86, landable: true, landingRadius: 1.5, orbitAngularSpeed: 0.4, spinAngularSpeed: 0.3 },
+      { name: 'Pallet Two', position: polar(7.0, 275), radius: 0.78, gravity: 10.2, falloff: 6.5, core: 0xff7fa2, glow: 0xffb8c9, landable: true, landingRadius: 1.28, orbitAngularSpeed: 0.12, spinAngularSpeed: -0.2 },
+    ],
+  },
+];
+for (const clockworkLevel of CLOCKWORK_PROTOTYPE_LEVELS) {
+  LEVEL_DEFINITIONS.push(clockworkLevel);
+  CAMPAIGN_LEVEL_ORDER.push(clockworkLevel.id);
+}
 
 const campaignOrderIndex = new Map(
   CAMPAIGN_LEVEL_ORDER.map((levelId, index) => [levelId, index]),
