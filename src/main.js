@@ -175,6 +175,9 @@ app.innerHTML = `
           </div>
         </div>
         <div class="clock-dock" id="clockControl" hidden>
+          <button id="clockLaunchButton" class="clock-launch" type="button" hidden aria-label="Launch armed shot" title="Launch (Space)">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>
+          </button>
           <span class="clock-dock-time" id="clockScrubValue">0.0s</span>
           <div class="clock-dock-bar">
             <div class="clock-ruler" id="clockRuler" aria-hidden="true"></div>
@@ -380,6 +383,7 @@ const clockScrubSlider = document.querySelector('#clockScrubSlider');
 const clockScrubValue = document.querySelector('#clockScrubValue');
 const clockRuler = document.querySelector('#clockRuler');
 const clockWindowEnd = document.querySelector('#clockWindowEnd');
+const clockLaunchButton = document.querySelector('#clockLaunchButton');
 const powerFill = document.querySelector('#powerFill');
 const fpsPanel = document.querySelector('#fpsPanel');
 const fpsValue = document.querySelector('#fpsValue');
@@ -1159,6 +1163,7 @@ const state = {
   timeSpeedIndex: 2,
   resumeTimeSpeedIndex: 2,
   dragActive: false,
+  armedShot: null,
   dragPower: 0,
   roundSettled: true,
   relayPulse: 0,
@@ -2734,6 +2739,7 @@ function applyCheckpointState(checkpoint) {
   setVec(state.dragPointerWorld, state.ball.position);
   state.dragActive = false;
   state.dragPower = 0;
+  state.armedShot = null;
   state.roundSettled = true;
   state.relayPulse = 0.8;
   state.shots = checkpoint.shots;
@@ -2919,6 +2925,7 @@ function applyPlaybackBallState(ballState) {
   setVec(state.dragPointerWorld, state.ball.position);
   state.dragActive = false;
   state.dragPower = 0;
+  state.armedShot = null;
   state.roundSettled = false;
   state.relayPulse = 0;
   resetBallRenderState();
@@ -3368,6 +3375,7 @@ function startUndo() {
   stopAdminReplay();
   state.dragActive = false;
   state.dragPower = 0;
+  state.armedShot = null;
   state.roundSettled = false;
   state.relayPulse = 0;
   resetBallTrace();
@@ -4907,6 +4915,7 @@ function beginGoalClosure(hint, options = {}) {
   state.ball.velocity.y = 0;
   state.dragActive = false;
   state.dragPower = 0;
+  state.armedShot = null;
   state.roundSettled = true;
   state.relayPulse = 0;
   state.goalCloseAnimation.active = true;
@@ -5117,6 +5126,7 @@ function syncClockControl() {
     rgba(255, 208, 122, 0.6) ${nowPercent}%,
     rgba(237, 243, 255, 0.12) ${nowPercent}%)`;
   clockScrubValue.textContent = `${time.toFixed(1)}s`;
+  clockLaunchButton.hidden = !state.armedShot;
 }
 
 function setControlShot(stageIndex, angleDeg, power) {
@@ -7217,7 +7227,9 @@ function syncHud() {
     'is-hot',
     getGoalRemainingTime(state.level, state.ball.time ?? state.level.time ?? 0) < 2.5,
   );
-  const shownPower = state.dragActive ? state.dragPower : getControlShot().power;
+  const shownPower = state.dragActive
+    ? state.dragPower
+    : (state.armedShot?.power ?? getControlShot().power);
   powerFill.style.transform = `scaleX(${Math.max(0.04, shownPower / MAX_DRAG_DISTANCE)})`;
   const levelPar = getLevelPar(state.level);
   const levelBest = getLevelBest(state.level.id);
@@ -7307,9 +7319,12 @@ function syncTutorialOverlay() {
 
 function updateAimPreview() {
   const mode = getSettings().aimPreview;
+  // A live drag previews as before; an armed clockwork shot keeps previewing
+  // after release, so scrubbing the clock shows the shot's future change live.
+  const dragging = state.dragActive && state.dragPower > 0.14;
+  const armed = !state.dragActive && Boolean(state.armedShot);
   const active = mode !== 'off'
-    && state.dragActive
-    && state.dragPower > 0.14
+    && (dragging || armed)
     && !ballIsMoving()
     && !state.adminReplay.active
     && aimPreviewLevel;
@@ -7319,12 +7334,14 @@ function updateAimPreview() {
     return;
   }
 
+  const aimInputDirection = dragging ? state.aimDirection : state.armedShot.direction;
+  const aimPower = dragging ? state.dragPower : state.armedShot.power;
   const startTime = state.ball.time ?? state.level.time ?? 0;
   setLevelTime(aimPreviewLevel, startTime);
   resetPreviewVisitState();
   const launchPlanetIndex = state.ball.anchorPlanetIndex;
-  const direction = constrainLaunchDirection(state.aimDirection, state.dragPower);
-  const relativeVelocity = launchVelocity(direction, state.dragPower);
+  const direction = constrainLaunchDirection(aimInputDirection, aimPower);
+  const relativeVelocity = launchVelocity(direction, aimPower);
   const bodyVelocity = launchPlanetIndex !== null
     ? getPlanetVelocity(aimPreviewLevel, launchPlanetIndex, startTime)
     : { x: 0, y: 0 };
@@ -7503,6 +7520,7 @@ function resetBall(message, hint, options = {}) {
   setVec(state.dragPointerWorld, state.ball.position);
   state.dragActive = false;
   state.dragPower = 0;
+  state.armedShot = null;
   state.roundSettled = true;
   state.relayPulse = 0;
   state.turretShot = null;
@@ -7673,6 +7691,7 @@ function beginLanding(result) {
   setVec(state.dragPointerWorld, state.ball.position);
   state.dragActive = false;
   state.dragPower = 0;
+  state.armedShot = null;
   state.roundSettled = true;
   state.relayPulse = 1;
   resetBallRenderState();
@@ -7905,6 +7924,7 @@ function launchShot(direction, power, anchor) {
   beginAttemptTrail();
   state.dragActive = false;
   state.dragPower = 0;
+  state.armedShot = null;
   setControlShot(activeStageIndex, angleDegFromDirection(launchDirection), power);
   setVec(state.dragAnchor, state.ball.position);
   setVec(state.dragStartWorld, state.ball.position);
@@ -7960,8 +7980,11 @@ function onPointerMove(event) {
     const remaining = getIceLaunchLockRemaining(getAnchoredIcePlanet());
     state.message = 'Aim while the ball settles.';
     state.hint = `Burn loaded: ${state.dragPower.toFixed(2)} / ${MAX_DRAG_DISTANCE.toFixed(1)} · unlocks in ${remaining.toFixed(1)}s`;
+  } else if (state.dragPower <= 0.12) {
+    state.message = 'Release here to cancel.';
+    state.hint = 'Pull further from the ball to load the launch. Esc also cancels.';
   } else {
-    state.message = 'Release to launch.';
+    state.message = getClockworkWindowSeconds() !== null ? 'Release to arm the shot.' : 'Release to launch.';
     state.hint = `Burn loaded: ${state.dragPower.toFixed(2)} / ${MAX_DRAG_DISTANCE.toFixed(1)}`;
   }
   syncHud();
@@ -7987,10 +8010,43 @@ function onPointerUp(event) {
       syncHud();
       return;
     }
+    // Clockwork levels separate aiming from firing: release ARMS the shot so
+    // the player can scrub the clock with the aim held, then fire explicitly.
+    if (getClockworkWindowSeconds() !== null) {
+      const armedShot = {
+        direction: { x: state.aimDirection.x, y: state.aimDirection.y },
+        power: state.dragPower,
+      };
+      state.dragActive = false;
+      state.dragPower = 0;
+      audio.stopLoop('drag');
+      setVec(state.dragAnchor, state.ball.position);
+      setVec(state.dragStartWorld, state.ball.position);
+      state.armedShot = armedShot;
+      state.message = 'Shot armed.';
+      state.hint = 'Scrub the clock to pick your moment, then press Launch (Space). Tap the ball to cancel.';
+      syncHud();
+      return;
+    }
     launchShot(state.aimDirection, state.dragPower, state.dragAnchor);
     return;
   }
 
+  state.dragActive = false;
+  state.dragPower = 0;
+  state.armedShot = null;
+  audio.stopLoop('drag');
+  setVec(state.dragAnchor, state.ball.position);
+  setVec(state.dragStartWorld, state.ball.position);
+  state.message = 'Launch cancelled.';
+  state.hint = 'Grab the ball and pull back to start the run.';
+  syncHud();
+}
+
+function cancelDrag() {
+  if (!state.dragActive) {
+    return;
+  }
   state.dragActive = false;
   state.dragPower = 0;
   audio.stopLoop('drag');
@@ -8001,10 +8057,35 @@ function onPointerUp(event) {
   syncHud();
 }
 
+function fireArmedShot() {
+  if (
+    !state.armedShot
+    || ballIsMoving()
+    || state.undo.active
+    || state.rewindPlayback.active
+    || state.gameOver.open
+    || state.goalCloseAnimation.active
+    || state.adminReplay.active
+    || state.worldMap.open
+    || state.settingsOpen
+    || state.daily.modalOpen
+    || isLaunchLockedByIce()
+  ) {
+    return;
+  }
+  const shot = state.armedShot;
+  state.armedShot = null;
+  launchShot(shot.direction, shot.power, { x: state.ball.position.x, y: state.ball.position.y });
+}
+
 renderer.domElement.addEventListener('pointerdown', onPointerDown);
 renderer.domElement.addEventListener('pointermove', onPointerMove);
 renderer.domElement.addEventListener('pointerup', onPointerUp);
 renderer.domElement.addEventListener('pointercancel', onPointerUp);
+renderer.domElement.addEventListener('contextmenu', (event) => {
+  event.preventDefault();
+  cancelDrag();
+});
 
 function restartLevel() {
   if (!canRetryLevel()) {
@@ -8041,6 +8122,9 @@ worldMapNodes.addEventListener('click', (event) => {
 
   state.worldMap.selectedWorldIndex = clamp(selectedWorldIndex, 0, WORLD_DEFINITIONS.length - 1);
   syncWorldMap();
+});
+clockLaunchButton.addEventListener('click', () => {
+  fireArmedShot();
 });
 clockScrubSlider.addEventListener('pointerdown', () => {
   clockScrubPointerActive = true;
@@ -8392,6 +8476,28 @@ window.addEventListener('keydown', (event) => {
       event.preventDefault();
       continueFromWorldMap();
     }
+    return;
+  }
+
+  if (event.key === 'Escape') {
+    if (state.dragActive) {
+      event.preventDefault();
+      cancelDrag();
+      return;
+    }
+    if (state.armedShot) {
+      event.preventDefault();
+      state.armedShot = null;
+      state.message = 'Launch cancelled.';
+      state.hint = 'Grab the ball and pull back to aim again.';
+      syncHud();
+      return;
+    }
+  }
+
+  if (event.code === 'Space' && !event.metaKey && !event.ctrlKey && !event.altKey && state.armedShot) {
+    event.preventDefault();
+    fireArmedShot();
     return;
   }
 
