@@ -8156,20 +8156,30 @@ clockScrubSlider.addEventListener('input', (event) => {
   scrubClockTo(Number.parseFloat(event.target.value));
 });
 
-// Touch targets: the native range input is far too small a drag target on
-// phones, so the WHOLE dock pill is the scrub surface (movie-player style —
-// including tap-to-seek). The input itself is pointer-events: none, visual only.
-function seekClockFromClientX(clientX) {
+// Touch scrubbing: the WHOLE dock pill is the drag surface, and dragging is
+// RELATIVE — grabbing the bar never jumps the clock (a tap changes nothing);
+// finger movement applies time deltas at track scale. Holding the finger past
+// either end of the track keeps the clock creeping in that direction, so the
+// full window is reachable from any grab point.
+let clockScrubLastClientX = 0;
+let clockScrubCreepPerSecond = 0;
+
+function clockSecondsPerPixel() {
   const windowSeconds = getClockworkWindowSeconds();
-  if (windowSeconds === null || clockScrubSlider.disabled) {
-    return;
-  }
   const rect = clockScrubSlider.getBoundingClientRect();
-  if (rect.width <= 0) {
+  if (windowSeconds === null || rect.width <= 0) {
+    return null;
+  }
+  return windowSeconds / rect.width;
+}
+
+function scrubClockBySeconds(deltaSeconds) {
+  const windowSeconds = getClockworkWindowSeconds();
+  if (windowSeconds === null || clockScrubSlider.disabled || deltaSeconds === 0) {
     return;
   }
-  const fraction = clamp((clientX - rect.left) / rect.width, 0, 1);
-  const targetTime = clamp(fraction * windowSeconds, getClockScrubMinTime(), windowSeconds);
+  const currentTime = state.ball.time ?? state.level.time ?? 0;
+  const targetTime = clamp(currentTime + deltaSeconds, getClockScrubMinTime(), windowSeconds);
   clockScrubSlider.value = String(targetTime);
   scrubClockTo(targetTime);
 }
@@ -8180,24 +8190,45 @@ clockControl.addEventListener('pointerdown', (event) => {
   }
   event.preventDefault();
   clockScrubPointerActive = true;
+  clockScrubLastClientX = event.clientX;
+  clockScrubCreepPerSecond = 0;
   clockControl.setPointerCapture(event.pointerId);
-  seekClockFromClientX(event.clientX);
 });
 clockControl.addEventListener('pointermove', (event) => {
   if (!clockScrubPointerActive) {
     return;
   }
-  seekClockFromClientX(event.clientX);
+  const perPixel = clockSecondsPerPixel();
+  if (perPixel === null) {
+    return;
+  }
+  scrubClockBySeconds((event.clientX - clockScrubLastClientX) * perPixel);
+  clockScrubLastClientX = event.clientX;
+  // Past the track edge, keep creeping — faster the further past.
+  const rect = clockScrubSlider.getBoundingClientRect();
+  const overshootPx = event.clientX < rect.left
+    ? event.clientX - rect.left
+    : event.clientX > rect.right
+      ? event.clientX - rect.right
+      : 0;
+  clockScrubCreepPerSecond = overshootPx * perPixel * 2.5;
 });
-clockControl.addEventListener('pointerup', () => {
+
+function endClockScrubGesture() {
   clockScrubPointerActive = false;
-});
-clockControl.addEventListener('pointercancel', () => {
-  clockScrubPointerActive = false;
-});
-window.addEventListener('pointerup', () => {
-  clockScrubPointerActive = false;
-});
+  clockScrubCreepPerSecond = 0;
+}
+
+clockControl.addEventListener('pointerup', endClockScrubGesture);
+clockControl.addEventListener('pointercancel', endClockScrubGesture);
+window.addEventListener('pointerup', endClockScrubGesture);
+
+function updateClockScrubCreep(delta) {
+  if (!clockScrubPointerActive || clockScrubCreepPerSecond === 0) {
+    return;
+  }
+  scrubClockBySeconds(clockScrubCreepPerSecond * delta);
+}
 
 timeSpeedSlider.addEventListener('input', (event) => {
   const nextIndex = clamp(Number.parseInt(event.target.value, 10), 0, TIME_SPEED_VALUES.length - 1);
@@ -9450,6 +9481,7 @@ function animate() {
   world.scale.setScalar(1 + zoomPunch);
   updateScreenShake(delta);
   updateGoalBursts(delta);
+  updateClockScrubCreep(delta);
   updateAimPreview();
   updateFutureArcs();
   syncClockControl();
