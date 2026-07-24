@@ -2261,6 +2261,12 @@ h1 {
     width: auto;
   }
 
+  /* Clockwork levels: the dock owns the bottom strip, so Retry/Undo move
+     up to sit just above it. */
+  .table-frame.has-clock-dock .action-row {
+    bottom: calc(88px + env(safe-area-inset-bottom));
+  }
+
   .game-over-actions {
     display: none;
   }

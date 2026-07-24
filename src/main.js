@@ -384,6 +384,7 @@ const clockScrubValue = document.querySelector('#clockScrubValue');
 const clockRuler = document.querySelector('#clockRuler');
 const clockWindowEnd = document.querySelector('#clockWindowEnd');
 const clockLaunchButton = document.querySelector('#clockLaunchButton');
+const tableFrame = document.querySelector('.table-frame');
 const powerFill = document.querySelector('#powerFill');
 const fpsPanel = document.querySelector('#fpsPanel');
 const fpsValue = document.querySelector('#fpsValue');
@@ -5095,9 +5096,13 @@ function syncClockControl() {
   const windowSeconds = getClockworkWindowSeconds();
   if (windowSeconds === null) {
     clockControl.hidden = true;
+    tableFrame.classList.remove('has-clock-dock');
     return;
   }
   clockControl.hidden = false;
+  // Portrait mobile parks the Retry/Undo action row in the bottom strip the
+  // dock occupies — this class lifts the row above the dock (see style.css).
+  tableFrame.classList.add('has-clock-dock');
   if (clockControl.dataset.window !== String(windowSeconds)) {
     clockControl.dataset.window = String(windowSeconds);
     clockScrubSlider.min = '0';
