@@ -3209,6 +3209,120 @@ const CLOCKWORK_PROTOTYPE_LEVELS = [
       { name: 'Resonator', position: polar(6.7, 300), radius: 0.84, gravity: 10.2, falloff: 6.4, core: 0xff7fa2, glow: 0xffb8c9, landable: true, landingRadius: 1.34, orbitAngularSpeed: 0.16, spinAngularSpeed: -0.2 },
     ],
   },
+  {
+    // Hypothesis: sweeping hazard timing. The pulsar's beams rotate like a
+    // lighthouse across the middle annulus; the buoys are easy to reach but
+    // the clock decides whether the lane is lit. Beams cover only 3.2–8.2
+    // radius, so the parked ball (r~2) and the goal (r 9) are never swept —
+    // scrubbing can't kill you, only flying badly can.
+    id: 'proto-clockwork-lighthouse',
+    name: 'Lighthouse',
+    summary: 'The pulsar sweeps the middle waters like a lighthouse — run the buoys while the beam looks away.',
+    timeWindowSeconds: 60,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 30, power: 1.7 },
+      { angleDeg: 75, power: 2.3 },
+    ],
+    startAnchor: polar(2.65, -150),
+    goalCenter: polar(7.3, 135),
+    goalRadius: 0.72,
+    goalPullRadius: 5.4,
+    goalPullStrength: 7.4,
+    goalOpenSeconds: 14,
+    pulsarJets: { periodSeconds: 3.4, activeSeconds: 0.85, phaseSeconds: 0, angleDeg: 10, angularSpeedDeg: 14, length: 5.0, innerRadius: 3.2, width: 0.4 },
+    planets: [
+      { name: "Keeper's Rock", position: polar(2.0, -150), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
+      { name: 'North Buoy', position: polar(4.3, 70), radius: 0.72, gravity: 8.8, falloff: 5.6, core: 0x74bbff, glow: 0x94dbff, landable: false, mustVisit: true, orbitAngularSpeed: 0.4, spinAngularSpeed: -0.3 },
+      { name: 'South Buoy', position: polar(6.2, 250), radius: 0.8, gravity: 9.6, falloff: 6.1, core: 0xff7fa2, glow: 0xffb8c9, landable: false, mustVisit: true, orbitAngularSpeed: 0.22, spinAngularSpeed: 0.25 },
+    ],
+  },
+  {
+    // Hypothesis: the scrubber as a POSITIONING tool. Landing on the ice
+    // glacier keeps you sliding — scrubbing time while parked rotates you
+    // around it, so the clock literally aims your next launch.
+    id: 'proto-clockwork-glacier',
+    name: 'Glacier Gear',
+    summary: 'Park on the glacier and wind the clock — you slide around it, and where you stop is where you launch.',
+    timeWindowSeconds: 70,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 40, power: 1.8 },
+      { angleDeg: 85, power: 2.4 },
+    ],
+    startAnchor: polar(2.65, -140),
+    goalCenter: polar(8.1, 340),
+    goalRadius: 0.72,
+    goalPullRadius: 5.4,
+    goalPullStrength: 7.4,
+    goalOpenSeconds: 16,
+    planets: [
+      { name: 'Base Camp', position: polar(2.0, -140), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
+      { name: 'The Glacier', position: polar(4.6, 90), radius: 1.0, gravity: 9.8, falloff: 6.2, core: 0xbfe8ff, glow: 0xe8fbff, landable: true, landingRadius: 1.7, surfaceType: 'ice', orbitAngularSpeed: 0.12, spinAngularSpeed: 0.3 },
+      { name: 'Floe East', position: polar(5.7, 0), radius: 0.72, gravity: 8.8, falloff: 5.7, core: 0x8b85ff, glow: 0xc6beff, landable: true, landingRadius: 1.22, mustVisit: true, orbitAngularSpeed: 0.25, spinAngularSpeed: -0.25 },
+      { name: 'Floe West', position: polar(6.9, 180), radius: 0.76, gravity: 9.2, falloff: 5.9, core: 0xf39a66, glow: 0xffcf86, landable: true, landingRadius: 1.26, mustVisit: true, orbitAngularSpeed: 0.18, spinAngularSpeed: 0.2 },
+    ],
+  },
+  {
+    // Hypothesis: the window IS a deadline. The sun swells into a red giant
+    // across the whole clock; the inner wheel gets swallowed around t≈45,
+    // so late scrub positions simply have less level left. The launch rock
+    // is never vulnerable — the deadline eats checkpoints, not the player.
+    id: 'proto-clockwork-swansong',
+    name: 'Swansong',
+    summary: 'The sun is dying on schedule. The inner wheel drowns first — the clock is a countdown, spend it well.',
+    timeWindowSeconds: 60,
+    sun: [0, 0],
+    startPlanetIndex: 1,
+    launchPresets: [
+      { angleDeg: 30, power: 1.7 },
+      { angleDeg: 70, power: 2.3 },
+    ],
+    startAnchor: polar(5.05, -150),
+    goalCenter: polar(6.3, 58),
+    goalRadius: 0.72,
+    goalPullRadius: 5.4,
+    goalPullStrength: 7.4,
+    goalOpenSeconds: 14,
+    redGiant: { startRadius: 0.42, endRadius: 3.7, growSeconds: 55, startTimeSeconds: 0 },
+    planets: [
+      { name: 'Cinder', position: polar(3.3, 60), radius: 0.66, gravity: 8.6, falloff: 5.5, core: 0xf39a66, glow: 0xffcf86, landable: false, mustVisit: true, orbitAngularSpeed: 0.3, spinAngularSpeed: -0.3, redGiantVulnerable: true, sunFadeStartRadius: 5.54, sunPlungeDuration: 0.72 },
+      { name: 'Last Light', position: polar(4.4, -150), radius: 0.62, gravity: 7.2, falloff: 5.0, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.08, spinAngularSpeed: 0.1, redGiantVulnerable: false },
+      { name: 'Ember', position: polar(5.2, 200), radius: 0.78, gravity: 9.4, falloff: 6.0, core: 0xff7fa2, glow: 0xffb8c9, landable: false, mustVisit: true, orbitAngularSpeed: 0.18, spinAngularSpeed: 0.2, redGiantVulnerable: false },
+    ],
+  },
+  {
+    // Hypothesis: a bombardment schedule. Each bell has a meteor with its
+    // name on it — graze it before its impact erases it. The bells are not
+    // landable, so the falling sky can never catch a parked ball.
+    id: 'proto-clockwork-fallingsky',
+    name: 'Falling Sky',
+    summary: 'Two bells, two meteors, one schedule. Graze each bell before its meteor rings it forever.',
+    timeWindowSeconds: 60,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 25, power: 1.7 },
+      { angleDeg: 70, power: 2.3 },
+    ],
+    startAnchor: polar(2.65, -150),
+    goalCenter: polar(6.9, 217),
+    goalRadius: 0.72,
+    goalPullRadius: 5.4,
+    goalPullStrength: 7.4,
+    goalOpenSeconds: 14,
+    meteorImpacts: [
+      { targetPlanetIndex: 1, impactTimeSeconds: 30, warningSeconds: 6, approachAngleDeg: -60, startDistance: 11, radius: 0.2 },
+      { targetPlanetIndex: 2, impactTimeSeconds: 52, warningSeconds: 6, approachAngleDeg: 120, startDistance: 11, radius: 0.2 },
+    ],
+    planets: [
+      { name: 'Shelter', position: polar(2.0, -150), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
+      { name: 'First Bell', position: polar(4.0, 50), radius: 0.72, gravity: 8.8, falloff: 5.6, core: 0x74bbff, glow: 0x94dbff, landable: true, landingRadius: 1.22, mustVisit: true, orbitAngularSpeed: 0.35, spinAngularSpeed: -0.3 },
+      { name: 'Second Bell', position: polar(5.9, 210), radius: 0.8, gravity: 9.6, falloff: 6.1, core: 0x8b85ff, glow: 0xc6beff, landable: true, landingRadius: 1.3, mustVisit: true, orbitAngularSpeed: 0.2, spinAngularSpeed: 0.25 },
+    ],
+  },
 ];
 for (const clockworkLevel of CLOCKWORK_PROTOTYPE_LEVELS) {
   LEVEL_DEFINITIONS.push(clockworkLevel);
