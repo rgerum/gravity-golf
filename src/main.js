@@ -8146,15 +8146,49 @@ worldMapNodes.addEventListener('click', (event) => {
 clockLaunchButton.addEventListener('click', () => {
   fireArmedShot();
 });
-clockScrubSlider.addEventListener('pointerdown', () => {
-  clockScrubPointerActive = true;
-});
+// Keyboard scrubbing still goes through the native input (arrow keys).
 clockScrubSlider.addEventListener('input', (event) => {
   scrubClockTo(Number.parseFloat(event.target.value));
 });
-clockScrubSlider.addEventListener('change', (event) => {
+
+// Touch targets: the native range input is far too small a drag target on
+// phones, so the WHOLE dock pill is the scrub surface (movie-player style —
+// including tap-to-seek). The input itself is pointer-events: none, visual only.
+function seekClockFromClientX(clientX) {
+  const windowSeconds = getClockworkWindowSeconds();
+  if (windowSeconds === null || clockScrubSlider.disabled) {
+    return;
+  }
+  const rect = clockScrubSlider.getBoundingClientRect();
+  if (rect.width <= 0) {
+    return;
+  }
+  const fraction = clamp((clientX - rect.left) / rect.width, 0, 1);
+  const targetTime = clamp(fraction * windowSeconds, getClockScrubMinTime(), windowSeconds);
+  clockScrubSlider.value = String(targetTime);
+  scrubClockTo(targetTime);
+}
+
+clockControl.addEventListener('pointerdown', (event) => {
+  if (event.target instanceof Element && event.target.closest('button')) {
+    return;
+  }
+  event.preventDefault();
+  clockScrubPointerActive = true;
+  clockControl.setPointerCapture(event.pointerId);
+  seekClockFromClientX(event.clientX);
+});
+clockControl.addEventListener('pointermove', (event) => {
+  if (!clockScrubPointerActive) {
+    return;
+  }
+  seekClockFromClientX(event.clientX);
+});
+clockControl.addEventListener('pointerup', () => {
   clockScrubPointerActive = false;
-  scrubClockTo(Number.parseFloat(event.target.value));
+});
+clockControl.addEventListener('pointercancel', () => {
+  clockScrubPointerActive = false;
 });
 window.addEventListener('pointerup', () => {
   clockScrubPointerActive = false;

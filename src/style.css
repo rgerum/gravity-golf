@@ -346,6 +346,11 @@ h1 {
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   pointer-events: auto;
+  /* The whole pill is the scrub surface; never hand these to page scrolling. */
+  touch-action: none;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .clock-dock[hidden] {
@@ -439,7 +444,9 @@ h1 {
   border-radius: 999px;
   background: rgba(237, 243, 255, 0.12);
   outline: none;
-  cursor: pointer;
+  /* Visual only — the dock's own pointer handlers do the scrubbing, so the
+     touch target is the full pill, not this thin strip. */
+  pointer-events: none;
 }
 
 .clock-dock input[type='range']::-webkit-slider-thumb {
@@ -471,7 +478,7 @@ h1 {
   .clock-dock {
     bottom: 10px;
     gap: 8px;
-    padding: 7px 12px;
+    padding: 14px 12px;
     width: calc(100% - 20px);
   }
 
@@ -479,6 +486,24 @@ h1 {
   .clock-dock-end {
     font-size: 0.62rem;
     min-width: 38px;
+  }
+}
+
+@media (pointer: coarse) {
+  /* Fat-finger comfort: a taller pill and a bigger thumb. */
+  .clock-dock {
+    padding-top: 16px;
+    padding-bottom: 16px;
+  }
+
+  .clock-dock input[type='range']::-webkit-slider-thumb {
+    width: 24px;
+    height: 24px;
+  }
+
+  .clock-dock input[type='range']::-moz-range-thumb {
+    width: 22px;
+    height: 22px;
   }
 }
 
