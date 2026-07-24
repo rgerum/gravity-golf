@@ -175,8 +175,8 @@ app.innerHTML = `
           </div>
         </div>
         <div class="clock-dock" id="clockControl" hidden>
-          <button id="clockLaunchButton" class="clock-launch" type="button" hidden aria-label="Launch armed shot" title="Launch (Space)">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>
+          <button id="clockLaunchButton" class="clock-fire-badge" type="button" hidden title="Fire (Space, or tap anywhere)">
+            <span class="clock-fire-dot" aria-hidden="true"></span>Armed — tap anywhere to fire
           </button>
           <span class="clock-dock-time" id="clockScrubValue">0.0s</span>
           <div class="clock-dock-bar">
@@ -7934,6 +7934,10 @@ function launchShot(direction, power, anchor) {
   syncHud();
 }
 
+// Peak stretch of the current pointer gesture: distinguishes a true tap
+// (fires an armed shot) from a pulled-then-returned drag (cancels instead).
+let dragMaxPower = 0;
+
 function onPointerDown(event) {
   if (
     state.worldMap.open
@@ -7950,6 +7954,7 @@ function onPointerDown(event) {
 
   const point = getWorldPointFromEvent(event);
   state.dragActive = true;
+  dragMaxPower = 0;
   setVec(state.dragStartWorld, point);
   setVec(state.dragPointerWorld, point);
   renderer.domElement.setPointerCapture(event.pointerId);
@@ -7975,6 +7980,7 @@ function onPointerMove(event) {
   const point = getWorldPointFromEvent(event);
   setVec(state.dragPointerWorld, point);
   updateDragState(point);
+  dragMaxPower = Math.max(dragMaxPower, state.dragPower);
   audio.setLoopParams('drag', { power: Math.min(1, state.dragPower / MAX_DRAG_DISTANCE) });
   if (isLaunchLockedByIce()) {
     const remaining = getIceLaunchLockRemaining(getAnchoredIcePlanet());
@@ -8024,7 +8030,7 @@ function onPointerUp(event) {
       setVec(state.dragStartWorld, state.ball.position);
       state.armedShot = armedShot;
       state.message = 'Shot armed.';
-      state.hint = 'Scrub the clock to pick your moment, then press Launch (Space). Tap the ball to cancel.';
+      state.hint = 'Tap anywhere to fire — or scrub the clock first. Esc cancels.';
       syncHud();
       return;
     }
@@ -8034,10 +8040,15 @@ function onPointerUp(event) {
 
   state.dragActive = false;
   state.dragPower = 0;
-  state.armedShot = null;
   audio.stopLoop('drag');
   setVec(state.dragAnchor, state.ball.position);
   setVec(state.dragStartWorld, state.ball.position);
+  if (state.armedShot && dragMaxPower <= 0.25) {
+    // A clean tap while armed fires; a pulled-then-returned drag cancels below.
+    fireArmedShot();
+    return;
+  }
+  state.armedShot = null;
   state.message = 'Launch cancelled.';
   state.hint = 'Grab the ball and pull back to start the run.';
   syncHud();
@@ -8084,7 +8095,16 @@ renderer.domElement.addEventListener('pointerup', onPointerUp);
 renderer.domElement.addEventListener('pointercancel', onPointerUp);
 renderer.domElement.addEventListener('contextmenu', (event) => {
   event.preventDefault();
-  cancelDrag();
+  if (state.dragActive) {
+    cancelDrag();
+    return;
+  }
+  if (state.armedShot) {
+    state.armedShot = null;
+    state.message = 'Launch cancelled.';
+    state.hint = 'Grab the ball and pull back to aim again.';
+    syncHud();
+  }
 });
 
 function restartLevel() {
