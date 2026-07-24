@@ -3073,6 +3073,142 @@ const CLOCKWORK_PROTOTYPE_LEVELS = [
       { name: 'Pallet Two', position: polar(7.0, 275), radius: 0.78, gravity: 10.2, falloff: 6.5, core: 0xff7fa2, glow: 0xffb8c9, landable: true, landingRadius: 1.28, orbitAngularSpeed: 0.12, spinAngularSpeed: -0.2 },
     ],
   },
+  {
+    // Hypothesis: existing furniture becomes a new puzzle on a clock. The
+    // white portal ferries you across the system, but only when its orbit
+    // lines up with your lane — and the black exit decides where you emerge.
+    id: 'proto-clockwork-ferry',
+    name: 'Ferry Gate',
+    summary: 'The far bell is out of reach — unless you catch the ferry portal as it crosses your lane.',
+    visitAll: true,
+    timeWindowSeconds: 60,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 25, power: 1.7 },
+      { angleDeg: 70, power: 2.3 },
+    ],
+    startAnchor: polar(2.65, -150),
+    goalCenter: polar(8.1, 245),
+    goalRadius: 0.72,
+    goalPullRadius: 5.4,
+    goalPullStrength: 7.4,
+    goalOpenSeconds: 16,
+    planets: [
+      { name: 'Dockmaster', position: polar(2.0, -150), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
+      { name: 'Near Bell', position: polar(3.6, 60), radius: 0.74, gravity: 8.8, falloff: 5.7, core: 0x74bbff, glow: 0x94dbff, landable: true, landingRadius: 1.24, orbitAngularSpeed: 0.5, spinAngularSpeed: -0.35 },
+      { name: 'Far Bell', position: polar(6.9, 210), radius: 0.8, gravity: 9.8, falloff: 6.2, core: 0xff7fa2, glow: 0xffb8c9, landable: true, landingRadius: 1.3, orbitAngularSpeed: 0.15, spinAngularSpeed: 0.25 },
+    ],
+    portals: [
+      { id: 'ferry-white', pairId: 'ferry-black', variant: 'white', position: polar(4.6, -20), radius: 0.68, orbitAngularSpeed: 0.35, orbitEccentricity: 0.04, core: 0xe8f6ff, glow: 0x9fe9ff },
+      { id: 'ferry-black', pairId: 'ferry-white', variant: 'black', position: polar(5.6, 205), radius: 0.68, orbitAngularSpeed: -0.15, orbitEccentricity: 0.04, core: 0x0b0616, glow: 0x7e67ff },
+    ],
+  },
+  {
+    // Hypothesis: the gravity field itself is the clock. Twin suns swing the
+    // safe corridor around the system; the wheels barely move, but WHEN you
+    // fly decides what shape space is.
+    id: 'proto-clockwork-furnace',
+    name: 'Twin Furnace',
+    summary: 'Two suns stir the field — the wheels wait patiently while the safe corridor swings.',
+    visitAll: true,
+    timeWindowSeconds: 60,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 35, power: 1.8 },
+      { angleDeg: 80, power: 2.4 },
+    ],
+    startAnchor: polar(3.85, -145),
+    goalCenter: polar(8.6, 65),
+    goalRadius: 0.72,
+    goalPullRadius: 5.4,
+    goalPullStrength: 7.4,
+    goalOpenSeconds: 16,
+    binarySystem: {
+      primarySun: {
+        name: 'Furnace Alpha',
+        position: polar(1.15, 200),
+        radius: 0.44,
+        gravityStrength: FIXED_SOLAR_GRAVITY_STRENGTH,
+        collisionRadius: 0.44,
+        orbitAngularSpeed: 0.25,
+        orbitEccentricity: 0.04,
+        core: 0xffdf96,
+        glow: 0xffa95a,
+      },
+      secondarySun: {
+        name: 'Furnace Beta',
+        position: polar(1.85, 20),
+        radius: 0.36,
+        gravityStrength: 16,
+        collisionRadius: 0.36,
+        orbitAngularSpeed: 0.25,
+        orbitEccentricity: 0.04,
+        core: 0x9ed7ff,
+        glow: 0x65b7ff,
+      },
+    },
+    planets: [
+      { name: 'Stoker', position: polar(3.2, -145), radius: 0.62, gravity: 7.2, falloff: 5.0, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.09, spinAngularSpeed: 0.1 },
+      { name: 'Ember Wheel', position: polar(4.6, 55), radius: 0.76, gravity: 9.0, falloff: 5.8, core: 0xf39a66, glow: 0xffcf86, landable: true, landingRadius: 1.26, orbitAngularSpeed: 0.14, spinAngularSpeed: -0.3 },
+      { name: 'Ash Wheel', position: polar(6.1, 180), radius: 0.82, gravity: 9.8, falloff: 6.2, core: 0x8b85ff, glow: 0xc6beff, landable: true, landingRadius: 1.32, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.25 },
+    ],
+  },
+  {
+    // Hypothesis: objective variety via per-planet gating. Only the comet is
+    // required (mustVisit), and its eccentric orbit means it is catchable
+    // only near perihelion — the clock is a comet timetable.
+    id: 'proto-clockwork-comet',
+    name: 'Comet Catch',
+    summary: 'Only the comet counts. It dives close every pass — meet it at perihelion, then run for the rim.',
+    timeWindowSeconds: 85,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 30, power: 1.6 },
+      { angleDeg: 65, power: 2.2 },
+    ],
+    startAnchor: polar(2.7, -135),
+    goalCenter: polar(8.8, 210),
+    goalRadius: 0.72,
+    goalPullRadius: 5.4,
+    goalPullStrength: 7.4,
+    goalOpenSeconds: 16,
+    planets: [
+      { name: 'Observatory', position: polar(2.05, -135), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
+      { name: 'The Visitor', position: polar(5.4, 0), radius: 0.66, gravity: 8.4, falloff: 5.4, core: 0xbfffe8, glow: 0x7df3d1, landable: true, landingRadius: 1.18, mustVisit: true, orbitAngularSpeed: 0.45, orbitEccentricity: 0.28, spinAngularSpeed: 0.5 },
+      { name: 'Rim Light', position: polar(8.0, 300), radius: 0.9, gravity: 10.6, falloff: 6.6, core: 0xff8f74, glow: 0xffcfad, landable: false, orbitAngularSpeed: 0.03, spinAngularSpeed: -0.03 },
+    ],
+  },
+  {
+    // Hypothesis: tempo contrast. Two counter-spinning wheels chime past each
+    // other every few seconds — a short clock full of fast recurring beats
+    // instead of one rare grand alignment.
+    id: 'proto-clockwork-chime',
+    name: 'Counterspin Chime',
+    summary: 'The twin wheels pass each other every few beats — ride one chime through both, then out.',
+    visitAll: true,
+    timeWindowSeconds: 40,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 20, power: 1.7 },
+      { angleDeg: 60, power: 2.3 },
+    ],
+    startAnchor: polar(2.6, -160),
+    goalCenter: polar(7.9, 40),
+    goalRadius: 0.72,
+    goalPullRadius: 5.4,
+    goalPullStrength: 7.4,
+    goalOpenSeconds: 14,
+    planets: [
+      { name: 'Metronome', position: polar(1.95, -160), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
+      { name: 'Chime East', position: polar(4.1, 20), radius: 0.72, gravity: 8.8, falloff: 5.6, core: 0x74bbff, glow: 0x94dbff, landable: true, landingRadius: 1.22, orbitAngularSpeed: 0.65, spinAngularSpeed: -0.4 },
+      { name: 'Chime West', position: polar(5.1, 180), radius: 0.76, gravity: 9.2, falloff: 5.9, core: 0xf39a66, glow: 0xffcf86, landable: true, landingRadius: 1.26, orbitAngularSpeed: -0.65, spinAngularSpeed: 0.4 },
+      { name: 'Resonator', position: polar(6.7, 300), radius: 0.84, gravity: 10.2, falloff: 6.4, core: 0xff7fa2, glow: 0xffb8c9, landable: true, landingRadius: 1.34, orbitAngularSpeed: 0.16, spinAngularSpeed: -0.2 },
+    ],
+  },
 ];
 for (const clockworkLevel of CLOCKWORK_PROTOTYPE_LEVELS) {
   LEVEL_DEFINITIONS.push(clockworkLevel);

@@ -154,7 +154,8 @@ for (let t = scanMinArg; t <= scanMaxArg + 1e-9; t += T_STEP) {
   const bar = '#'.repeat(best.grazes) + '.'.repeat(requiredIndices.length - best.grazes);
   console.log(
     `t=${t.toFixed(1).padStart(5)}s  [${bar}] grazes=${best.grazes}` +
-      ` angle=${String(best.angleDeg).padStart(3)}° power=${best.power.toFixed(1)}${marker}`,
+      ` angle=${String(best.angleDeg).padStart(3)}° power=${best.power.toFixed(1)}` +
+      ` goalDist=${best.minGoalDistance.toFixed(2)}${marker}`,
   );
 }
 
