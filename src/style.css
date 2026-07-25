@@ -402,6 +402,54 @@ h1 {
   }
 }
 
+.clock-dead-badge {
+  border-color: rgba(255, 112, 112, 0.75);
+  background: rgba(30, 8, 8, 0.88);
+  color: #ff8f8f;
+  animation-name: clock-dead-pulse;
+}
+
+@keyframes clock-dead-pulse {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(255, 92, 92, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(255, 92, 92, 0.85);
+  }
+}
+
+.clock-dock.is-dead {
+  border-color: rgba(255, 112, 112, 0.6);
+}
+
+.clock-dock.is-dead .clock-dock-time {
+  color: #ff8f8f;
+}
+
+.clock-dock.is-dead input[type='range']::-webkit-slider-thumb {
+  background: #ff8f8f;
+  box-shadow: 0 0 12px rgba(255, 92, 92, 0.7);
+}
+
+.clock-dock.is-dead input[type='range']::-moz-range-thumb {
+  background: #ff8f8f;
+  box-shadow: 0 0 12px rgba(255, 92, 92, 0.7);
+}
+
+.dead-vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  background: radial-gradient(ellipse at center, transparent 52%, rgba(160, 24, 24, 0.42) 100%);
+}
+
+.dead-vignette.is-visible {
+  opacity: 1;
+}
+
 .clock-dock-time,
 .clock-dock-end {
   font-family: 'IBM Plex Mono', monospace;

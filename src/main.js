@@ -22,6 +22,7 @@ import {
   getBallSurfaceRadius,
   getGoalRemainingFraction,
   getGoalRemainingTime,
+  getGoalCloseTime,
   getLavaOverheatRemaining,
   getPrimarySunVisualRadius,
   getRedGiantProgress,
@@ -178,6 +179,9 @@ app.innerHTML = `
           <button id="clockLaunchButton" class="clock-fire-badge" type="button" hidden title="Fire (Space, or tap anywhere)">
             <span class="clock-fire-dot" aria-hidden="true"></span>Armed — tap anywhere to fire
           </button>
+          <button id="clockDeadBadge" class="clock-fire-badge clock-dead-badge" type="button" hidden title="Rewind to a live moment">
+            ☠ Dead time — tap to rewind
+          </button>
           <span class="clock-dock-time" id="clockScrubValue">0.0s</span>
           <div class="clock-dock-bar">
             <div class="clock-ruler" id="clockRuler" aria-hidden="true"></div>
@@ -199,6 +203,7 @@ app.innerHTML = `
           </div>
         </div>
         <div class="slowmo-vignette" id="slowmoVignette" aria-hidden="true"></div>
+        <div class="dead-vignette" id="deadVignette" aria-hidden="true"></div>
         <div class="flair-layer" id="flairLayer" aria-hidden="true"></div>
         <div class="result-banner" id="resultBanner" hidden aria-live="polite">
           <p class="result-banner-kicker" id="resultBannerKicker">Hole clear</p>
@@ -384,6 +389,8 @@ const clockScrubValue = document.querySelector('#clockScrubValue');
 const clockRuler = document.querySelector('#clockRuler');
 const clockWindowEnd = document.querySelector('#clockWindowEnd');
 const clockLaunchButton = document.querySelector('#clockLaunchButton');
+const clockDeadBadge = document.querySelector('#clockDeadBadge');
+const deadVignette = document.querySelector('#deadVignette');
 const tableFrame = document.querySelector('.table-frame');
 const powerFill = document.querySelector('#powerFill');
 const fpsPanel = document.querySelector('#fpsPanel');
@@ -5044,6 +5051,150 @@ function scrubClockTo(targetTime) {
 
 let clockScrubPointerActive = false;
 
+// --- Dead time ----------------------------------------------------------------
+// Scrubbing can park you in a lethal moment (beam overhead, ground consumed)
+// or one where the level can no longer be finished (a required checkpoint
+// already destroyed, the goal window closed). These are first-class states:
+// while anchored on a clockwork level nothing kills you — the timeline marks
+// dead bands in red, a badge explains why, and launching is blocked until you
+// rewind to a live moment.
+
+function collectClockDeadReasons(sampleLevel, ballPosition, sampleTime, anchorPlanetIndex, visitedFlags) {
+  const reasons = [];
+  if (anchorPlanetIndex !== null && anchorPlanetIndex !== undefined) {
+    const ground = sampleLevel.planets[anchorPlanetIndex];
+    if (!ground || ground.active === false || ground.collapseState === 'consumed' || ground.destroyedByMeteor) {
+      reasons.push('ground');
+    } else if (ballPosition && isPointInPulsarJets(sampleLevel, ballPosition, sampleTime)) {
+      reasons.push('beam');
+    }
+  }
+  for (const planetIndex of sampleLevel.requiredVisitIndices ?? []) {
+    if (visitedFlags[planetIndex]) {
+      continue;
+    }
+    const planet = sampleLevel.planets[planetIndex];
+    if (!planet || planet.active === false || planet.collapseState === 'consumed' || planet.destroyedByMeteor) {
+      reasons.push('checkpoint');
+      break;
+    }
+  }
+  // Goal-close state lives on the real level and is time-independent.
+  if (getGoalCloseTime(state.level) <= sampleTime + 0.0001) {
+    reasons.push('goal');
+  }
+  return reasons;
+}
+
+function getCurrentClockDeadReasons() {
+  if (
+    getClockworkWindowSeconds() === null
+    || state.ball.anchorPlanetIndex === null
+    || state.ball.anchorPlanetIndex === undefined
+    || ballIsMoving()
+    || state.undo.active
+    || state.rewindPlayback.active
+    || state.ball.crashed
+    || state.ball.goaling
+  ) {
+    return null;
+  }
+  const now = state.ball.time ?? state.level.time ?? 0;
+  const visited = state.level.planets.map((planet) => Boolean(planet.visited));
+  const reasons = collectClockDeadReasons(
+    state.level,
+    state.ball.position,
+    now,
+    state.ball.anchorPlanetIndex,
+    visited,
+  );
+  return reasons.length > 0 ? reasons : null;
+}
+
+const CLOCK_DEAD_SAMPLE_STEP = 0.25;
+let clockDeadBandsKey = '';
+let clockDeadBands = [];
+
+// Sample the whole window for dead intervals. Recomputed only when the cache
+// key changes (landing, undo, graze, unlock) — not per frame.
+function refreshClockDeadBands() {
+  const windowSeconds = getClockworkWindowSeconds();
+  const anchorIndex = state.ball.anchorPlanetIndex;
+  if (windowSeconds === null || !aimPreviewLevel || anchorIndex === null || anchorIndex === undefined) {
+    return;
+  }
+  const visited = state.level.planets.map((planet) => Boolean(planet.visited));
+  const key = [
+    state.levelIndex,
+    anchorIndex,
+    (state.ball.anchorSinceTime ?? 0).toFixed(2),
+    visited.join(''),
+    state.level.goalUnlockTime ?? 'locked',
+  ].join('|');
+  if (key === clockDeadBandsKey) {
+    return;
+  }
+  clockDeadBandsKey = key;
+  const sampleBall = {
+    position: { x: 0, y: 0 },
+    velocity: { x: 0, y: 0 },
+    time: 0,
+    anchorPlanetIndex: anchorIndex,
+    anchorNormal: {
+      x: state.ball.anchorNormal?.x ?? 1,
+      y: state.ball.anchorNormal?.y ?? 0,
+    },
+    heat: 0,
+    landingCount: 0,
+  };
+  const bands = [];
+  let openStart = null;
+  for (let sampleTime = 0; sampleTime <= windowSeconds + 0.000001; sampleTime += CLOCK_DEAD_SAMPLE_STEP) {
+    setLevelTime(aimPreviewLevel, sampleTime);
+    let position = null;
+    if (aimPreviewLevel.planets[anchorIndex]?.active !== false) {
+      sampleBall.time = sampleTime;
+      syncBallToAnchor(aimPreviewLevel, sampleBall);
+      position = sampleBall.position;
+    }
+    const dead = collectClockDeadReasons(aimPreviewLevel, position, sampleTime, anchorIndex, visited).length > 0;
+    if (dead && openStart === null) {
+      openStart = sampleTime;
+    } else if (!dead && openStart !== null) {
+      bands.push([openStart, sampleTime]);
+      openStart = null;
+    }
+  }
+  if (openStart !== null) {
+    bands.push([openStart, windowSeconds]);
+  }
+  clockDeadBands = bands;
+}
+
+// Tap the dead badge to rewind to the nearest live moment before now.
+function rewindToNearestLiveTime() {
+  const windowSeconds = getClockworkWindowSeconds();
+  if (windowSeconds === null) {
+    return;
+  }
+  const now = state.ball.time ?? state.level.time ?? 0;
+  const minTime = getClockScrubMinTime();
+  for (let sampleTime = now; sampleTime >= minTime - 0.000001; sampleTime -= CLOCK_DEAD_SAMPLE_STEP) {
+    const inDeadBand = clockDeadBands.some(([bandStart, bandEnd]) => sampleTime >= bandStart - 0.001 && sampleTime <= bandEnd + 0.001);
+    if (!inDeadBand) {
+      scrubClockTo(sampleTime);
+      return;
+    }
+  }
+}
+
+const CLOCK_DEAD_LABELS = {
+  ground: 'No ground here',
+  beam: 'Beam overhead',
+  checkpoint: 'Checkpoint lost',
+  goal: 'Black hole closed',
+};
+
 const FUTURE_ARC_SAMPLES = 9;
 const FUTURE_ARC_SECONDS = 2.4;
 let lastFutureArcTime = null;
@@ -5122,16 +5273,34 @@ function syncClockControl() {
     clockScrubSlider.value = String(time);
   }
   clockScrubSlider.disabled = !canScrubClock();
+  refreshClockDeadBands();
   const minPercent = (clamp(getClockScrubMinTime(), 0, windowSeconds) / windowSeconds) * 100;
   const nowPercent = (time / windowSeconds) * 100;
-  clockScrubSlider.style.background = `linear-gradient(to right,
+  const baseLayer = `linear-gradient(to right,
     rgba(255, 208, 122, 0.14) 0%,
     rgba(255, 208, 122, 0.14) ${minPercent}%,
     rgba(255, 208, 122, 0.6) ${minPercent}%,
     rgba(255, 208, 122, 0.6) ${nowPercent}%,
     rgba(237, 243, 255, 0.12) ${nowPercent}%)`;
+  const deadStops = clockDeadBands.map(([bandStart, bandEnd]) => {
+    const startPercent = (bandStart / windowSeconds) * 100;
+    const endPercent = (bandEnd / windowSeconds) * 100;
+    return `transparent ${startPercent}%, rgba(255, 92, 92, 0.72) ${startPercent}%, rgba(255, 92, 92, 0.72) ${endPercent}%, transparent ${endPercent}%`;
+  });
+  clockScrubSlider.style.background = deadStops.length > 0
+    ? `linear-gradient(to right, ${deadStops.join(', ')}), ${baseLayer}`
+    : baseLayer;
   clockScrubValue.textContent = `${time.toFixed(1)}s`;
-  clockLaunchButton.hidden = !state.armedShot;
+
+  const deadReasons = getCurrentClockDeadReasons();
+  const isDead = Boolean(deadReasons);
+  clockControl.classList.toggle('is-dead', isDead);
+  deadVignette.classList.toggle('is-visible', isDead);
+  clockDeadBadge.hidden = !isDead;
+  if (isDead) {
+    clockDeadBadge.textContent = `☠ ${CLOCK_DEAD_LABELS[deadReasons[0]] ?? 'Dead time'} — tap to rewind`;
+  }
+  clockLaunchButton.hidden = !state.armedShot || isDead;
 }
 
 function setControlShot(stageIndex, angleDeg, power) {
@@ -8024,6 +8193,17 @@ function onPointerUp(event) {
     // Clockwork levels separate aiming from firing: release ARMS the shot so
     // the player can scrub the clock with the aim held, then fire explicitly.
     if (getClockworkWindowSeconds() !== null) {
+      if (getCurrentClockDeadReasons()) {
+        state.dragActive = false;
+        state.dragPower = 0;
+        audio.stopLoop('drag');
+        setVec(state.dragAnchor, state.ball.position);
+        setVec(state.dragStartWorld, state.ball.position);
+        state.message = 'Dead time.';
+        state.hint = 'Rewind the clock to a live moment before arming a shot.';
+        syncHud();
+        return;
+      }
       const armedShot = {
         direction: { x: state.aimDirection.x, y: state.aimDirection.y },
         power: state.dragPower,
@@ -8086,6 +8266,7 @@ function fireArmedShot() {
     || state.settingsOpen
     || state.daily.modalOpen
     || isLaunchLockedByIce()
+    || getCurrentClockDeadReasons()
   ) {
     return;
   }
@@ -8150,6 +8331,9 @@ worldMapNodes.addEventListener('click', (event) => {
 });
 clockLaunchButton.addEventListener('click', () => {
   fireArmedShot();
+});
+clockDeadBadge.addEventListener('click', () => {
+  rewindToNearestLiveTime();
 });
 // Keyboard scrubbing still goes through the native input (arrow keys).
 clockScrubSlider.addEventListener('input', (event) => {
@@ -8875,7 +9059,12 @@ function updatePhysics(delta) {
           return;
         }
       }
-      if (isPointInPulsarJets(state.level, state.ball.position, state.ball.time ?? state.level.time ?? 0)) {
+      // Clockwork levels: anchored hazards are "dead time" (UI-flagged,
+      // launch-blocked, rewindable) rather than kills.
+      if (
+        getClockworkWindowSeconds() === null
+        && isPointInPulsarJets(state.level, state.ball.position, state.ball.time ?? state.level.time ?? 0)
+      ) {
         beginPulsarCrash();
         return;
       }
@@ -8895,7 +9084,11 @@ function updatePhysics(delta) {
       if (maybeEnterVibeJamPortal()) {
         return;
       }
-      if (!isGoalLocked(state.level) && !isGoalOpen(state.level, state.ball.time)) {
+      if (
+        getClockworkWindowSeconds() === null
+        && !isGoalLocked(state.level)
+        && !isGoalOpen(state.level, state.ball.time)
+      ) {
         beginGoalClosure(describeFailureHint('goal-closed'), { countReset: true });
       }
       return;
