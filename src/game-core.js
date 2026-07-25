@@ -3229,7 +3229,11 @@ const CLOCKWORK_PROTOTYPE_LEVELS = [
     goalPullRadius: 5.4,
     goalPullStrength: 7.4,
     goalOpenSeconds: 14,
-    pulsarJets: { periodSeconds: 3.4, activeSeconds: 0.85, phaseSeconds: 0, angleDeg: 10, angularSpeedDeg: 14, width: 0.4 },
+    // Nearly co-rotating with Keeper's Rock (5.7°/s): the rock starts 26°
+    // past the trailing beam (outside its angular halfwidth) and gains
+    // ~2.4°/s on the pair, meeting the next beam only at the window's very
+    // end — the t≈49 golden run stays comfortably alive (death is absorbing).
+    pulsarJets: { periodSeconds: 3.4, activeSeconds: 0.85, phaseSeconds: 0, angleDeg: 184, angularSpeedDeg: 3.3, width: 0.4 },
     planets: [
       { name: "Keeper's Rock", position: polar(2.0, -150), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
       { name: 'North Buoy', position: polar(4.3, 70), radius: 0.72, gravity: 8.8, falloff: 5.6, core: 0x74bbff, glow: 0x94dbff, landable: false, mustVisit: true, orbitAngularSpeed: 0.4, spinAngularSpeed: -0.3 },

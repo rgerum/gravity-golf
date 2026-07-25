@@ -5108,7 +5108,15 @@ function getCurrentClockDeadReasons() {
     state.ball.anchorPlanetIndex,
     visited,
   );
-  return reasons.length > 0 ? reasons : null;
+  if (reasons.length > 0) {
+    return reasons;
+  }
+  // Death is absorbing: a lethal moment earlier in the parked timeline means
+  // the ball no longer exists here, even if nothing is lethal right now.
+  const band = clockDeadBands.find(
+    (deadBand) => now >= deadBand.start - 0.05 && now <= deadBand.end + 0.05,
+  );
+  return band ? [`lost@${band.start.toFixed(1)}`] : null;
 }
 
 const CLOCK_DEAD_SAMPLE_STEP = 0.25;
@@ -5147,6 +5155,7 @@ function refreshClockDeadBands() {
     heat: 0,
     landingCount: 0,
   };
+  const minTime = getClockScrubMinTime();
   const bands = [];
   let openStart = null;
   for (let sampleTime = 0; sampleTime <= windowSeconds + 0.000001; sampleTime += CLOCK_DEAD_SAMPLE_STEP) {
@@ -5157,16 +5166,31 @@ function refreshClockDeadBands() {
       syncBallToAnchor(aimPreviewLevel, sampleBall);
       position = sampleBall.position;
     }
-    const dead = collectClockDeadReasons(aimPreviewLevel, position, sampleTime, anchorIndex, visited).length > 0;
+    const reasons = collectClockDeadReasons(aimPreviewLevel, position, sampleTime, anchorIndex, visited);
+    // Death is absorbing: the first moment lethal to the parked ball (at or
+    // after its landing time) kills every later moment — the rest of the
+    // window is an empty system with no ball in it.
+    const lethalReason = sampleTime >= minTime - 0.000001
+      ? reasons.find((reason) => reason === 'ground' || reason === 'beam')
+      : null;
+    if (lethalReason) {
+      if (openStart !== null && openStart < sampleTime) {
+        bands.push({ start: openStart, end: sampleTime, reason: 'window' });
+      }
+      bands.push({ start: sampleTime, end: windowSeconds, reason: lethalReason });
+      openStart = null;
+      break;
+    }
+    const dead = reasons.length > 0;
     if (dead && openStart === null) {
       openStart = sampleTime;
     } else if (!dead && openStart !== null) {
-      bands.push([openStart, sampleTime]);
+      bands.push({ start: openStart, end: sampleTime, reason: 'window' });
       openStart = null;
     }
   }
   if (openStart !== null) {
-    bands.push([openStart, windowSeconds]);
+    bands.push({ start: openStart, end: windowSeconds, reason: 'window' });
   }
   clockDeadBands = bands;
 }
@@ -5180,7 +5204,9 @@ function rewindToNearestLiveTime() {
   const now = state.ball.time ?? state.level.time ?? 0;
   const minTime = getClockScrubMinTime();
   for (let sampleTime = now; sampleTime >= minTime - 0.000001; sampleTime -= CLOCK_DEAD_SAMPLE_STEP) {
-    const inDeadBand = clockDeadBands.some(([bandStart, bandEnd]) => sampleTime >= bandStart - 0.001 && sampleTime <= bandEnd + 0.001);
+    const inDeadBand = clockDeadBands.some(
+      (deadBand) => sampleTime >= deadBand.start - 0.001 && sampleTime <= deadBand.end + 0.001,
+    );
     if (!inDeadBand) {
       scrubClockTo(sampleTime);
       return;
@@ -5194,6 +5220,13 @@ const CLOCK_DEAD_LABELS = {
   checkpoint: 'Checkpoint lost',
   goal: 'Black hole closed',
 };
+
+function clockDeadLabel(reason) {
+  if (reason.startsWith('lost@')) {
+    return `Ball destroyed at ${Number.parseFloat(reason.slice(5)).toFixed(0)}s`;
+  }
+  return CLOCK_DEAD_LABELS[reason] ?? 'Dead time';
+}
 
 const FUTURE_ARC_SAMPLES = 9;
 const FUTURE_ARC_SECONDS = 2.4;
@@ -5282,9 +5315,9 @@ function syncClockControl() {
     rgba(255, 208, 122, 0.6) ${minPercent}%,
     rgba(255, 208, 122, 0.6) ${nowPercent}%,
     rgba(237, 243, 255, 0.12) ${nowPercent}%)`;
-  const deadStops = clockDeadBands.map(([bandStart, bandEnd]) => {
-    const startPercent = (bandStart / windowSeconds) * 100;
-    const endPercent = (bandEnd / windowSeconds) * 100;
+  const deadStops = clockDeadBands.map((deadBand) => {
+    const startPercent = (deadBand.start / windowSeconds) * 100;
+    const endPercent = (deadBand.end / windowSeconds) * 100;
     return `transparent ${startPercent}%, rgba(255, 92, 92, 0.72) ${startPercent}%, rgba(255, 92, 92, 0.72) ${endPercent}%, transparent ${endPercent}%`;
   });
   clockScrubSlider.style.background = deadStops.length > 0
@@ -5298,9 +5331,21 @@ function syncClockControl() {
   deadVignette.classList.toggle('is-visible', isDead);
   clockDeadBadge.hidden = !isDead;
   if (isDead) {
-    clockDeadBadge.textContent = `☠ ${CLOCK_DEAD_LABELS[deadReasons[0]] ?? 'Dead time'} — tap to rewind`;
+    clockDeadBadge.textContent = `☠ ${clockDeadLabel(deadReasons[0])} — tap to rewind`;
   }
   clockLaunchButton.hidden = !state.armedShot || isDead;
+  // A dead future is an empty system — the ball does not exist in it.
+  if (
+    state.ball.anchorPlanetIndex !== null
+    && state.ball.anchorPlanetIndex !== undefined
+    && !state.ball.crashed
+    && !state.ball.goaling
+    && !state.undo.active
+    && !state.rewindPlayback.active
+  ) {
+    ballGroup.visible = !isDead;
+    ballShadow.visible = !isDead;
+  }
 }
 
 function setControlShot(stageIndex, angleDeg, power) {
