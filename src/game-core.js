@@ -3226,6 +3226,59 @@ const CLOCKWORK_PROTOTYPE_LEVELS = [
     ],
   },
   {
+    // Slot 11 — gentle two-shot intro: the beats are on opposite sides, so
+    // no single throw finishes it. Land on the near one, spend what's left.
+    id: 'clockwork-two-beats',
+    name: 'Two Beats',
+    summary: 'Near beat, far beat, a long way apart. Land in between and split the clock — or find the one throw that refuses to.',
+    visitAll: true,
+    timeWindowSeconds: 60,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 25, power: 1.6 },
+      { angleDeg: 65, power: 2.2 },
+    ],
+    startAnchor: polar(2.65, -140),
+    goalCenter: polar(8.0, 260),
+    goalRadius: 0.78,
+    goalPullRadius: 5.6,
+    goalPullStrength: 7.6,
+    goalOpenSeconds: 18,
+    planets: [
+      { name: 'Downbeat', position: polar(2.0, -140), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
+      { name: 'Near Beat', position: polar(3.8, 40), radius: 0.74, gravity: 8.8, falloff: 5.7, core: 0x74bbff, glow: 0x94dbff, landable: true, landingRadius: 1.32, flybyRadius: 2.0, orbitAngularSpeed: 0.5, spinAngularSpeed: -0.3 },
+      { name: 'Far Beat', position: polar(6.4, 220), radius: 0.8, gravity: 9.6, falloff: 6.1, core: 0xf39a66, glow: 0xffcf86, landable: true, landingRadius: 1.34, flybyRadius: 2.0, orbitAngularSpeed: 0.15, spinAngularSpeed: 0.25 },
+    ],
+  },
+  {
+    // Slot 12 — the relay as a plan: three stepping stones spaced for
+    // land-and-relaunch, with a long window to budget across hops.
+    id: 'clockwork-relay-race',
+    name: 'Relay Race',
+    summary: 'Three stones, one long clock. Hop, hand over, hop again.',
+    visitAll: true,
+    timeWindowSeconds: 70,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 30, power: 1.7 },
+      { angleDeg: 70, power: 2.3 },
+    ],
+    startAnchor: polar(2.65, -150),
+    goalCenter: polar(7.5, 128),
+    goalRadius: 0.78,
+    goalPullRadius: 5.6,
+    goalPullStrength: 7.6,
+    goalOpenSeconds: 18,
+    planets: [
+      { name: 'Starting Block', position: polar(2.0, -150), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
+      { name: 'First Stone', position: polar(3.6, 0), radius: 0.72, gravity: 8.6, falloff: 5.6, core: 0x74bbff, glow: 0x94dbff, landable: true, landingRadius: 1.36, flybyRadius: 1.9, orbitAngularSpeed: 0.45, spinAngularSpeed: -0.3 },
+      { name: 'Second Stone', position: polar(5.2, 120), radius: 0.78, gravity: 9.2, falloff: 5.9, core: 0x8b85ff, glow: 0xc6beff, landable: true, landingRadius: 1.4, flybyRadius: 1.9, orbitAngularSpeed: 0.3, spinAngularSpeed: 0.25 },
+      { name: 'Third Stone', position: polar(6.8, 240), radius: 0.84, gravity: 9.9, falloff: 6.3, core: 0xff7fa2, glow: 0xffb8c9, landable: true, landingRadius: 1.42, flybyRadius: 1.9, orbitAngularSpeed: 0.18, spinAngularSpeed: -0.2 },
+    ],
+  },
+  {
     // Hypothesis: occlusion timing. The grazes are approachable, but a heavy
     // non-landable Warden sweeps across the goal lane — the clock decides
     // whether the finish is open, not whether the chain exists.
@@ -3251,6 +3304,34 @@ const CLOCKWORK_PROTOTYPE_LEVELS = [
       { name: 'West Gong', position: polar(3.9, 95), radius: 0.74, gravity: 8.8, falloff: 5.7, core: 0x74bbff, glow: 0x94dbff, landable: true, landingRadius: 1.24, orbitAngularSpeed: 0.45, spinAngularSpeed: -0.35 },
       { name: 'East Gong', position: polar(5.4, 140), radius: 0.8, gravity: 9.6, falloff: 6.0, core: 0xff7fa2, glow: 0xffb8c9, landable: true, landingRadius: 1.3, orbitAngularSpeed: 0.45, spinAngularSpeed: 0.3 },
       { name: 'Warden', position: polar(7.3, 55), radius: 1.15, gravity: 13.0, falloff: 7.0, core: 0xff8f74, glow: 0xffcfad, landable: false, orbitAngularSpeed: 0.25, spinAngularSpeed: -0.05 },
+    ],
+  },
+  {
+    // Slot 14 — eclipse escalation: TWO wardens share the rim, so the goal
+    // lane closes twice per cycle and open windows are half as long.
+    id: 'clockwork-double-warden',
+    name: 'Double Warden',
+    summary: 'Two wardens walk the rim in lockstep. The lane opens briefly between their rounds.',
+    visitAll: true,
+    timeWindowSeconds: 60,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 40, power: 1.7 },
+      { angleDeg: 85, power: 2.3 },
+    ],
+    startAnchor: polar(2.65, -155),
+    goalCenter: polar(9.0, 160),
+    goalRadius: 0.72,
+    goalPullRadius: 5.4,
+    goalPullStrength: 7.4,
+    goalOpenSeconds: 14,
+    planets: [
+      { name: 'Warder Rock', position: polar(2.0, -155), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.12, spinAngularSpeed: 0.12 },
+      { name: 'West Gong', position: polar(3.9, 95), radius: 0.74, gravity: 8.8, falloff: 5.7, core: 0x74bbff, glow: 0x94dbff, landable: true, landingRadius: 1.24, orbitAngularSpeed: 0.45, spinAngularSpeed: -0.35 },
+      { name: 'East Gong', position: polar(5.4, 140), radius: 0.8, gravity: 9.6, falloff: 6.0, core: 0xff7fa2, glow: 0xffb8c9, landable: true, landingRadius: 1.3, orbitAngularSpeed: 0.45, spinAngularSpeed: 0.3 },
+      { name: 'First Warden', position: polar(7.2, 55), radius: 1.1, gravity: 12.5, falloff: 7.0, core: 0xff8f74, glow: 0xffcfad, landable: false, orbitAngularSpeed: 0.3, spinAngularSpeed: -0.05 },
+      { name: 'Second Warden', position: polar(7.4, 235), radius: 1.1, gravity: 12.5, falloff: 7.0, core: 0xff8f74, glow: 0xffcfad, landable: false, orbitAngularSpeed: 0.3, spinAngularSpeed: 0.05 },
     ],
   },
   {
@@ -3280,6 +3361,140 @@ const CLOCKWORK_PROTOTYPE_LEVELS = [
       { name: 'Pallet One', position: polar(3.6, 30), radius: 0.72, gravity: 8.7, falloff: 5.6, core: 0x8b85ff, glow: 0xc6beff, landable: true, landingRadius: 1.22, orbitAngularSpeed: 0.75, spinAngularSpeed: -0.4 },
       { name: 'Balance Wheel', position: polar(5.2, 150), radius: 0.86, gravity: 9.8, falloff: 6.2, core: 0xf39a66, glow: 0xffcf86, landable: true, landingRadius: 1.5, orbitAngularSpeed: 0.4, spinAngularSpeed: 0.3 },
       { name: 'Pallet Two', position: polar(7.0, 275), radius: 0.78, gravity: 10.2, falloff: 6.5, core: 0xff7fa2, glow: 0xffb8c9, landable: true, landingRadius: 1.28, orbitAngularSpeed: 0.12, spinAngularSpeed: -0.2 },
+    ],
+  },
+  {
+    // Slot 16 — the shortest clock in the campaign: two forced shots on a
+    // 35-second spring. Time is the resource; undo is the refund.
+    id: 'clockwork-spent-spring',
+    name: 'Spent Spring',
+    summary: 'Thirty-five seconds, two throws. Spend the spring like it is money.',
+    visitAll: true,
+    timeWindowSeconds: 35,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 25, power: 1.7 },
+      { angleDeg: 60, power: 2.3 },
+    ],
+    startAnchor: polar(2.65, -140),
+    goalCenter: polar(7.5, 137),
+    goalRadius: 0.72,
+    goalPullRadius: 5.4,
+    goalPullStrength: 7.4,
+    goalOpenSeconds: 14,
+    planets: [
+      { name: 'Mainplate', position: polar(2.0, -140), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
+      { name: 'Coil East', position: polar(3.9, 30), radius: 0.72, gravity: 8.7, falloff: 5.6, core: 0x74bbff, glow: 0x94dbff, landable: true, landingRadius: 1.3, flybyRadius: 1.8, orbitAngularSpeed: 0.4, spinAngularSpeed: -0.3 },
+      { name: 'Coil West', position: polar(5.8, 210), radius: 0.78, gravity: 9.3, falloff: 6.0, core: 0xf39a66, glow: 0xffcf86, landable: true, landingRadius: 1.3, flybyRadius: 1.8, orbitAngularSpeed: 0.2, spinAngularSpeed: 0.25 },
+    ],
+  },
+  {
+    // Slot 17 — new concept: the checkpoint is a MOON. Grazing it means
+    // timing the parent's orbit and the moon's phase at once.
+    id: 'clockwork-moon-gate',
+    name: 'Moon Gate',
+    summary: 'The gate is a moon of the giant. Two clocks tick — the orbit and the phase. Pass when they agree.',
+    timeWindowSeconds: 60,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 30, power: 1.7 },
+      { angleDeg: 70, power: 2.3 },
+    ],
+    startAnchor: polar(2.65, -150),
+    goalCenter: polar(8.4, 200),
+    goalRadius: 0.72,
+    goalPullRadius: 5.4,
+    goalPullStrength: 7.4,
+    goalOpenSeconds: 16,
+    planets: [
+      { name: 'Gatehouse', position: polar(2.0, -150), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
+      { name: 'Giant Step', position: polar(4.8, 70), radius: 1.0, gravity: 10.0, falloff: 6.4, core: 0xf39a66, glow: 0xffcf86, landable: true, landingRadius: 1.6, orbitAngularSpeed: 0.18, spinAngularSpeed: 0.2 },
+      { name: 'The Gate', position: polar(5.9, 70), radius: 0.5, gravity: 6.4, falloff: 4.4, core: 0xb9c2cf, glow: 0xf0f4ff, landable: true, landingRadius: 0.98, flybyRadius: 1.6, mustVisit: true, orbitAround: 1, orbitAngularSpeed: 1.2, orbitEccentricity: 0.03, spinAngularSpeed: -0.6 },
+    ],
+  },
+  {
+    // Slot 18 — the longest chain yet: four gears in a train. Any subset per
+    // throw; the elegant line takes all four.
+    id: 'clockwork-gear-train',
+    name: 'Gear Train',
+    summary: 'Four gears, one train of thought. Collect them in any rhythm — or all at once.',
+    visitAll: true,
+    timeWindowSeconds: 75,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 25, power: 1.7 },
+      { angleDeg: 65, power: 2.3 },
+    ],
+    startAnchor: polar(2.65, -150),
+    goalCenter: polar(6.8, 267),
+    goalRadius: 0.72,
+    goalPullRadius: 5.4,
+    goalPullStrength: 7.4,
+    goalOpenSeconds: 16,
+    planets: [
+      { name: 'Winder', position: polar(2.0, -150), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
+      { name: 'First Gear', position: polar(3.4, 0), radius: 0.7, gravity: 8.5, falloff: 5.5, core: 0x74bbff, glow: 0x94dbff, landable: true, landingRadius: 1.2, flybyRadius: 1.8, orbitAngularSpeed: 0.7, spinAngularSpeed: -0.35 },
+      { name: 'Second Gear', position: polar(4.6, 90), radius: 0.74, gravity: 8.9, falloff: 5.7, core: 0x8b85ff, glow: 0xc6beff, landable: true, landingRadius: 1.24, flybyRadius: 1.8, orbitAngularSpeed: 0.5, spinAngularSpeed: 0.3 },
+      { name: 'Third Gear', position: polar(5.8, 180), radius: 0.78, gravity: 9.3, falloff: 6.0, core: 0xf39a66, glow: 0xffcf86, landable: true, landingRadius: 1.28, flybyRadius: 1.8, orbitAngularSpeed: 0.35, spinAngularSpeed: -0.25 },
+      { name: 'Fourth Gear', position: polar(7.0, 270), radius: 0.82, gravity: 9.8, falloff: 6.3, core: 0xff7fa2, glow: 0xffb8c9, landable: true, landingRadius: 1.32, flybyRadius: 1.8, orbitAngularSpeed: 0.22, spinAngularSpeed: 0.2 },
+    ],
+  },
+  {
+    // Slot 19 — dense inner machinery: tight checkpoint orbits inside, a
+    // heavy casing outside; the way out is through its gaps.
+    id: 'clockwork-inner-works',
+    name: 'Inner Works',
+    summary: 'The small cogs live close to the fire, and the casing outside only opens where it opens.',
+    visitAll: true,
+    timeWindowSeconds: 60,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 30, power: 1.6 },
+      { angleDeg: 70, power: 2.2 },
+    ],
+    startAnchor: polar(2.55, -150),
+    goalCenter: polar(7.5, 138),
+    goalRadius: 0.72,
+    goalPullRadius: 5.4,
+    goalPullStrength: 7.4,
+    goalOpenSeconds: 15,
+    planets: [
+      { name: 'Oil Stone', position: polar(1.9, -150), radius: 0.58, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.12, spinAngularSpeed: 0.1 },
+      { name: 'Cog A', position: polar(3.1, 40), radius: 0.66, gravity: 8.4, falloff: 5.4, core: 0x74bbff, glow: 0x94dbff, landable: true, landingRadius: 1.14, flybyRadius: 1.5, orbitAngularSpeed: 0.55, spinAngularSpeed: -0.35 },
+      { name: 'Cog B', position: polar(4.1, 200), radius: 0.7, gravity: 8.8, falloff: 5.6, core: 0x8b85ff, glow: 0xc6beff, landable: true, landingRadius: 1.18, flybyRadius: 1.5, orbitAngularSpeed: 0.4, spinAngularSpeed: 0.3 },
+      { name: 'Casing', position: polar(5.9, 100), radius: 0.95, gravity: 11.5, falloff: 6.8, core: 0xff8f74, glow: 0xffcfad, landable: false, orbitAngularSpeed: 0.15, spinAngularSpeed: -0.05 },
+    ],
+  },
+  {
+    // Slot 20 — Act II boss: a rigid gong pair to chain, a warden on the
+    // rim, and the best moment deep in the window.
+    id: 'clockwork-foreman',
+    name: 'The Foreman',
+    summary: 'The Foreman keeps the yard. Ring both gongs, mind his rounds, and clock out late.',
+    visitAll: true,
+    timeWindowSeconds: 75,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 35, power: 1.8 },
+      { angleDeg: 80, power: 2.4 },
+    ],
+    startAnchor: polar(2.65, -155),
+    goalCenter: polar(7.5, 325),
+    goalRadius: 0.72,
+    goalPullRadius: 5.4,
+    goalPullStrength: 7.4,
+    goalOpenSeconds: 14,
+    planets: [
+      { name: 'Punch Clock', position: polar(2.0, -155), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.11, spinAngularSpeed: 0.12 },
+      { name: 'Yard Gong', position: polar(3.8, 80), radius: 0.74, gravity: 8.8, falloff: 5.7, core: 0x74bbff, glow: 0x94dbff, landable: true, landingRadius: 1.24, orbitAngularSpeed: 0.4, spinAngularSpeed: -0.35 },
+      { name: 'Gate Gong', position: polar(5.2, 125), radius: 0.8, gravity: 9.5, falloff: 6.0, core: 0x8b85ff, glow: 0xc6beff, landable: true, landingRadius: 1.3, orbitAngularSpeed: 0.4, spinAngularSpeed: 0.3 },
+      { name: 'Far Bell', position: polar(6.6, 300), radius: 0.8, gravity: 9.7, falloff: 6.2, core: 0xf39a66, glow: 0xffcf86, landable: true, landingRadius: 1.3, orbitAngularSpeed: 0.18, spinAngularSpeed: 0.2 },
+      { name: 'The Foreman', position: polar(7.8, 40), radius: 1.1, gravity: 12.8, falloff: 7.0, core: 0xff8f74, glow: 0xffcfad, landable: false, orbitAngularSpeed: 0.25, spinAngularSpeed: -0.05 },
     ],
   },
   {
