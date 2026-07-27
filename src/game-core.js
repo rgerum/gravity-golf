@@ -2971,6 +2971,162 @@ for (const proto of VISIT_ALL_PROTOTYPES) {
 // Phases are tuned with scripts/solve-clockwork.js.
 const CLOCKWORK_PROTOTYPE_LEVELS = [
   {
+    // Slot 1 — teach the verbs: scrub, watch the arcs, arm, fire. One fat
+    // graze ring, slow wheels, huge goal window. Nothing can go wrong.
+    id: 'clockwork-first-light',
+    name: 'First Light',
+    summary: 'Wind the clock, brush the ringed world, and fall into the black hole. Take your time — you own it.',
+    visitAll: true,
+    timeWindowSeconds: 45,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 30, power: 1.5 },
+      { angleDeg: 70, power: 2.1 },
+    ],
+    startAnchor: polar(2.65, -150),
+    goalCenter: polar(7.2, 150),
+    goalRadius: 0.78,
+    goalPullRadius: 5.6,
+    goalPullStrength: 7.6,
+    goalOpenSeconds: 20,
+    planets: [
+      { name: 'Dawn Rock', position: polar(2.0, -150), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.08, spinAngularSpeed: 0.1 },
+      { name: 'Hour Hand', position: polar(4.2, 100), radius: 0.76, gravity: 8.8, falloff: 5.7, core: 0xf39a66, glow: 0xffcf86, landable: true, landingRadius: 1.3, flybyRadius: 2.3, orbitAngularSpeed: 0.3, spinAngularSpeed: -0.25 },
+    ],
+  },
+  {
+    // Slot 2 — first chain: two wheels, both generous. Teaches that one
+    // launch can collect more than one graze.
+    id: 'clockwork-two-hands',
+    name: 'Two Hands',
+    summary: 'Minute hand, hour hand. Find the moment one throw brushes both.',
+    visitAll: true,
+    timeWindowSeconds: 50,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 25, power: 1.6 },
+      { angleDeg: 65, power: 2.2 },
+    ],
+    startAnchor: polar(2.65, -140),
+    goalCenter: polar(7.5, 168),
+    goalRadius: 0.78,
+    goalPullRadius: 5.6,
+    goalPullStrength: 7.6,
+    goalOpenSeconds: 18,
+    planets: [
+      { name: 'Pivot', position: polar(2.0, -140), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
+      { name: 'Minute Hand', position: polar(3.6, 60), radius: 0.72, gravity: 8.6, falloff: 5.6, core: 0x74bbff, glow: 0x94dbff, landable: true, landingRadius: 1.22, flybyRadius: 2.0, orbitAngularSpeed: 0.45, spinAngularSpeed: -0.3 },
+      { name: 'Hour Hand', position: polar(5.4, 230), radius: 0.8, gravity: 9.4, falloff: 6.0, core: 0xf39a66, glow: 0xffcf86, landable: true, landingRadius: 1.3, flybyRadius: 2.0, orbitAngularSpeed: 0.25, spinAngularSpeed: 0.25 },
+    ],
+  },
+  {
+    // Slot 3 — three ratioed wheels that align often; a gentle rehearsal for
+    // the real Orrery four slots later.
+    id: 'clockwork-little-orrery',
+    name: 'Little Orrery',
+    summary: 'Three small wheels, one patient clock. Alignments come around often — catch any of them.',
+    visitAll: true,
+    timeWindowSeconds: 60,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 30, power: 1.7 },
+      { angleDeg: 70, power: 2.3 },
+    ],
+    startAnchor: polar(2.65, -150),
+    goalCenter: polar(6.6, 192),
+    goalRadius: 0.78,
+    goalPullRadius: 5.6,
+    goalPullStrength: 7.6,
+    goalOpenSeconds: 16,
+    planets: [
+      { name: 'Keystone', position: polar(2.0, -150), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
+      { name: 'Small Wheel', position: polar(3.4, 0), radius: 0.7, gravity: 8.5, falloff: 5.5, core: 0x74bbff, glow: 0x94dbff, landable: true, landingRadius: 1.2, flybyRadius: 1.9, orbitAngularSpeed: 0.8, spinAngularSpeed: -0.35 },
+      { name: 'Middle Wheel', position: polar(4.8, 120), radius: 0.76, gravity: 9.0, falloff: 5.8, core: 0x8b85ff, glow: 0xc6beff, landable: true, landingRadius: 1.26, flybyRadius: 1.9, orbitAngularSpeed: 0.5, spinAngularSpeed: 0.3 },
+      { name: 'Great Wheel', position: polar(6.2, 240), radius: 0.82, gravity: 9.8, falloff: 6.2, core: 0xff7fa2, glow: 0xffb8c9, landable: true, landingRadius: 1.32, flybyRadius: 1.9, orbitAngularSpeed: 0.3, spinAngularSpeed: -0.2 },
+    ],
+  },
+  {
+    // Slot 4 — the alignment exists only late in the window: teaches
+    // scrubbing FAR and trusting the ruler to find your way back.
+    id: 'clockwork-waiting-room',
+    name: 'Waiting Room',
+    summary: 'Nothing lines up early. Wind deep into the clock — the moment is in there, near the end.',
+    visitAll: true,
+    timeWindowSeconds: 60,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 25, power: 1.7 },
+      { angleDeg: 60, power: 2.3 },
+    ],
+    startAnchor: polar(2.65, -145),
+    goalCenter: polar(7.5, 300),
+    goalRadius: 0.78,
+    goalPullRadius: 5.6,
+    goalPullStrength: 7.6,
+    goalOpenSeconds: 16,
+    planets: [
+      { name: 'Bench', position: polar(2.0, -145), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.09, spinAngularSpeed: 0.1 },
+      { name: 'Early Door', position: polar(3.8, 170), radius: 0.72, gravity: 8.6, falloff: 5.6, core: 0x74bbff, glow: 0x94dbff, landable: true, landingRadius: 1.22, flybyRadius: 1.9, orbitAngularSpeed: 0.35, spinAngularSpeed: -0.3 },
+      { name: 'Late Door', position: polar(5.6, 350), radius: 0.78, gravity: 9.2, falloff: 5.9, core: 0xf39a66, glow: 0xffcf86, landable: true, landingRadius: 1.28, flybyRadius: 1.9, orbitAngularSpeed: 0.2, spinAngularSpeed: 0.25 },
+    ],
+  },
+  {
+    // Slot 5 — first counter-rotation: two wheels closing on each other make
+    // brief double-graze windows on a fast rhythm.
+    id: 'clockwork-pendulum',
+    name: 'Pendulum',
+    summary: 'Two wheels swing opposite ways. When they pass each other, one throw takes both.',
+    visitAll: true,
+    timeWindowSeconds: 45,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 30, power: 1.7 },
+      { angleDeg: 75, power: 2.3 },
+    ],
+    startAnchor: polar(2.65, -160),
+    goalCenter: polar(7.6, 330),
+    goalRadius: 0.78,
+    goalPullRadius: 5.6,
+    goalPullStrength: 7.6,
+    goalOpenSeconds: 16,
+    planets: [
+      { name: 'Fulcrum', position: polar(2.0, -160), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
+      { name: 'Swing East', position: polar(4.2, 60), radius: 0.72, gravity: 8.7, falloff: 5.6, core: 0x74bbff, glow: 0x94dbff, landable: true, landingRadius: 1.22, flybyRadius: 1.9, orbitAngularSpeed: 0.5, spinAngularSpeed: -0.3 },
+      { name: 'Swing West', position: polar(5.4, 200), radius: 0.78, gravity: 9.2, falloff: 5.9, core: 0xff7fa2, glow: 0xffb8c9, landable: true, landingRadius: 1.28, flybyRadius: 1.9, orbitAngularSpeed: -0.5, spinAngularSpeed: 0.3 },
+    ],
+  },
+  {
+    // Slot 6 — the rings tighten for the first time: same ideas, less
+    // forgiveness. Prepares the jump to the full Orrery next.
+    id: 'clockwork-threading',
+    name: 'Threading',
+    summary: 'The rings are narrower here. Aim like you mean it.',
+    visitAll: true,
+    timeWindowSeconds: 50,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 20, power: 1.7 },
+      { angleDeg: 60, power: 2.3 },
+    ],
+    startAnchor: polar(2.65, -150),
+    goalCenter: polar(6.6, 247),
+    goalRadius: 0.72,
+    goalPullRadius: 5.4,
+    goalPullStrength: 7.4,
+    goalOpenSeconds: 15,
+    planets: [
+      { name: 'Needle', position: polar(2.0, -150), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
+      { name: 'First Eye', position: polar(4.0, 30), radius: 0.72, gravity: 8.7, falloff: 5.6, core: 0x8b85ff, glow: 0xc6beff, landable: true, landingRadius: 1.22, flybyRadius: 1.45, orbitAngularSpeed: 0.4, spinAngularSpeed: -0.3 },
+      { name: 'Second Eye', position: polar(6.0, 200), radius: 0.78, gravity: 9.3, falloff: 6.0, core: 0xf39a66, glow: 0xffcf86, landable: true, landingRadius: 1.28, flybyRadius: 1.5, orbitAngularSpeed: 0.22, spinAngularSpeed: 0.25 },
+    ],
+  },
+  {
     id: 'proto-clockwork-orrery',
     name: 'Clockwork Orrery',
     summary: 'Wind the clock until the wheels line up, then graze all three in one launch.',
@@ -2990,6 +3146,31 @@ const CLOCKWORK_PROTOTYPE_LEVELS = [
       { name: 'Minute Wheel', position: polar(3.4, 40), radius: 0.72, gravity: 8.6, falloff: 5.6, core: 0x74bbff, glow: 0x94dbff, landable: true, landingRadius: 1.22, orbitAngularSpeed: 0.9, spinAngularSpeed: -0.4 },
       { name: 'Hour Wheel', position: polar(4.9, 160), radius: 0.8, gravity: 9.6, falloff: 6.0, core: 0xf39a66, glow: 0xffcf86, landable: true, landingRadius: 1.3, orbitAngularSpeed: 0.6, spinAngularSpeed: 0.35 },
       { name: 'Bell Wheel', position: polar(6.5, 260), radius: 0.86, gravity: 10.4, falloff: 6.4, core: 0xff7fa2, glow: 0xffb8c9, landable: true, landingRadius: 1.36, orbitAngularSpeed: 0.3, spinAngularSpeed: -0.2 },
+    ],
+  },
+  {
+    // Slot 8 — isolate the moving-launch-pad idea with a single target
+    // before Sling Window asks for a chain of them.
+    id: 'clockwork-sling-school',
+    name: 'Sling School',
+    summary: 'Your rock is the fast one. Wind the clock until its swing throws for you, not against you.',
+    visitAll: true,
+    timeWindowSeconds: 58,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 30, power: 1.7 },
+      { angleDeg: 70, power: 2.3 },
+    ],
+    startAnchor: polar(3.1, -120),
+    goalCenter: polar(7.5, 168),
+    goalRadius: 0.78,
+    goalPullRadius: 5.6,
+    goalPullStrength: 7.6,
+    goalOpenSeconds: 16,
+    planets: [
+      { name: 'Whirl Rock', position: polar(2.4, -120), radius: 0.6, gravity: 7.2, falloff: 4.9, core: 0x8b85ff, glow: 0xc6beff, landable: true, orbitAngularSpeed: 0.55, orbitEccentricity: 0.15, spinAngularSpeed: 0.2 },
+      { name: 'Catcher', position: polar(5.0, 80), radius: 0.78, gravity: 9.2, falloff: 5.9, core: 0xf39a66, glow: 0xffcf86, landable: true, landingRadius: 1.28, flybyRadius: 2.0, orbitAngularSpeed: 0.15, spinAngularSpeed: -0.25 },
     ],
   },
   {
@@ -3014,6 +3195,34 @@ const CLOCKWORK_PROTOTYPE_LEVELS = [
       { name: 'Flywheel', position: polar(2.4, -120), radius: 0.6, gravity: 7.2, falloff: 4.9, core: 0x8b85ff, glow: 0xc6beff, landable: true, orbitAngularSpeed: 0.8, orbitEccentricity: 0.2, spinAngularSpeed: 0.2 },
       { name: 'Cam', position: polar(4.4, 70), radius: 0.76, gravity: 9.0, falloff: 5.8, core: 0x74bbff, glow: 0x94dbff, landable: true, landingRadius: 1.26, orbitAngularSpeed: 0.35, spinAngularSpeed: -0.3 },
       { name: 'Rocker', position: polar(6.2, 200), radius: 0.84, gravity: 10.0, falloff: 6.3, core: 0xf39a66, glow: 0xffcf86, landable: true, landingRadius: 1.34, orbitAngularSpeed: 0.18, spinAngularSpeed: 0.25 },
+    ],
+  },
+  {
+    // Hypothesis: tempo contrast. Two counter-spinning wheels chime past each
+    // other every few seconds — a short clock full of fast recurring beats
+    // instead of one rare grand alignment.
+    id: 'proto-clockwork-chime',
+    name: 'Counterspin Chime',
+    summary: 'The twin wheels pass each other every few beats — ride one chime through both, then out.',
+    visitAll: true,
+    timeWindowSeconds: 40,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 20, power: 1.7 },
+      { angleDeg: 60, power: 2.3 },
+    ],
+    startAnchor: polar(2.6, -160),
+    goalCenter: polar(7.9, 40),
+    goalRadius: 0.72,
+    goalPullRadius: 5.4,
+    goalPullStrength: 7.4,
+    goalOpenSeconds: 14,
+    planets: [
+      { name: 'Metronome', position: polar(1.95, -160), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
+      { name: 'Chime East', position: polar(4.1, 20), radius: 0.72, gravity: 8.8, falloff: 5.6, core: 0x74bbff, glow: 0x94dbff, landable: true, landingRadius: 1.22, orbitAngularSpeed: 0.65, spinAngularSpeed: -0.4 },
+      { name: 'Chime West', position: polar(5.1, 180), radius: 0.76, gravity: 9.2, falloff: 5.9, core: 0xf39a66, glow: 0xffcf86, landable: true, landingRadius: 1.26, orbitAngularSpeed: -0.65, spinAngularSpeed: 0.4 },
+      { name: 'Resonator', position: polar(6.7, 300), radius: 0.84, gravity: 10.2, falloff: 6.4, core: 0xff7fa2, glow: 0xffb8c9, landable: true, landingRadius: 1.34, orbitAngularSpeed: 0.16, spinAngularSpeed: -0.2 },
     ],
   },
   {
@@ -3179,34 +3388,6 @@ const CLOCKWORK_PROTOTYPE_LEVELS = [
       { name: 'Observatory', position: polar(2.05, -135), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
       { name: 'The Visitor', position: polar(5.4, 0), radius: 0.66, gravity: 8.4, falloff: 5.4, core: 0xbfffe8, glow: 0x7df3d1, landable: true, landingRadius: 1.18, mustVisit: true, orbitAngularSpeed: 0.45, orbitEccentricity: 0.28, spinAngularSpeed: 0.5 },
       { name: 'Rim Light', position: polar(8.0, 300), radius: 0.9, gravity: 10.6, falloff: 6.6, core: 0xff8f74, glow: 0xffcfad, landable: false, orbitAngularSpeed: 0.03, spinAngularSpeed: -0.03 },
-    ],
-  },
-  {
-    // Hypothesis: tempo contrast. Two counter-spinning wheels chime past each
-    // other every few seconds — a short clock full of fast recurring beats
-    // instead of one rare grand alignment.
-    id: 'proto-clockwork-chime',
-    name: 'Counterspin Chime',
-    summary: 'The twin wheels pass each other every few beats — ride one chime through both, then out.',
-    visitAll: true,
-    timeWindowSeconds: 40,
-    sun: [0, 0],
-    startPlanetIndex: 0,
-    launchPresets: [
-      { angleDeg: 20, power: 1.7 },
-      { angleDeg: 60, power: 2.3 },
-    ],
-    startAnchor: polar(2.6, -160),
-    goalCenter: polar(7.9, 40),
-    goalRadius: 0.72,
-    goalPullRadius: 5.4,
-    goalPullStrength: 7.4,
-    goalOpenSeconds: 14,
-    planets: [
-      { name: 'Metronome', position: polar(1.95, -160), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
-      { name: 'Chime East', position: polar(4.1, 20), radius: 0.72, gravity: 8.8, falloff: 5.6, core: 0x74bbff, glow: 0x94dbff, landable: true, landingRadius: 1.22, orbitAngularSpeed: 0.65, spinAngularSpeed: -0.4 },
-      { name: 'Chime West', position: polar(5.1, 180), radius: 0.76, gravity: 9.2, falloff: 5.9, core: 0xf39a66, glow: 0xffcf86, landable: true, landingRadius: 1.26, orbitAngularSpeed: -0.65, spinAngularSpeed: 0.4 },
-      { name: 'Resonator', position: polar(6.7, 300), radius: 0.84, gravity: 10.2, falloff: 6.4, core: 0xff7fa2, glow: 0xffb8c9, landable: true, landingRadius: 1.34, orbitAngularSpeed: 0.16, spinAngularSpeed: -0.2 },
     ],
   },
   {
