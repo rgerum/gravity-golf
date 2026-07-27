@@ -3529,6 +3529,36 @@ const CLOCKWORK_PROTOTYPE_LEVELS = [
     ],
   },
   {
+    // Slot 22 — the portal round trip: out through the white door, back
+    // through the black one, collecting a bell on each side.
+    id: 'clockwork-return-ticket',
+    name: 'Return Ticket',
+    summary: 'One bell on each shore, one gate between them. Buy the round trip.',
+    visitAll: true,
+    timeWindowSeconds: 75,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 25, power: 1.7 },
+      { angleDeg: 70, power: 2.3 },
+    ],
+    startAnchor: polar(2.65, -150),
+    goalCenter: polar(7.6, 100),
+    goalRadius: 0.72,
+    goalPullRadius: 5.4,
+    goalPullStrength: 7.4,
+    goalOpenSeconds: 16,
+    planets: [
+      { name: 'Ticket Booth', position: polar(2.0, -150), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
+      { name: 'Near Shore', position: polar(3.8, 50), radius: 0.74, gravity: 8.8, falloff: 5.7, core: 0x74bbff, glow: 0x94dbff, landable: true, landingRadius: 1.24, flybyRadius: 1.9, orbitAngularSpeed: 0.4, spinAngularSpeed: -0.3 },
+      { name: 'Far Shore', position: polar(6.6, 230), radius: 0.8, gravity: 9.6, falloff: 6.1, core: 0xff7fa2, glow: 0xffb8c9, landable: true, landingRadius: 1.3, flybyRadius: 1.9, orbitAngularSpeed: 0.15, spinAngularSpeed: 0.25 },
+    ],
+    portals: [
+      { id: 'ticket-white', pairId: 'ticket-black', variant: 'white', position: polar(4.8, -30), radius: 0.68, orbitAngularSpeed: 0.3, orbitEccentricity: 0.04, core: 0xe8f6ff, glow: 0x9fe9ff },
+      { id: 'ticket-black', pairId: 'ticket-white', variant: 'black', position: polar(5.6, 210), radius: 0.68, orbitAngularSpeed: -0.12, orbitEccentricity: 0.04, core: 0x0b0616, glow: 0x7e67ff },
+    ],
+  },
+  {
     // Hypothesis: the gravity field itself is the clock. Twin suns swing the
     // safe corridor around the system; the wheels barely move, but WHEN you
     // fly decides what shape space is.
@@ -3580,6 +3610,56 @@ const CLOCKWORK_PROTOTYPE_LEVELS = [
     ],
   },
   {
+    // Slot 24 — binary escalation: the suns swing faster AND the wheels
+    // move — two clocks to read at once.
+    id: 'clockwork-furnace-dance',
+    name: 'Furnace Dance',
+    summary: 'The suns waltz quicker here, and the wheels will not wait for them. Two rhythms, one throw.',
+    visitAll: true,
+    timeWindowSeconds: 60,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 35, power: 1.8 },
+      { angleDeg: 80, power: 2.4 },
+    ],
+    startAnchor: polar(3.95, -145),
+    goalCenter: polar(8.2, 250),
+    goalRadius: 0.72,
+    goalPullRadius: 5.4,
+    goalPullStrength: 7.4,
+    goalOpenSeconds: 16,
+    binarySystem: {
+      primarySun: {
+        name: 'Dancer Alpha',
+        position: polar(1.15, 180),
+        radius: 0.44,
+        gravityStrength: FIXED_SOLAR_GRAVITY_STRENGTH,
+        collisionRadius: 0.44,
+        orbitAngularSpeed: 0.3,
+        orbitEccentricity: 0.04,
+        core: 0xffdf96,
+        glow: 0xffa95a,
+      },
+      secondarySun: {
+        name: 'Dancer Beta',
+        position: polar(1.85, 0),
+        radius: 0.36,
+        gravityStrength: 16,
+        collisionRadius: 0.36,
+        orbitAngularSpeed: 0.3,
+        orbitEccentricity: 0.04,
+        core: 0x9ed7ff,
+        glow: 0x65b7ff,
+      },
+    },
+    planets: [
+      { name: 'Bandstand', position: polar(3.3, -145), radius: 0.62, gravity: 7.2, falloff: 5.0, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
+      { name: 'Quick Step', position: polar(4.4, 60), radius: 0.74, gravity: 8.9, falloff: 5.7, core: 0xf39a66, glow: 0xffcf86, landable: true, landingRadius: 1.24, flybyRadius: 1.8, orbitAngularSpeed: 0.5, spinAngularSpeed: -0.3 },
+      { name: 'Slow Turn', position: polar(5.9, 220), radius: 0.8, gravity: 9.6, falloff: 6.1, core: 0x8b85ff, glow: 0xc6beff, landable: true, landingRadius: 1.3, flybyRadius: 1.8, orbitAngularSpeed: 0.35, spinAngularSpeed: 0.25 },
+    ],
+  },
+  {
     // Hypothesis: objective variety via per-planet gating. Only the comet is
     // required (mustVisit), and its eccentric orbit means it is catchable
     // only near perihelion — the clock is a comet timetable.
@@ -3603,6 +3683,225 @@ const CLOCKWORK_PROTOTYPE_LEVELS = [
       { name: 'Observatory', position: polar(2.05, -135), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
       { name: 'The Visitor', position: polar(5.4, 0), radius: 0.66, gravity: 8.4, falloff: 5.4, core: 0xbfffe8, glow: 0x7df3d1, landable: true, landingRadius: 1.18, mustVisit: true, orbitAngularSpeed: 0.45, orbitEccentricity: 0.28, spinAngularSpeed: 0.5 },
       { name: 'Rim Light', position: polar(8.0, 300), radius: 0.9, gravity: 10.6, falloff: 6.6, core: 0xff8f74, glow: 0xffcfad, landable: false, orbitAngularSpeed: 0.03, spinAngularSpeed: -0.03 },
+    ],
+  },
+  {
+    // Slot 26 — two comets on crossing ellipses, each with its own
+    // perihelion timetable. Catch both before the clock runs down.
+    id: 'clockwork-two-visitors',
+    name: 'Two Visitors',
+    summary: 'Two travellers ride the same road, half a lap apart. Board the first, ride it, and leap to the second.',
+    timeWindowSeconds: 90,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 30, power: 1.7 },
+      { angleDeg: 70, power: 2.3 },
+    ],
+    startAnchor: polar(2.7, -135),
+    goalCenter: polar(8.2, 90),
+    goalRadius: 0.72,
+    goalPullRadius: 5.4,
+    goalPullStrength: 7.4,
+    goalOpenSeconds: 18,
+    planets: [
+      { name: 'Twin Observatory', position: polar(2.05, -135), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
+      { name: 'First Visitor', position: polar(5.35, 20), radius: 0.62, gravity: 8.2, falloff: 5.3, core: 0xbfffe8, glow: 0x7df3d1, landable: true, landingRadius: 1.3, flybyRadius: 2.1, mustVisit: true, orbitAngularSpeed: 0.35, orbitEccentricity: 0.26, spinAngularSpeed: 0.5 },
+      { name: 'Second Visitor', position: polar(5.45, 200), radius: 0.66, gravity: 8.6, falloff: 5.5, core: 0xd8c8ff, glow: 0xb39dff, landable: true, landingRadius: 1.3, flybyRadius: 2.1, mustVisit: true, orbitAngularSpeed: 0.35, orbitEccentricity: 0.26, spinAngularSpeed: -0.4 },
+    ],
+  },
+  {
+    // Hypothesis: the scrubber as a POSITIONING tool. Landing on the ice
+    // glacier keeps you sliding — scrubbing time while parked rotates you
+    // around it, so the clock literally aims your next launch.
+    id: 'proto-clockwork-glacier',
+    name: 'Glacier Gear',
+    summary: 'Park on the glacier and wind the clock — you slide around it, and where you stop is where you launch.',
+    timeWindowSeconds: 70,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 40, power: 1.8 },
+      { angleDeg: 85, power: 2.4 },
+    ],
+    startAnchor: polar(2.65, -140),
+    goalCenter: polar(8.1, 340),
+    goalRadius: 0.72,
+    goalPullRadius: 5.4,
+    goalPullStrength: 7.4,
+    goalOpenSeconds: 16,
+    planets: [
+      { name: 'Base Camp', position: polar(2.0, -140), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
+      { name: 'The Glacier', position: polar(4.6, 90), radius: 1.0, gravity: 9.8, falloff: 6.2, core: 0xbfe8ff, glow: 0xe8fbff, landable: true, landingRadius: 1.7, surfaceType: 'ice', orbitAngularSpeed: 0.12, spinAngularSpeed: 0.3 },
+      { name: 'Floe East', position: polar(5.7, 0), radius: 0.72, gravity: 8.8, falloff: 5.7, core: 0x8b85ff, glow: 0xc6beff, landable: true, landingRadius: 1.22, mustVisit: true, orbitAngularSpeed: 0.25, spinAngularSpeed: -0.25 },
+      { name: 'Floe West', position: polar(6.9, 180), radius: 0.76, gravity: 9.2, falloff: 5.9, core: 0xf39a66, glow: 0xffcf86, landable: true, landingRadius: 1.26, mustVisit: true, orbitAngularSpeed: 0.18, spinAngularSpeed: 0.2 },
+    ],
+  },
+  {
+    // Slot 28 — two glaciers: slide-aim on the first to reach the second,
+    // slide again to line up the bells. The clock steers everything.
+    id: 'clockwork-ice-works',
+    name: 'Ice Works',
+    summary: 'Two frozen anvils to skate on, two bells to ring. Let the clock walk you around the ice.',
+    timeWindowSeconds: 70,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 40, power: 1.8 },
+      { angleDeg: 85, power: 2.4 },
+    ],
+    startAnchor: polar(2.65, -140),
+    goalCenter: polar(8.2, 40),
+    goalRadius: 0.72,
+    goalPullRadius: 5.4,
+    goalPullStrength: 7.4,
+    goalOpenSeconds: 16,
+    planets: [
+      { name: 'Cold Camp', position: polar(2.0, -140), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
+      { name: 'North Anvil', position: polar(4.0, 80), radius: 0.9, gravity: 9.4, falloff: 6.0, core: 0xbfe8ff, glow: 0xe8fbff, landable: true, landingRadius: 1.6, surfaceType: 'ice', orbitAngularSpeed: 0.14, spinAngularSpeed: 0.3 },
+      { name: 'Frost Bell', position: polar(5.4, 200), radius: 0.72, gravity: 8.9, falloff: 5.7, core: 0x8b85ff, glow: 0xc6beff, landable: true, landingRadius: 1.22, flybyRadius: 1.8, mustVisit: true, orbitAngularSpeed: 0.25, spinAngularSpeed: -0.25 },
+      { name: 'South Anvil', position: polar(6.6, 320), radius: 0.9, gravity: 9.8, falloff: 6.3, core: 0xbfe8ff, glow: 0xe8fbff, landable: true, landingRadius: 1.6, surfaceType: 'ice', orbitAngularSpeed: 0.1, spinAngularSpeed: -0.3 },
+      { name: 'Rime Bell', position: polar(7.6, 140), radius: 0.76, gravity: 9.4, falloff: 6.1, core: 0xff7fa2, glow: 0xffb8c9, landable: true, landingRadius: 1.26, flybyRadius: 1.8, mustVisit: true, orbitAngularSpeed: 0.12, spinAngularSpeed: 0.2 },
+    ],
+  },
+  {
+    // Slot 29 — portal plus ice: ride the gate across, land on the drift
+    // glacier, and let the scrubber slide you into the second bell's lane.
+    id: 'clockwork-cold-ferry',
+    name: 'Cold Ferry',
+    summary: 'The ferry crosses cold water. Skate the far shore until the last bell rings true.',
+    timeWindowSeconds: 70,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 25, power: 1.7 },
+      { angleDeg: 70, power: 2.3 },
+    ],
+    startAnchor: polar(2.65, -150),
+    goalCenter: polar(7.5, 277),
+    goalRadius: 0.72,
+    goalPullRadius: 5.4,
+    goalPullStrength: 7.4,
+    goalOpenSeconds: 16,
+    planets: [
+      { name: 'Pier', position: polar(2.0, -150), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
+      { name: 'Harbor Bell', position: polar(3.6, 120), radius: 0.72, gravity: 8.6, falloff: 5.6, core: 0x74bbff, glow: 0x94dbff, landable: true, landingRadius: 1.22, flybyRadius: 1.8, mustVisit: true, orbitAngularSpeed: 0.4, spinAngularSpeed: -0.3 },
+      { name: 'Drift Glacier', position: polar(5.2, 250), radius: 0.95, gravity: 9.7, falloff: 6.2, core: 0xbfe8ff, glow: 0xe8fbff, landable: true, landingRadius: 1.65, surfaceType: 'ice', orbitAngularSpeed: 0.13, spinAngularSpeed: 0.3 },
+      { name: 'Buoy Bell', position: polar(7.0, 330), radius: 0.78, gravity: 9.5, falloff: 6.1, core: 0xff7fa2, glow: 0xffb8c9, landable: true, landingRadius: 1.28, flybyRadius: 1.8, mustVisit: true, orbitAngularSpeed: 0.12, spinAngularSpeed: 0.2 },
+    ],
+    portals: [
+      { id: 'coldferry-white', pairId: 'coldferry-black', variant: 'white', position: polar(4.4, -10), radius: 0.68, orbitAngularSpeed: 0.28, orbitEccentricity: 0.04, core: 0xe8f6ff, glow: 0x9fe9ff },
+      { id: 'coldferry-black', pairId: 'coldferry-white', variant: 'black', position: polar(6.0, 210), radius: 0.68, orbitAngularSpeed: -0.14, orbitEccentricity: 0.04, core: 0x0b0616, glow: 0x7e67ff },
+    ],
+  },
+  {
+    // Slot 30 — sling pad plus comet: your rock is fast, the visitor is
+    // faster. Two eccentric clocks that agree only a few times per window.
+    id: 'clockwork-perihelion-rush',
+    name: 'Perihelion Rush',
+    summary: 'Your rock swings hard; the visitor dives harder. Fire when both curves say now.',
+    timeWindowSeconds: 60,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 30, power: 1.8 },
+      { angleDeg: 75, power: 2.4 },
+    ],
+    startAnchor: polar(3.2, -120),
+    goalCenter: polar(8.2, 170),
+    goalRadius: 0.72,
+    goalPullRadius: 5.4,
+    goalPullStrength: 7.4,
+    goalOpenSeconds: 15,
+    planets: [
+      { name: 'Rush Rock', position: polar(2.4, -120), radius: 0.6, gravity: 7.2, falloff: 4.9, core: 0x8b85ff, glow: 0xc6beff, landable: true, orbitAngularSpeed: 0.6, orbitEccentricity: 0.1, spinAngularSpeed: 0.2 },
+      { name: 'The Rusher', position: polar(5.5, 40), radius: 0.64, gravity: 8.4, falloff: 5.4, core: 0xbfffe8, glow: 0x7df3d1, landable: true, landingRadius: 1.14, flybyRadius: 1.8, mustVisit: true, orbitAngularSpeed: 0.5, orbitEccentricity: 0.2, spinAngularSpeed: 0.5 },
+      { name: 'Grandstand', position: polar(7.4, 260), radius: 0.86, gravity: 10.2, falloff: 6.5, core: 0xff8f74, glow: 0xffcfad, landable: false, orbitAngularSpeed: 0.05, spinAngularSpeed: -0.03 },
+    ],
+  },
+  {
+    // Slot 31 — dust banks on the clock: the drag zones orbit, so WHEN you
+    // fly decides whether the sea is in your way.
+    id: 'clockwork-sea',
+    name: 'Clockwork Sea',
+    summary: 'The dust tides circle the works. Sail between them — or wait until they part.',
+    visitAll: true,
+    timeWindowSeconds: 65,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 25, power: 1.8 },
+      { angleDeg: 65, power: 2.4 },
+    ],
+    startAnchor: polar(2.65, -150),
+    goalCenter: polar(7.5, 192),
+    goalRadius: 0.72,
+    goalPullRadius: 5.4,
+    goalPullStrength: 7.4,
+    goalOpenSeconds: 16,
+    planets: [
+      { name: 'Lightship', position: polar(2.0, -150), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
+      { name: 'Chart Wheel', position: polar(4.2, 60), radius: 0.74, gravity: 8.8, falloff: 5.7, core: 0x74bbff, glow: 0x94dbff, landable: true, landingRadius: 1.24, flybyRadius: 1.8, orbitAngularSpeed: 0.4, spinAngularSpeed: -0.3 },
+      { name: 'Compass Wheel', position: polar(6.2, 240), radius: 0.8, gravity: 9.6, falloff: 6.1, core: 0xf39a66, glow: 0xffcf86, landable: true, landingRadius: 1.3, flybyRadius: 1.8, orbitAngularSpeed: 0.2, spinAngularSpeed: 0.25 },
+    ],
+    dustClouds: [
+      { position: polar(4.4, 160), radius: 1.15, drag: 0.6, orbitAngularSpeed: 0.22 },
+      { position: polar(5.6, 340), radius: 1.25, drag: 0.6, orbitAngularSpeed: -0.14 },
+    ],
+  },
+  {
+    // Slot 32 — Act III boss: binary suns swing the field while a portal
+    // pair offers the only sane route between three far-flung wheels.
+    id: 'clockwork-curator',
+    name: 'The Curator',
+    summary: 'The Curator rearranges the museum as you walk it. The gate is the only door he cannot move.',
+    visitAll: true,
+    timeWindowSeconds: 75,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 35, power: 1.8 },
+      { angleDeg: 80, power: 2.4 },
+    ],
+    startAnchor: polar(3.95, -150),
+    goalCenter: polar(7.5, 7),
+    goalRadius: 0.72,
+    goalPullRadius: 5.4,
+    goalPullStrength: 7.4,
+    goalOpenSeconds: 15,
+    binarySystem: {
+      primarySun: {
+        name: 'Curator Alpha',
+        position: polar(1.15, 220),
+        radius: 0.44,
+        gravityStrength: FIXED_SOLAR_GRAVITY_STRENGTH,
+        collisionRadius: 0.44,
+        orbitAngularSpeed: 0.22,
+        orbitEccentricity: 0.04,
+        core: 0xffdf96,
+        glow: 0xffa95a,
+      },
+      secondarySun: {
+        name: 'Curator Beta',
+        position: polar(1.85, 40),
+        radius: 0.36,
+        gravityStrength: 16,
+        collisionRadius: 0.36,
+        orbitAngularSpeed: 0.22,
+        orbitEccentricity: 0.04,
+        core: 0x9ed7ff,
+        glow: 0x65b7ff,
+      },
+    },
+    planets: [
+      { name: 'Cloakroom', position: polar(3.3, -150), radius: 0.62, gravity: 7.2, falloff: 5.0, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.09, spinAngularSpeed: 0.1 },
+      { name: 'First Hall', position: polar(4.5, 30), radius: 0.74, gravity: 8.9, falloff: 5.7, core: 0x74bbff, glow: 0x94dbff, landable: true, landingRadius: 1.24, flybyRadius: 1.7, orbitAngularSpeed: 0.35, spinAngularSpeed: -0.3 },
+      { name: 'Second Hall', position: polar(5.8, 150), radius: 0.78, gravity: 9.4, falloff: 6.0, core: 0x8b85ff, glow: 0xc6beff, landable: true, landingRadius: 1.28, flybyRadius: 1.7, orbitAngularSpeed: 0.24, spinAngularSpeed: 0.25 },
+      { name: 'Third Hall', position: polar(7.0, 270), radius: 0.82, gravity: 9.9, falloff: 6.3, core: 0xff7fa2, glow: 0xffb8c9, landable: true, landingRadius: 1.32, flybyRadius: 1.7, orbitAngularSpeed: 0.16, spinAngularSpeed: -0.2 },
+    ],
+    portals: [
+      { id: 'curator-white', pairId: 'curator-black', variant: 'white', position: polar(5.0, -60), radius: 0.68, orbitAngularSpeed: 0.26, orbitEccentricity: 0.04, core: 0xe8f6ff, glow: 0x9fe9ff },
+      { id: 'curator-black', pairId: 'curator-white', variant: 'black', position: polar(6.4, 180), radius: 0.68, orbitAngularSpeed: -0.12, orbitEccentricity: 0.04, core: 0x0b0616, glow: 0x7e67ff },
     ],
   },
   {
@@ -3634,33 +3933,6 @@ const CLOCKWORK_PROTOTYPE_LEVELS = [
       { name: "Keeper's Rock", position: polar(2.0, -150), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
       { name: 'North Buoy', position: polar(4.3, 70), radius: 0.72, gravity: 8.8, falloff: 5.6, core: 0x74bbff, glow: 0x94dbff, landable: true, landingRadius: 1.22, mustVisit: true, orbitAngularSpeed: 0.4, spinAngularSpeed: -0.3 },
       { name: 'South Buoy', position: polar(6.2, 250), radius: 0.8, gravity: 9.6, falloff: 6.1, core: 0xff7fa2, glow: 0xffb8c9, landable: true, landingRadius: 1.3, mustVisit: true, orbitAngularSpeed: 0.22, spinAngularSpeed: 0.25 },
-    ],
-  },
-  {
-    // Hypothesis: the scrubber as a POSITIONING tool. Landing on the ice
-    // glacier keeps you sliding — scrubbing time while parked rotates you
-    // around it, so the clock literally aims your next launch.
-    id: 'proto-clockwork-glacier',
-    name: 'Glacier Gear',
-    summary: 'Park on the glacier and wind the clock — you slide around it, and where you stop is where you launch.',
-    timeWindowSeconds: 70,
-    sun: [0, 0],
-    startPlanetIndex: 0,
-    launchPresets: [
-      { angleDeg: 40, power: 1.8 },
-      { angleDeg: 85, power: 2.4 },
-    ],
-    startAnchor: polar(2.65, -140),
-    goalCenter: polar(8.1, 340),
-    goalRadius: 0.72,
-    goalPullRadius: 5.4,
-    goalPullStrength: 7.4,
-    goalOpenSeconds: 16,
-    planets: [
-      { name: 'Base Camp', position: polar(2.0, -140), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
-      { name: 'The Glacier', position: polar(4.6, 90), radius: 1.0, gravity: 9.8, falloff: 6.2, core: 0xbfe8ff, glow: 0xe8fbff, landable: true, landingRadius: 1.7, surfaceType: 'ice', orbitAngularSpeed: 0.12, spinAngularSpeed: 0.3 },
-      { name: 'Floe East', position: polar(5.7, 0), radius: 0.72, gravity: 8.8, falloff: 5.7, core: 0x8b85ff, glow: 0xc6beff, landable: true, landingRadius: 1.22, mustVisit: true, orbitAngularSpeed: 0.25, spinAngularSpeed: -0.25 },
-      { name: 'Floe West', position: polar(6.9, 180), radius: 0.76, gravity: 9.2, falloff: 5.9, core: 0xf39a66, glow: 0xffcf86, landable: true, landingRadius: 1.26, mustVisit: true, orbitAngularSpeed: 0.18, spinAngularSpeed: 0.2 },
     ],
   },
   {
