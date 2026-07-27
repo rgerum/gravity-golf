@@ -4193,6 +4193,225 @@ const CLOCKWORK_PROTOTYPE_LEVELS = [
       { name: 'The Night Warden', position: polar(7.3, 20), radius: 1.12, gravity: 12.8, falloff: 7.0, core: 0xff8f74, glow: 0xffcfad, landable: false, orbitAngularSpeed: 0.28, spinAngularSpeed: -0.05 },
     ],
   },
+  {
+    // Slot 43 — the ring, introduced deliberately: a checkpoint you cannot
+    // land on. Small bright core, no landing ring — thread it at speed.
+    // (Richard's rule: flyby-only is an expert tool, used consciously.)
+    id: 'clockwork-ring-road',
+    name: 'Ring Road',
+    summary: 'The ring is not a place to stand — it is a place to pass. One clean thread, then home.',
+    timeWindowSeconds: 55,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 30, power: 1.7 },
+      { angleDeg: 70, power: 2.3 },
+    ],
+    startAnchor: polar(2.65, -150),
+    goalCenter: polar(7.5, 200),
+    goalRadius: 0.72,
+    goalPullRadius: 5.4,
+    goalPullStrength: 7.4,
+    goalOpenSeconds: 16,
+    planets: [
+      { name: 'Roadhouse', position: polar(2.0, -150), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
+      { name: 'Waypost', position: polar(3.9, 120), radius: 0.76, gravity: 9.0, falloff: 5.8, core: 0x74bbff, glow: 0x94dbff, landable: true, landingRadius: 1.3, orbitAngularSpeed: 0.28, spinAngularSpeed: -0.25 },
+      { name: 'The Toll Ring', position: polar(5.6, 300), radius: 0.46, gravity: 7.8, falloff: 5.0, core: 0xfff3c0, glow: 0xffd07a, landable: false, mustVisit: true, flybyRadius: 1.7, orbitAngularSpeed: 0.24, spinAngularSpeed: 0.6 },
+    ],
+  },
+  {
+    // Slot 44 — an orrery of rings: three pass-only checkpoints on ratioed
+    // orbits. The landable mid-relay is the only rest stop.
+    id: 'clockwork-three-rings',
+    name: 'Three Rings',
+    summary: 'Three tolls on the road and nowhere to park but the middle. Thread them all.',
+    timeWindowSeconds: 70,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 25, power: 1.7 },
+      { angleDeg: 65, power: 2.3 },
+    ],
+    startAnchor: polar(2.65, -150),
+    goalCenter: polar(7.5, 152),
+    goalRadius: 0.72,
+    goalPullRadius: 5.4,
+    goalPullStrength: 7.4,
+    goalOpenSeconds: 15,
+    planets: [
+      { name: 'Trailhead', position: polar(2.0, -150), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
+      { name: 'Inner Toll', position: polar(3.5, 0), radius: 0.44, gravity: 7.6, falloff: 5.0, core: 0xfff3c0, glow: 0xffd07a, landable: false, mustVisit: true, flybyRadius: 2.0, orbitAngularSpeed: 0.6, spinAngularSpeed: 0.6 },
+      { name: 'Rest Stop', position: polar(4.7, 140), radius: 0.82, gravity: 9.4, falloff: 6.0, core: 0x8b85ff, glow: 0xc6beff, landable: true, landingRadius: 1.52, orbitAngularSpeed: 0.3, spinAngularSpeed: -0.25 },
+      { name: 'Middle Toll', position: polar(5.9, 250), radius: 0.46, gravity: 7.8, falloff: 5.1, core: 0xfff3c0, glow: 0xffd07a, landable: false, mustVisit: true, flybyRadius: 2.0, orbitAngularSpeed: 0.36, spinAngularSpeed: -0.6 },
+      { name: 'Outer Toll', position: polar(7.1, 20), radius: 0.48, gravity: 8.0, falloff: 5.2, core: 0xfff3c0, glow: 0xffd07a, landable: false, mustVisit: true, flybyRadius: 2.0, orbitAngularSpeed: 0.2, spinAngularSpeed: 0.5 },
+    ],
+  },
+  {
+    // Slot 45 — the ferry route with tolls: portal hop between two rings.
+    id: 'clockwork-ghost-ferry',
+    name: 'Ghost Ferry',
+    summary: 'The ferry still runs at night. Pay the toll on both shores — without ever stepping off.',
+    timeWindowSeconds: 70,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 25, power: 1.7 },
+      { angleDeg: 70, power: 2.3 },
+    ],
+    startAnchor: polar(2.65, -150),
+    goalCenter: polar(7.5, 280),
+    goalRadius: 0.72,
+    goalPullRadius: 5.4,
+    goalPullStrength: 7.4,
+    goalOpenSeconds: 16,
+    planets: [
+      { name: 'Night Pier', position: polar(2.0, -150), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
+      { name: 'Near Toll', position: polar(3.7, 60), radius: 0.44, gravity: 7.6, falloff: 5.0, core: 0xfff3c0, glow: 0xffd07a, landable: false, mustVisit: true, flybyRadius: 2.0, orbitAngularSpeed: 0.42, spinAngularSpeed: 0.6 },
+      { name: 'Mooring', position: polar(5.0, 190), radius: 0.8, gravity: 9.4, falloff: 6.0, core: 0x8b85ff, glow: 0xc6beff, landable: true, landingRadius: 1.4, orbitAngularSpeed: 0.24, spinAngularSpeed: -0.25 },
+      { name: 'Far Toll', position: polar(6.6, 320), radius: 0.46, gravity: 7.8, falloff: 5.1, core: 0xfff3c0, glow: 0xffd07a, landable: false, mustVisit: true, flybyRadius: 2.0, orbitAngularSpeed: 0.16, spinAngularSpeed: -0.5 },
+    ],
+    portals: [
+      { id: 'ghostferry-white', pairId: 'ghostferry-black', variant: 'white', position: polar(4.4, -20), radius: 0.68, orbitAngularSpeed: 0.3, orbitEccentricity: 0.04, core: 0xe8f6ff, glow: 0x9fe9ff },
+      { id: 'ghostferry-black', pairId: 'ghostferry-white', variant: 'black', position: polar(5.8, 200), radius: 0.68, orbitAngularSpeed: -0.13, orbitEccentricity: 0.04, core: 0x0b0616, glow: 0x7e67ff },
+    ],
+  },
+  {
+    // Slot 46 — a ring with a deadline: the sun will swallow the Cinder
+    // Ring around t≈40. Thread it before the fire does.
+    id: 'clockwork-cinder-ring',
+    name: 'Cinder Ring',
+    summary: 'The innermost toll is already glowing. Thread it before the sun forecloses.',
+    timeWindowSeconds: 60,
+    sun: [0, 0],
+    startPlanetIndex: 1,
+    launchPresets: [
+      { angleDeg: 30, power: 1.7 },
+      { angleDeg: 70, power: 2.3 },
+    ],
+    startAnchor: polar(5.15, -150),
+    goalCenter: polar(7.5, 60),
+    goalRadius: 0.72,
+    goalPullRadius: 5.4,
+    goalPullStrength: 7.4,
+    goalOpenSeconds: 15,
+    redGiant: { startRadius: 0.42, endRadius: 3.8, growSeconds: 52, startTimeSeconds: 0 },
+    planets: [
+      { name: 'Cinder Ring', position: polar(3.6, 70), radius: 0.44, gravity: 7.6, falloff: 5.0, core: 0xffd8a8, glow: 0xff9a5a, landable: false, mustVisit: true, flybyRadius: 1.7, orbitAngularSpeed: 0.36, spinAngularSpeed: 0.6, redGiantVulnerable: true, sunFadeStartRadius: 5.14, sunPlungeDuration: 0.72 },
+      { name: 'Ash Porch', position: polar(4.5, -150), radius: 0.62, gravity: 7.4, falloff: 5.1, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1, redGiantVulnerable: false },
+      { name: 'Smoke Wheel', position: polar(6.2, 240), radius: 0.78, gravity: 9.4, falloff: 6.0, core: 0x8b85ff, glow: 0xc6beff, landable: true, landingRadius: 1.28, flybyRadius: 1.9, orbitAngularSpeed: 0.18, spinAngularSpeed: 0.25, redGiantVulnerable: false },
+    ],
+  },
+  {
+    // Slot 47 — the epic: a two-minute clock, four stations, and room for
+    // every strategy. The longest deliberate plan in the campaign.
+    id: 'clockwork-long-now',
+    name: 'The Long Now',
+    summary: 'Two minutes of clockwork. Four stations. Plan like a cartographer, fire like a poet.',
+    timeWindowSeconds: 120,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 25, power: 1.7 },
+      { angleDeg: 65, power: 2.3 },
+    ],
+    startAnchor: polar(2.65, -150),
+    goalCenter: polar(7.5, 340),
+    goalRadius: 0.72,
+    goalPullRadius: 5.4,
+    goalPullStrength: 7.4,
+    goalOpenSeconds: 16,
+    planets: [
+      { name: 'Deep Dock', position: polar(2.0, -150), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.09, spinAngularSpeed: 0.1 },
+      { name: 'Station One', position: polar(3.6, 40), radius: 0.72, gravity: 8.6, falloff: 5.6, core: 0x74bbff, glow: 0x94dbff, landable: true, landingRadius: 1.32, flybyRadius: 1.8, orbitAngularSpeed: 0.42, spinAngularSpeed: -0.3 },
+      { name: 'Station Two', position: polar(4.8, 150), radius: 0.5, gravity: 7.9, falloff: 5.2, core: 0xfff3c0, glow: 0xffd07a, landable: false, mustVisit: true, flybyRadius: 1.7, orbitAngularSpeed: 0.3, spinAngularSpeed: 0.5 },
+      { name: 'Station Three', position: polar(6.0, 260), radius: 0.78, gravity: 9.4, falloff: 6.0, core: 0x8b85ff, glow: 0xc6beff, landable: true, landingRadius: 1.34, flybyRadius: 1.8, orbitAngularSpeed: 0.2, spinAngularSpeed: 0.25 },
+      { name: 'Station Four', position: polar(7.2, 10), radius: 0.5, gravity: 8.0, falloff: 5.2, core: 0xfff3c0, glow: 0xffd07a, landable: false, mustVisit: true, flybyRadius: 1.7, orbitAngularSpeed: 0.13, spinAngularSpeed: -0.5 },
+    ],
+  },
+  {
+    // Slot 48 — counter-rotating tolls: the chime again, but the passes are
+    // pass-only and the tempo is faster.
+    id: 'clockwork-ring-cycle',
+    name: 'Ring Cycle',
+    summary: 'Two tolls swing against each other. The overture is short — catch the bar you are given.',
+    timeWindowSeconds: 45,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 25, power: 1.7 },
+      { angleDeg: 65, power: 2.3 },
+    ],
+    startAnchor: polar(2.65, -160),
+    goalCenter: polar(7.5, 302),
+    goalRadius: 0.72,
+    goalPullRadius: 5.4,
+    goalPullStrength: 7.4,
+    goalOpenSeconds: 14,
+    planets: [
+      { name: 'Podium', position: polar(2.0, -160), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
+      { name: 'Treble Ring', position: polar(4.3, 30), radius: 0.44, gravity: 7.7, falloff: 5.0, core: 0xfff3c0, glow: 0xffd07a, landable: false, mustVisit: true, flybyRadius: 1.6, orbitAngularSpeed: 0.55, spinAngularSpeed: 0.6 },
+      { name: 'Bass Ring', position: polar(5.5, 200), radius: 0.48, gravity: 7.9, falloff: 5.1, core: 0xfff3c0, glow: 0xffd07a, landable: false, mustVisit: true, flybyRadius: 1.6, orbitAngularSpeed: -0.5, spinAngularSpeed: -0.6 },
+      { name: 'Gallery', position: polar(6.7, 320), radius: 0.8, gravity: 9.6, falloff: 6.1, core: 0x8b85ff, glow: 0xc6beff, landable: true, landingRadius: 1.3, orbitAngularSpeed: 0.14, spinAngularSpeed: 0.2 },
+    ],
+  },
+  {
+    // Slot 49 — the dress rehearsal: portal, flicker, and a toll ring in one
+    // system. Nothing new — everything at once.
+    id: 'clockwork-rehearsal',
+    name: 'Dress Rehearsal',
+    summary: 'Every trick you know, one quiet run-through before midnight.',
+    timeWindowSeconds: 80,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 30, power: 1.7 },
+      { angleDeg: 70, power: 2.3 },
+    ],
+    startAnchor: polar(2.65, -150),
+    goalCenter: polar(7.5, 130),
+    goalRadius: 0.72,
+    goalPullRadius: 5.4,
+    goalPullStrength: 7.4,
+    goalOpenSeconds: 15,
+    planets: [
+      { name: 'Green Room', position: polar(2.0, -150), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
+      { name: 'Prompt Wheel', position: polar(3.9, 70), radius: 0.72, gravity: 8.8, falloff: 5.6, core: 0x64e6ff, glow: 0xb5f5ff, landable: true, landingRadius: 1.24, flybyRadius: 1.8, mustVisit: true, orbitAngularSpeed: 0.36, spinAngularSpeed: -0.3, flicker: { periodSeconds: 6.8, visibleSeconds: 4.0, phaseSeconds: 0, transitionSeconds: 0.32 } },
+      { name: 'Stage Toll', position: polar(5.4, 230), radius: 0.46, gravity: 7.8, falloff: 5.1, core: 0xfff3c0, glow: 0xffd07a, landable: false, mustVisit: true, flybyRadius: 1.6, orbitAngularSpeed: 0.26, spinAngularSpeed: 0.5 },
+      { name: 'Balcony', position: polar(6.8, 350), radius: 0.8, gravity: 9.6, falloff: 6.1, core: 0x8b85ff, glow: 0xc6beff, landable: true, landingRadius: 1.3, orbitAngularSpeed: 0.14, spinAngularSpeed: 0.2 },
+    ],
+    portals: [
+      { id: 'rehearsal-white', pairId: 'rehearsal-black', variant: 'white', position: polar(4.6, -40), radius: 0.68, orbitAngularSpeed: 0.28, orbitEccentricity: 0.04, core: 0xe8f6ff, glow: 0x9fe9ff },
+      { id: 'rehearsal-black', pairId: 'rehearsal-white', variant: 'black', position: polar(6.0, 180), radius: 0.68, orbitAngularSpeed: -0.13, orbitEccentricity: 0.04, core: 0x0b0616, glow: 0x7e67ff },
+    ],
+  },
+  {
+    // Slot 50 — Midnight: the grand orrery. Five stations across the whole
+    // system, a warden on the rim, one hundred seconds to compose the run.
+    id: 'clockwork-midnight',
+    name: 'Midnight',
+    summary: 'The whole works turning at once. Wind the clock to midnight and play your masterpiece.',
+    timeWindowSeconds: 100,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 30, power: 1.8 },
+      { angleDeg: 75, power: 2.4 },
+    ],
+    startAnchor: polar(2.65, -150),
+    goalCenter: polar(8.6, 240),
+    goalRadius: 0.72,
+    goalPullRadius: 5.4,
+    goalPullStrength: 7.4,
+    goalOpenSeconds: 15,
+    planets: [
+      { name: 'Midnight Rock', position: polar(2.0, -150), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
+      { name: 'One O-Clock', position: polar(3.3, 30), radius: 0.7, gravity: 8.5, falloff: 5.5, core: 0x74bbff, glow: 0x94dbff, landable: true, landingRadius: 1.3, flybyRadius: 1.8, orbitAngularSpeed: 0.55, spinAngularSpeed: -0.3 },
+      { name: 'Three O-Clock', position: polar(4.4, 120), radius: 0.48, gravity: 7.8, falloff: 5.1, core: 0xfff3c0, glow: 0xffd07a, landable: false, mustVisit: true, flybyRadius: 1.7, orbitAngularSpeed: 0.4, spinAngularSpeed: 0.5 },
+      { name: 'Six O-Clock', position: polar(5.5, 210), radius: 0.78, gravity: 9.4, falloff: 6.0, core: 0x8b85ff, glow: 0xc6beff, landable: true, landingRadius: 1.32, flybyRadius: 1.8, orbitAngularSpeed: 0.28, spinAngularSpeed: 0.25 },
+      { name: 'Nine O-Clock', position: polar(6.6, 300), radius: 0.5, gravity: 8.0, falloff: 5.2, core: 0xfff3c0, glow: 0xffd07a, landable: false, mustVisit: true, flybyRadius: 1.7, orbitAngularSpeed: 0.18, spinAngularSpeed: -0.5 },
+      { name: 'The Doorman', position: polar(7.8, 60), radius: 1.1, gravity: 12.5, falloff: 7.0, core: 0xff8f74, glow: 0xffcfad, landable: false, orbitAngularSpeed: 0.22, spinAngularSpeed: -0.05 },
+    ],
+  },
 ];
 for (const clockworkLevel of CLOCKWORK_PROTOTYPE_LEVELS) {
   LEVEL_DEFINITIONS.push(clockworkLevel);
