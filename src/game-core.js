@@ -3936,31 +3936,30 @@ const CLOCKWORK_PROTOTYPE_LEVELS = [
     ],
   },
   {
-    // Hypothesis: the window IS a deadline. The sun swells into a red giant
-    // across the whole clock; the inner wheel gets swallowed around t≈45,
-    // so late scrub positions simply have less level left. The launch rock
-    // is never vulnerable — the deadline eats checkpoints, not the player.
-    id: 'proto-clockwork-swansong',
-    name: 'Swansong',
-    summary: 'The sun is dying on schedule. The inner wheel drowns first — the clock is a countdown, spend it well.',
-    timeWindowSeconds: 60,
+    // Slot 34 — beam escalation: a hotter pulsar, longer pulses, and a beam
+    // pair that catches your rock at t≈35. The dead tail is the deadline.
+    id: 'clockwork-twin-beams',
+    name: 'Twin Beams',
+    summary: 'This lighthouse burns hotter and turns meaner. Ring the buoys before its light finds your rock.',
+    visitAll: true,
+    timeWindowSeconds: 50,
     sun: [0, 0],
-    startPlanetIndex: 1,
+    startPlanetIndex: 0,
     launchPresets: [
       { angleDeg: 30, power: 1.7 },
-      { angleDeg: 70, power: 2.3 },
+      { angleDeg: 75, power: 2.3 },
     ],
-    startAnchor: polar(5.05, -150),
-    goalCenter: polar(6.9, 58),
+    startAnchor: polar(2.65, -150),
+    goalCenter: polar(7.5, 288),
     goalRadius: 0.72,
     goalPullRadius: 5.4,
     goalPullStrength: 7.4,
     goalOpenSeconds: 14,
-    redGiant: { startRadius: 0.42, endRadius: 3.7, growSeconds: 55, startTimeSeconds: 0 },
+    pulsarJets: { periodSeconds: 3.0, activeSeconds: 1.0, phaseSeconds: 0, angleDeg: 175, angularSpeedDeg: 1.7, width: 0.45 },
     planets: [
-      { name: 'Cinder', position: polar(3.3, 60), radius: 0.66, gravity: 8.6, falloff: 5.5, core: 0xf39a66, glow: 0xffcf86, landable: true, landingRadius: 1.18, mustVisit: true, orbitAngularSpeed: 0.3, spinAngularSpeed: -0.3, redGiantVulnerable: true, sunFadeStartRadius: 5.54, sunPlungeDuration: 0.72 },
-      { name: 'Last Light', position: polar(4.4, -150), radius: 0.62, gravity: 7.2, falloff: 5.0, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.08, spinAngularSpeed: 0.1, redGiantVulnerable: false },
-      { name: 'Ember', position: polar(5.6, 200), radius: 0.78, gravity: 9.4, falloff: 6.0, core: 0xff7fa2, glow: 0xffb8c9, landable: true, landingRadius: 1.28, mustVisit: true, orbitAngularSpeed: 0.18, spinAngularSpeed: 0.2, redGiantVulnerable: false },
+      { name: 'Ember Rock', position: polar(2.0, -150), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
+      { name: 'High Buoy', position: polar(4.2, 60), radius: 0.72, gravity: 8.8, falloff: 5.6, core: 0x74bbff, glow: 0x94dbff, landable: true, landingRadius: 1.22, flybyRadius: 1.8, orbitAngularSpeed: 0.42, spinAngularSpeed: -0.3 },
+      { name: 'Low Buoy', position: polar(6.0, 240), radius: 0.8, gravity: 9.6, falloff: 6.1, core: 0xff7fa2, glow: 0xffb8c9, landable: true, landingRadius: 1.3, flybyRadius: 1.8, orbitAngularSpeed: 0.2, spinAngularSpeed: 0.25 },
     ],
   },
   {
@@ -3991,6 +3990,207 @@ const CLOCKWORK_PROTOTYPE_LEVELS = [
       { name: 'Shelter', position: polar(2.0, -150), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
       { name: 'First Bell', position: polar(4.0, 50), radius: 0.72, gravity: 8.8, falloff: 5.6, core: 0x74bbff, glow: 0x94dbff, landable: true, landingRadius: 1.22, mustVisit: true, orbitAngularSpeed: 0.35, spinAngularSpeed: -0.3 },
       { name: 'Second Bell', position: polar(5.9, 210), radius: 0.8, gravity: 9.6, falloff: 6.1, core: 0x8b85ff, glow: 0xc6beff, landable: true, landingRadius: 1.3, mustVisit: true, orbitAngularSpeed: 0.2, spinAngularSpeed: 0.25 },
+    ],
+  },
+  {
+    // Slot 36 — meteor escalation: four strikes on the calendar, two with
+    // bells' names on them. The timeline reads like a weather forecast.
+    id: 'clockwork-meteor-season',
+    name: 'Meteor Season',
+    summary: 'Four stones are falling and two have addresses. Ring the bells before the mail arrives.',
+    timeWindowSeconds: 65,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 25, power: 1.7 },
+      { angleDeg: 70, power: 2.3 },
+    ],
+    startAnchor: polar(2.65, -150),
+    goalCenter: polar(7.5, 216),
+    goalRadius: 0.72,
+    goalPullRadius: 5.4,
+    goalPullStrength: 7.4,
+    goalOpenSeconds: 15,
+    meteorImpacts: [
+      { targetPlanetIndex: 1, impactTimeSeconds: 22, warningSeconds: 6, approachAngleDeg: -50, startDistance: 11, radius: 0.2 },
+      { targetPlanetIndex: 2, impactTimeSeconds: 44, warningSeconds: 6, approachAngleDeg: 130, startDistance: 11, radius: 0.2 },
+      { impactTimeSeconds: 12, warningSeconds: 4.5, start: polar(11.5, -20), target: polar(11.2, 70), destroysPlanet: false, radius: 0.16 },
+      { impactTimeSeconds: 33, warningSeconds: 4.5, start: polar(11.8, 200), target: polar(11.4, 120), destroysPlanet: false, radius: 0.16 },
+    ],
+    planets: [
+      { name: 'Storm Cellar', position: polar(2.0, -150), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
+      { name: 'Morning Bell', position: polar(4.0, 40), radius: 0.72, gravity: 8.8, falloff: 5.6, core: 0x74bbff, glow: 0x94dbff, landable: true, landingRadius: 1.22, flybyRadius: 1.8, mustVisit: true, orbitAngularSpeed: 0.38, spinAngularSpeed: -0.3 },
+      { name: 'Evening Bell', position: polar(5.8, 210), radius: 0.8, gravity: 9.6, falloff: 6.1, core: 0x8b85ff, glow: 0xc6beff, landable: true, landingRadius: 1.3, flybyRadius: 1.8, mustVisit: true, orbitAngularSpeed: 0.2, spinAngularSpeed: 0.25 },
+    ],
+  },
+  {
+    // Hypothesis: the window IS a deadline. The sun swells into a red giant
+    // across the whole clock; the inner wheel gets swallowed around t≈45,
+    // so late scrub positions simply have less level left. The launch rock
+    // is never vulnerable — the deadline eats checkpoints, not the player.
+    id: 'proto-clockwork-swansong',
+    name: 'Swansong',
+    summary: 'The sun is dying on schedule. The inner wheel drowns first — the clock is a countdown, spend it well.',
+    timeWindowSeconds: 60,
+    sun: [0, 0],
+    startPlanetIndex: 1,
+    launchPresets: [
+      { angleDeg: 30, power: 1.7 },
+      { angleDeg: 70, power: 2.3 },
+    ],
+    startAnchor: polar(5.05, -150),
+    goalCenter: polar(6.9, 58),
+    goalRadius: 0.72,
+    goalPullRadius: 5.4,
+    goalPullStrength: 7.4,
+    goalOpenSeconds: 14,
+    redGiant: { startRadius: 0.42, endRadius: 3.7, growSeconds: 55, startTimeSeconds: 0 },
+    planets: [
+      { name: 'Cinder', position: polar(3.3, 60), radius: 0.66, gravity: 8.6, falloff: 5.5, core: 0xf39a66, glow: 0xffcf86, landable: true, landingRadius: 1.18, mustVisit: true, orbitAngularSpeed: 0.3, spinAngularSpeed: -0.3, redGiantVulnerable: true, sunFadeStartRadius: 5.54, sunPlungeDuration: 0.72 },
+      { name: 'Last Light', position: polar(4.4, -150), radius: 0.62, gravity: 7.2, falloff: 5.0, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.08, spinAngularSpeed: 0.1, redGiantVulnerable: false },
+      { name: 'Ember', position: polar(5.6, 200), radius: 0.78, gravity: 9.4, falloff: 6.0, core: 0xff7fa2, glow: 0xffb8c9, landable: true, landingRadius: 1.28, mustVisit: true, orbitAngularSpeed: 0.18, spinAngularSpeed: 0.2, redGiantVulnerable: false },
+    ],
+  },
+  {
+    // Slot 38 — red giant escalation: a hungrier sun on a shorter fuse, and
+    // your launch rock starts BETWEEN the doomed wheels and safety.
+    id: 'clockwork-nova-countdown',
+    name: 'Nova Countdown',
+    summary: 'The sun eats inward to outward and it eats fast. Two wheels drown on schedule — be quicker than dinner.',
+    timeWindowSeconds: 55,
+    sun: [0, 0],
+    startPlanetIndex: 2,
+    launchPresets: [
+      { angleDeg: 30, power: 1.7 },
+      { angleDeg: 70, power: 2.3 },
+    ],
+    startAnchor: polar(5.65, -150),
+    goalCenter: polar(6.6, 15),
+    goalRadius: 0.72,
+    goalPullRadius: 5.4,
+    goalPullStrength: 7.4,
+    goalOpenSeconds: 14,
+    redGiant: { startRadius: 0.42, endRadius: 4.2, growSeconds: 45, startTimeSeconds: 0 },
+    planets: [
+      { name: 'First Course', position: polar(3.2, 40), radius: 0.66, gravity: 8.5, falloff: 5.5, core: 0xf39a66, glow: 0xffcf86, landable: true, landingRadius: 1.16, flybyRadius: 1.8, mustVisit: true, orbitAngularSpeed: 0.32, spinAngularSpeed: -0.3, redGiantVulnerable: true, sunFadeStartRadius: 6.04, sunPlungeDuration: 0.72 },
+      { name: 'Second Course', position: polar(4.0, 200), radius: 0.7, gravity: 8.8, falloff: 5.7, core: 0x8b85ff, glow: 0xc6beff, landable: true, landingRadius: 1.2, flybyRadius: 1.8, mustVisit: true, orbitAngularSpeed: 0.17, spinAngularSpeed: 0.25, redGiantVulnerable: true, sunFadeStartRadius: 6.13, sunPlungeDuration: 0.72 },
+      { name: 'High Ground', position: polar(5.0, -150), radius: 0.62, gravity: 7.4, falloff: 5.1, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1, redGiantVulnerable: false },
+    ],
+  },
+  {
+    // Slot 39 — flickering checkpoints: the wheels phase in and out on their
+    // own countdowns. A graze only counts while the wheel exists.
+    id: 'clockwork-flicker-works',
+    name: 'Flicker Works',
+    summary: 'The wheels here are only sometimes. Time your pass for when they remember to exist.',
+    systemState: 'flicker',
+    timeWindowSeconds: 68,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 30, power: 1.7 },
+      { angleDeg: 70, power: 2.3 },
+    ],
+    startAnchor: polar(2.65, -150),
+    goalCenter: polar(7.5, 260),
+    goalRadius: 0.72,
+    goalPullRadius: 5.4,
+    goalPullStrength: 7.4,
+    goalOpenSeconds: 15,
+    planets: [
+      { name: 'Constant', position: polar(2.0, -150), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
+      { name: 'Sometimes East', position: polar(4.2, 50), radius: 0.72, gravity: 8.8, falloff: 5.6, core: 0x64e6ff, glow: 0xb5f5ff, landable: true, landingRadius: 1.22, flybyRadius: 1.9, mustVisit: true, orbitAngularSpeed: 0.35, spinAngularSpeed: -0.3, flicker: { periodSeconds: 6.4, visibleSeconds: 3.6, phaseSeconds: 0, transitionSeconds: 0.32 } },
+      { name: 'Sometimes West', position: polar(5.9, 230), radius: 0.78, gravity: 9.4, falloff: 6.0, core: 0x64e6ff, glow: 0xb5f5ff, landable: true, landingRadius: 1.28, flybyRadius: 1.9, mustVisit: true, orbitAngularSpeed: 0.2, spinAngularSpeed: 0.25, flicker: { periodSeconds: 6.4, visibleSeconds: 3.6, phaseSeconds: 3.2, transitionSeconds: 0.32 } },
+    ],
+  },
+  {
+    // Slot 40 — compound weather: dust banks slow the lanes while meteors
+    // keep the calendar. Read both before you spend the clock.
+    id: 'clockwork-dark-tide',
+    name: 'Dark Tide',
+    summary: 'The tide muddies the fast lanes and the sky is still falling. Pick your hour twice.',
+    timeWindowSeconds: 70,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 25, power: 1.8 },
+      { angleDeg: 65, power: 2.4 },
+    ],
+    startAnchor: polar(2.65, -150),
+    goalCenter: polar(7.5, 60),
+    goalRadius: 0.72,
+    goalPullRadius: 5.4,
+    goalPullStrength: 7.4,
+    goalOpenSeconds: 15,
+    meteorImpacts: [
+      { targetPlanetIndex: 1, impactTimeSeconds: 38, warningSeconds: 6, approachAngleDeg: -70, startDistance: 11, radius: 0.2 },
+    ],
+    dustClouds: [
+      { position: polar(4.6, 140), radius: 1.2, drag: 0.6, orbitAngularSpeed: 0.18 },
+      { position: polar(6.0, 320), radius: 1.25, drag: 0.6, orbitAngularSpeed: -0.12 },
+    ],
+    planets: [
+      { name: 'Breakwater', position: polar(2.0, -150), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
+      { name: 'Tide Bell', position: polar(4.3, 70), radius: 0.74, gravity: 8.9, falloff: 5.7, core: 0x74bbff, glow: 0x94dbff, landable: true, landingRadius: 1.24, flybyRadius: 1.8, mustVisit: true, orbitAngularSpeed: 0.34, spinAngularSpeed: -0.3 },
+      { name: 'Deep Bell', position: polar(6.3, 250), radius: 0.8, gravity: 9.7, falloff: 6.2, core: 0xff7fa2, glow: 0xffb8c9, landable: true, landingRadius: 1.3, flybyRadius: 1.8, mustVisit: true, orbitAngularSpeed: 0.18, spinAngularSpeed: 0.25 },
+    ],
+  },
+  {
+    // Slot 41 — the lighthouse in a dying system: beams sweep while the sun
+    // swells. Two dead-time sources share one timeline.
+    id: 'clockwork-last-lighthouse',
+    name: 'Last Lighthouse',
+    summary: 'The keeper\'s lamp is failing and the sea is rising. Ring what still shines before it drowns.',
+    visitAll: true,
+    timeWindowSeconds: 60,
+    sun: [0, 0],
+    startPlanetIndex: 1,
+    launchPresets: [
+      { angleDeg: 30, power: 1.7 },
+      { angleDeg: 75, power: 2.3 },
+    ],
+    startAnchor: polar(5.85, -150),
+    goalCenter: polar(7.5, 42),
+    goalRadius: 0.72,
+    goalPullRadius: 5.4,
+    goalPullStrength: 7.4,
+    goalOpenSeconds: 17,
+    redGiant: { startRadius: 0.42, endRadius: 3.9, growSeconds: 50, startTimeSeconds: 0 },
+    planets: [
+      { name: 'Shoal Wheel', position: polar(4.0, 60), radius: 0.68, gravity: 8.6, falloff: 5.5, core: 0xf39a66, glow: 0xffcf86, landable: true, landingRadius: 1.18, flybyRadius: 2.0, orbitAngularSpeed: 0.34, spinAngularSpeed: -0.3, redGiantVulnerable: true, sunFadeStartRadius: 5.78, sunPlungeDuration: 0.72 },
+      { name: 'Last Keeper', position: polar(5.2, -150), radius: 0.62, gravity: 7.4, falloff: 5.1, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1, redGiantVulnerable: false },
+      { name: 'Harbor Wheel', position: polar(6.6, 240), radius: 0.8, gravity: 9.6, falloff: 6.1, core: 0x64e6ff, glow: 0xb5f5ff, landable: true, landingRadius: 1.3, flybyRadius: 2.0, orbitAngularSpeed: 0.16, spinAngularSpeed: 0.25, redGiantVulnerable: false, flicker: { periodSeconds: 7.0, visibleSeconds: 4.2, phaseSeconds: 1.5, transitionSeconds: 0.32 } },
+    ],
+  },
+  {
+    // Slot 42 — Act IV boss: a warden walks the rim, meteors keep the
+    // schedule, and the gongs still have to ring in order.
+    id: 'clockwork-wardens-hour',
+    name: "Warden's Hour",
+    summary: 'His rounds, the falling sky, and two stubborn gongs. Every red band on that bar is his doing.',
+    visitAll: true,
+    timeWindowSeconds: 80,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 35, power: 1.8 },
+      { angleDeg: 80, power: 2.4 },
+    ],
+    startAnchor: polar(2.65, -155),
+    goalCenter: polar(9.0, 200),
+    goalRadius: 0.72,
+    goalPullRadius: 5.4,
+    goalPullStrength: 7.4,
+    goalOpenSeconds: 17,
+    meteorImpacts: [
+      { targetPlanetIndex: 1, impactTimeSeconds: 34, warningSeconds: 6, approachAngleDeg: -55, startDistance: 11, radius: 0.2 },
+      { targetPlanetIndex: 2, impactTimeSeconds: 62, warningSeconds: 6, approachAngleDeg: 140, startDistance: 11, radius: 0.2 },
+    ],
+    planets: [
+      { name: 'Gatehouse Rock', position: polar(2.0, -155), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.11, spinAngularSpeed: 0.12 },
+      { name: 'First Gong', position: polar(3.9, 85), radius: 0.74, gravity: 8.8, falloff: 5.7, core: 0x74bbff, glow: 0x94dbff, landable: true, landingRadius: 1.24, flybyRadius: 1.7, orbitAngularSpeed: 0.42, spinAngularSpeed: -0.35 },
+      { name: 'Second Gong', position: polar(5.4, 130), radius: 0.8, gravity: 9.6, falloff: 6.0, core: 0x8b85ff, glow: 0xc6beff, landable: true, landingRadius: 1.3, flybyRadius: 1.7, orbitAngularSpeed: 0.42, spinAngularSpeed: 0.3 },
+      { name: 'The Night Warden', position: polar(7.3, 20), radius: 1.12, gravity: 12.8, falloff: 7.0, core: 0xff8f74, glow: 0xffcfad, landable: false, orbitAngularSpeed: 0.28, spinAngularSpeed: -0.05 },
     ],
   },
 ];

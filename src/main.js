@@ -5074,7 +5074,8 @@ function collectClockDeadReasons(sampleLevel, ballPosition, sampleTime, anchorPl
       continue;
     }
     const planet = sampleLevel.planets[planetIndex];
-    if (!planet || planet.active === false || planet.collapseState === 'consumed' || planet.destroyedByMeteor) {
+    // Only PERMANENT loss counts — a flickering checkpoint blinks back.
+    if (!planet || planet.collapseState === 'consumed' || planet.destroyedByMeteor) {
       reasons.push('checkpoint');
       break;
     }
