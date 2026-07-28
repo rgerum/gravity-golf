@@ -4412,6 +4412,98 @@ const CLOCKWORK_PROTOTYPE_LEVELS = [
       { name: 'The Doorman', position: polar(7.8, 60), radius: 1.1, gravity: 12.5, falloff: 7.0, core: 0xff8f74, glow: 0xffcfad, landable: false, orbitAngularSpeed: 0.22, spinAngularSpeed: -0.05 },
     ],
   },
+  {
+    // LAB 215 — architecture test: two counter-rotating belt walls with one
+    // gap each. The level is a combination lock; scrub until the doors agree.
+    id: 'clockwork-lock',
+    name: 'The Lock',
+    summary: 'Two walls, two doors, one clock. Turn it until the doors agree.',
+    visitAll: true,
+    timeWindowSeconds: 68,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 30, power: 1.7 },
+      { angleDeg: 70, power: 2.3 },
+    ],
+    startAnchor: polar(2.65, -150),
+    goalCenter: polar(7.5, 90),
+    goalRadius: 0.72,
+    goalPullRadius: 5.4,
+    goalPullStrength: 7.4,
+    goalOpenSeconds: 16,
+    planets: [
+      { name: 'Keyway', position: polar(2.0, -150), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
+      { name: 'Tumbler', position: polar(4.7, 100), radius: 0.76, gravity: 9.0, falloff: 5.8, core: 0xf39a66, glow: 0xffcf86, landable: true, landingRadius: 1.3, flybyRadius: 1.9, orbitAngularSpeed: 0.3, spinAngularSpeed: -0.25 },
+    ],
+    asteroids: [
+      ...makeAsteroidBelt({ orbitRadius: 3.7, count: 40, gapAngles: [40], gapWidthDeg: 52, angularSpeed: 0.22, seed: 1 }),
+      ...makeAsteroidBelt({ orbitRadius: 5.8, count: 46, gapAngles: [220], gapWidthDeg: 52, angularSpeed: -0.14, seed: 2 }),
+    ],
+  },
+  {
+    // LAB 216 — rotating wall-arcs sweeping like clock hands. The space
+    // between their passes is the level.
+    id: 'clockwork-sweeper',
+    name: 'The Sweeper',
+    summary: 'Two long arms sweep the floor. Dance between them.',
+    visitAll: true,
+    timeWindowSeconds: 60,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 25, power: 1.7 },
+      { angleDeg: 65, power: 2.3 },
+    ],
+    startAnchor: polar(2.65, -150),
+    goalCenter: polar(7.5, 287),
+    goalRadius: 0.72,
+    goalPullRadius: 5.4,
+    goalPullStrength: 7.4,
+    goalOpenSeconds: 15,
+    planets: [
+      { name: 'Broom Cupboard', position: polar(2.0, -150), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
+      { name: 'Dust Wheel', position: polar(3.4, 60), radius: 0.7, gravity: 8.6, falloff: 5.5, core: 0x74bbff, glow: 0x94dbff, landable: true, landingRadius: 1.2, flybyRadius: 1.9, orbitAngularSpeed: 0.4, spinAngularSpeed: -0.3 },
+      { name: 'Pan Wheel', position: polar(5.3, 250), radius: 0.78, gravity: 9.3, falloff: 6.0, core: 0x8b85ff, glow: 0xc6beff, landable: true, landingRadius: 1.28, flybyRadius: 1.9, orbitAngularSpeed: 0.22, spinAngularSpeed: 0.25 },
+    ],
+    asteroids: [
+      ...makeAsteroidBelt({ orbitRadius: 4.5, count: 40, gapAngles: [180], gapWidthDeg: 285, angularSpeed: 0.28, seed: 3 }),
+      ...makeAsteroidBelt({ orbitRadius: 6.1, count: 46, gapAngles: [0], gapWidthDeg: 285, angularSpeed: -0.18, seed: 4 }),
+    ],
+  },
+  {
+    // LAB 217 — one slow door in a full wall divides the system into rooms;
+    // the portal pair is the other door. Walls make shortcuts load-bearing.
+    id: 'clockwork-chambers',
+    name: 'Chambers',
+    summary: 'One wall, two rooms, two doors — the slow one is free, the fast one is a gate.',
+    visitAll: true,
+    timeWindowSeconds: 76,
+    sun: [0, 0],
+    startPlanetIndex: 0,
+    launchPresets: [
+      { angleDeg: 30, power: 1.7 },
+      { angleDeg: 70, power: 2.3 },
+    ],
+    startAnchor: polar(2.65, -150),
+    goalCenter: polar(7.5, 122),
+    goalRadius: 0.72,
+    goalPullRadius: 5.4,
+    goalPullStrength: 7.4,
+    goalOpenSeconds: 16,
+    planets: [
+      { name: 'Antechamber', position: polar(2.0, -150), radius: 0.6, gravity: 7.0, falloff: 4.9, core: 0x6da8ff, glow: 0x78c2ff, landable: true, orbitAngularSpeed: 0.1, spinAngularSpeed: 0.1 },
+      { name: 'Inner Sanctum', position: polar(3.3, 30), radius: 0.7, gravity: 8.5, falloff: 5.5, core: 0x74bbff, glow: 0x94dbff, landable: true, landingRadius: 1.2, flybyRadius: 1.9, orbitAngularSpeed: 0.4, spinAngularSpeed: -0.3 },
+      { name: 'Outer Court', position: polar(6.6, 200), radius: 0.8, gravity: 9.6, falloff: 6.1, core: 0xff7fa2, glow: 0xffb8c9, landable: true, landingRadius: 1.3, flybyRadius: 1.9, orbitAngularSpeed: 0.15, spinAngularSpeed: 0.25 },
+    ],
+    asteroids: [
+      ...makeAsteroidBelt({ orbitRadius: 5.0, count: 44, gapAngles: [90], gapWidthDeg: 46, angularSpeed: 0.09, seed: 5 }),
+    ],
+    portals: [
+      { id: 'chambers-white', pairId: 'chambers-black', variant: 'white', position: polar(3.9, -80), radius: 0.68, orbitAngularSpeed: 0.25, orbitEccentricity: 0.04, core: 0xe8f6ff, glow: 0x9fe9ff },
+      { id: 'chambers-black', pairId: 'chambers-white', variant: 'black', position: polar(6.0, 140), radius: 0.68, orbitAngularSpeed: -0.1, orbitEccentricity: 0.04, core: 0x0b0616, glow: 0x7e67ff },
+    ],
+  },
 ];
 for (const clockworkLevel of CLOCKWORK_PROTOTYPE_LEVELS) {
   LEVEL_DEFINITIONS.push(clockworkLevel);
