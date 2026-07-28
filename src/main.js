@@ -175,6 +175,13 @@ app.innerHTML = `
             </div>
           </div>
         </div>
+        <div class="admin-dock" id="adminDock" hidden>
+          <span class="admin-dock-label" id="adminSolutionLabel">–</span>
+          <button id="adminPrevButton" type="button" aria-label="Previous solution">◀</button>
+          <button id="adminShowButton" type="button">Show</button>
+          <button id="adminReplayButton" type="button">Replay</button>
+          <button id="adminNextButton" type="button" aria-label="Next solution">▶</button>
+        </div>
         <div class="clock-dock" id="clockControl" hidden>
           <button id="clockLaunchButton" class="clock-fire-badge" type="button" hidden title="Fire (Space, or tap anywhere)">
             <span class="clock-fire-dot" aria-hidden="true"></span>Armed — tap anywhere to fire
@@ -391,6 +398,8 @@ const clockWindowEnd = document.querySelector('#clockWindowEnd');
 const clockLaunchButton = document.querySelector('#clockLaunchButton');
 const clockDeadBadge = document.querySelector('#clockDeadBadge');
 const deadVignette = document.querySelector('#deadVignette');
+const adminDock = document.querySelector('#adminDock');
+const adminSolutionLabel = document.querySelector('#adminSolutionLabel');
 const tableFrame = document.querySelector('.table-frame');
 const powerFill = document.querySelector('#powerFill');
 const fpsPanel = document.querySelector('#fpsPanel');
@@ -1295,7 +1304,14 @@ const state = {
   goalBursts: [],
   turretShot: null,
   adminMode: (() => {
+    // ?admin=1 enables, ?admin=0 disables (and persists either way) — the
+    // typed cheat is useless on touch devices and its 'r' fights the Retry key.
     try {
+      const urlAdmin = new URL(window.location.href).searchParams.get('admin');
+      if (urlAdmin === '1' || urlAdmin === '0') {
+        window.localStorage.setItem(ADMIN_STORAGE_KEY, urlAdmin);
+        return urlAdmin === '1';
+      }
       return window.localStorage.getItem(ADMIN_STORAGE_KEY) === '1';
     } catch {
       return false;
@@ -7555,6 +7571,14 @@ function syncHud() {
   heatStatusPill.classList.toggle('is-danger', Boolean(getAnchoredLavaPlanet()));
   syncActionButtons();
   syncTimeControl();
+  adminDock.hidden = !state.adminMode;
+  if (state.adminMode) {
+    const solutions = state.level.adminSolutions ?? [];
+    const solution = solutions[state.adminSolutionIndex % Math.max(1, solutions.length)];
+    adminSolutionLabel.textContent = solutions.length > 0
+      ? `${(state.adminSolutionIndex % solutions.length) + 1}/${solutions.length} ${solution?.label ?? ''}`
+      : 'no solutions';
+  }
   syncPerfOverlay();
   syncTutorialOverlay();
   syncGameOverModal();
@@ -8485,6 +8509,10 @@ clockLaunchButton.addEventListener('click', () => {
 clockDeadBadge.addEventListener('click', () => {
   rewindToNearestLiveTime();
 });
+document.querySelector('#adminPrevButton').addEventListener('click', () => previewAdminSolution(-1));
+document.querySelector('#adminNextButton').addEventListener('click', () => previewAdminSolution(1));
+document.querySelector('#adminShowButton').addEventListener('click', () => previewAdminSolution(0));
+document.querySelector('#adminReplayButton').addEventListener('click', () => startAdminReplay());
 // Keyboard scrubbing still goes through the native input (arrow keys).
 clockScrubSlider.addEventListener('input', (event) => {
   scrubClockTo(Number.parseFloat(event.target.value));
@@ -9162,8 +9190,10 @@ function updatePhysics(delta) {
       const currentTime = state.ball.time ?? state.level.time ?? 0;
       // Clockwork levels: anchored time is frozen — only the scrubber (or the
       // ball flying) spends the window, so aiming never silently burns it.
+      // Admin replays fast-forward their scrub waits — a 40s wait is review
+      // friction, not content.
       const timeSpeed = state.adminReplay.active
-        ? 1
+        ? 4
         : getClockworkWindowSeconds() !== null
           ? 0
           : getEffectiveTimeSpeedValue();

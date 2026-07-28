@@ -329,6 +329,47 @@ h1 {
   text-align: right;
 }
 
+.admin-dock {
+  position: absolute;
+  top: 64px;
+  right: 14px;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(26, 10, 30, 0.78);
+  border: 1px solid rgba(255, 122, 234, 0.4);
+  pointer-events: auto;
+}
+
+.admin-dock[hidden] {
+  display: none;
+}
+
+.admin-dock-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.6rem;
+  letter-spacing: 0.06em;
+  color: #ff9de8;
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-dock button {
+  padding: 5px 9px;
+  border: 1px solid rgba(255, 122, 234, 0.45);
+  border-radius: 8px;
+  background: rgba(60, 20, 66, 0.7);
+  color: #ffd7f5;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.62rem;
+  cursor: pointer;
+}
+
 .clock-dock {
   position: absolute;
   left: 50%;
