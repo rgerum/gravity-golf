@@ -1092,6 +1092,69 @@ function syncAimGhostRings(grazeEvents) {
 // The preview level must mirror the live level's graze progress each drag,
 // otherwise preview grazes from earlier drags stick and the simulated goal
 // gate diverges from the real one.
+// When the previewed shot threads a portal, the dotted line jumps across the
+// screen — these markers make the jump explicit: cyan ring where you enter,
+// violet ring where you emerge, dashed link between them.
+function makePortalJumpRing(color) {
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(0.3, 0.4, 32),
+    new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: 0.85,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    }),
+  );
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.12;
+  ring.renderOrder = 8;
+  ring.visible = false;
+  world.add(ring);
+  return ring;
+}
+
+const portalJumpEntryRing = makePortalJumpRing(0x9fe9ff);
+const portalJumpExitRing = makePortalJumpRing(0xb49aff);
+const portalJumpLinkGeometry = new THREE.BufferGeometry();
+portalJumpLinkGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+const portalJumpLink = new THREE.Line(
+  portalJumpLinkGeometry,
+  new THREE.LineDashedMaterial({
+    color: 0x9fe9ff,
+    transparent: true,
+    opacity: 0.5,
+    dashSize: 0.22,
+    gapSize: 0.18,
+    depthWrite: false,
+  }),
+);
+portalJumpLink.position.y = 0.11;
+portalJumpLink.visible = false;
+world.add(portalJumpLink);
+
+function syncPortalJumpMarker(jump) {
+  const visible = Boolean(jump);
+  portalJumpEntryRing.visible = visible;
+  portalJumpExitRing.visible = visible;
+  portalJumpLink.visible = visible;
+  if (!jump) {
+    return;
+  }
+  portalJumpEntryRing.position.set(jump.from.x, 0.12, jump.from.y);
+  portalJumpExitRing.position.set(jump.to.x, 0.12, jump.to.y);
+  const positions = portalJumpLinkGeometry.attributes.position;
+  positions.array[0] = jump.from.x;
+  positions.array[1] = 0;
+  positions.array[2] = jump.from.y;
+  positions.array[3] = jump.to.x;
+  positions.array[4] = 0;
+  positions.array[5] = jump.to.y;
+  positions.needsUpdate = true;
+  portalJumpLink.computeLineDistances();
+}
+
 function resetPreviewVisitState() {
   const requiredIndices = aimPreviewLevel?.requiredVisitIndices ?? [];
   if (requiredIndices.length === 0) {
@@ -1333,6 +1396,7 @@ const state = {
 let planetVisuals = [];
 let extraSunVisuals = [];
 let portalVisuals = [];
+let portalTethers = [];
 let vibeJamPortalVisuals = [];
 let dustCloudVisuals = [];
 let asteroidVisuals = [];
@@ -6245,6 +6309,32 @@ function rebuildExtraSuns() {
 
 function rebuildPortals() {
   clearGroup(portalsRoot);
+  // A faint dashed tether between paired holes: the exit is never a mystery.
+  portalTethers = (state.level.portals ?? [])
+    .filter((portal) => portal.variant === 'white')
+    .map((portal) => {
+      const pair = (state.level.portals ?? []).find((candidate) => candidate.id === portal.pairId);
+      if (!pair) {
+        return null;
+      }
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+      const line = new THREE.Line(
+        geometry,
+        new THREE.LineDashedMaterial({
+          color: 0x9fe9ff,
+          transparent: true,
+          opacity: 0.26,
+          dashSize: 0.3,
+          gapSize: 0.24,
+          depthWrite: false,
+        }),
+      );
+      line.position.y = 0.03;
+      portalsRoot.add(line);
+      return { line, portal, pair };
+    })
+    .filter(Boolean);
   portalVisuals = (state.level.portals ?? []).map((portal) => {
     const group = new THREE.Group();
     const isWhite = portal.variant === 'white';
@@ -7551,6 +7641,7 @@ function updateAimPreview() {
   if (!active) {
     aimPreviewPoints.visible = false;
     syncAimGhostRings([]);
+    syncPortalJumpMarker(null);
     return;
   }
 
@@ -7592,9 +7683,21 @@ function updateAimPreview() {
   const totalSteps = Math.floor(horizonSeconds / step);
   const requiredIndices = aimPreviewLevel.requiredVisitIndices ?? [];
   const grazeEvents = [];
+  let portalJump = null;
   let pointCount = 0;
   for (let stepIndex = 0; stepIndex < totalSteps && pointCount < AIM_PREVIEW_MAX_POINTS; stepIndex += 1) {
+    const beforeX = previewBall.position.x;
+    const beforeY = previewBall.position.y;
     const result = stepBall(aimPreviewLevel, previewBall, step);
+    if (!portalJump) {
+      const jumpDistance = Math.hypot(previewBall.position.x - beforeX, previewBall.position.y - beforeY);
+      if (jumpDistance > 1.4) {
+        portalJump = {
+          from: { x: beforeX, y: beforeY },
+          to: { x: previewBall.position.x, y: previewBall.position.y },
+        };
+      }
+    }
     for (const planetIndex of requiredIndices) {
       const previewPlanet = aimPreviewLevel.planets[planetIndex];
       if (
@@ -7647,6 +7750,7 @@ function updateAimPreview() {
   aimPreviewGeometry.attributes.color.needsUpdate = true;
   aimPreviewPoints.visible = pointCount > 1;
   syncAimGhostRings(grazeEvents);
+  syncPortalJumpMarker(portalJump);
 }
 
 function getGhostTime() {
@@ -9284,6 +9388,17 @@ function updateDecor(time, delta = 0) {
     visual.corona.rotation.z = time * (0.24 + index * 0.08);
     visual.corona.material.opacity = 0.24 + Math.sin(time * 2 + index) * 0.04;
     visual.core.rotation.y = time * (0.18 + index * 0.06);
+  });
+  portalTethers.forEach((tether) => {
+    const positions = tether.line.geometry.attributes.position;
+    positions.array[0] = tether.portal.position.x;
+    positions.array[1] = 0;
+    positions.array[2] = tether.portal.position.y;
+    positions.array[3] = tether.pair.position.x;
+    positions.array[4] = 0;
+    positions.array[5] = tether.pair.position.y;
+    positions.needsUpdate = true;
+    tether.line.computeLineDistances();
   });
   portalVisuals.forEach((visual, index) => {
     visual.group.position.set(visual.portal.position.x, 0, visual.portal.position.y);

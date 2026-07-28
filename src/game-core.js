@@ -4418,6 +4418,10 @@ const CLOCKWORK_PROTOTYPE_LEVELS = [
     id: 'clockwork-lock',
     name: 'The Lock',
     summary: 'Two walls, two doors, one clock. Turn it until the doors agree.',
+    adminSolutions: [
+      { label: 'Doors agree at 42s', robustRate: 0.5, shots: [{ waitSeconds: 42, angleDeg: 339, power: 2.3 }] },
+      { label: 'Doors agree at 40s', robustRate: 0.5, shots: [{ waitSeconds: 40, angleDeg: 21, power: 2.7 }] },
+    ],
     visitAll: true,
     timeWindowSeconds: 68,
     sun: [0, 0],
@@ -4437,8 +4441,8 @@ const CLOCKWORK_PROTOTYPE_LEVELS = [
       { name: 'Tumbler', position: polar(4.7, 100), radius: 0.76, gravity: 9.0, falloff: 5.8, core: 0xf39a66, glow: 0xffcf86, landable: true, landingRadius: 1.3, flybyRadius: 1.9, orbitAngularSpeed: 0.3, spinAngularSpeed: -0.25 },
     ],
     asteroids: [
-      ...makeAsteroidBelt({ orbitRadius: 3.7, count: 40, gapAngles: [40], gapWidthDeg: 52, angularSpeed: 0.22, seed: 1 }),
-      ...makeAsteroidBelt({ orbitRadius: 5.8, count: 46, gapAngles: [220], gapWidthDeg: 52, angularSpeed: -0.14, seed: 2 }),
+      ...makeAsteroidBelt({ orbitRadius: 3.7, count: 40, gapAngles: [40], gapWidthDeg: 64, angularSpeed: 0.18, seed: 1 }),
+      ...makeAsteroidBelt({ orbitRadius: 5.8, count: 46, gapAngles: [220, 40], gapWidthDeg: 64, angularSpeed: -0.12, seed: 2 }),
     ],
   },
   {
@@ -4447,6 +4451,10 @@ const CLOCKWORK_PROTOTYPE_LEVELS = [
     id: 'clockwork-sweeper',
     name: 'The Sweeper',
     summary: 'Two long arms sweep the floor. Dance between them.',
+    adminSolutions: [
+      { label: 'Late waltz 56s', robustRate: 0.5, shots: [{ waitSeconds: 56, angleDeg: 336, power: 2.7 }] },
+      { label: 'Late waltz 57s', robustRate: 0.5, shots: [{ waitSeconds: 57, angleDeg: 348, power: 2.7 }] },
+    ],
     visitAll: true,
     timeWindowSeconds: 60,
     sun: [0, 0],
@@ -4467,8 +4475,8 @@ const CLOCKWORK_PROTOTYPE_LEVELS = [
       { name: 'Pan Wheel', position: polar(5.3, 250), radius: 0.78, gravity: 9.3, falloff: 6.0, core: 0x8b85ff, glow: 0xc6beff, landable: true, landingRadius: 1.28, flybyRadius: 1.9, orbitAngularSpeed: 0.22, spinAngularSpeed: 0.25 },
     ],
     asteroids: [
-      ...makeAsteroidBelt({ orbitRadius: 4.5, count: 40, gapAngles: [180], gapWidthDeg: 285, angularSpeed: 0.28, seed: 3 }),
-      ...makeAsteroidBelt({ orbitRadius: 6.1, count: 46, gapAngles: [0], gapWidthDeg: 285, angularSpeed: -0.18, seed: 4 }),
+      ...makeAsteroidBelt({ orbitRadius: 4.5, count: 40, gapAngles: [180], gapWidthDeg: 300, angularSpeed: 0.22, seed: 3 }),
+      ...makeAsteroidBelt({ orbitRadius: 6.1, count: 46, gapAngles: [0], gapWidthDeg: 300, angularSpeed: -0.15, seed: 4 }),
     ],
   },
   {
@@ -4477,6 +4485,10 @@ const CLOCKWORK_PROTOTYPE_LEVELS = [
     id: 'clockwork-chambers',
     name: 'Chambers',
     summary: 'One wall, two rooms, two doors — the slow one is free, the fast one is a gate.',
+    adminSolutions: [
+      { label: 'Both rooms at 69s', robustRate: 0.5, shots: [{ waitSeconds: 69, angleDeg: 60, power: 2.7 }] },
+      { label: 'Both rooms at 68s', robustRate: 0.5, shots: [{ waitSeconds: 68, angleDeg: 30, power: 2.3 }] },
+    ],
     visitAll: true,
     timeWindowSeconds: 76,
     sun: [0, 0],
