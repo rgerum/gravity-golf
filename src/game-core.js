@@ -3535,7 +3535,7 @@ const CLOCKWORK_PROTOTYPE_LEVELS = [
     name: 'Return Ticket',
     summary: 'One bell on each shore, one gate between them. Buy the round trip.',
     visitAll: true,
-    timeWindowSeconds: 75,
+    timeWindowSeconds: 88,
     sun: [0, 0],
     startPlanetIndex: 0,
     launchPresets: [
@@ -3543,7 +3543,7 @@ const CLOCKWORK_PROTOTYPE_LEVELS = [
       { angleDeg: 70, power: 2.3 },
     ],
     startAnchor: polar(2.65, -150),
-    goalCenter: polar(7.6, 100),
+    goalCenter: polar(7.5, 227),
     goalRadius: 0.72,
     goalPullRadius: 5.4,
     goalPullStrength: 7.4,
@@ -5910,6 +5910,7 @@ function cloneBallRuntimeState(ball) {
     anchorNormal: ball.anchorNormal ? cloneVec(ball.anchorNormal) : null,
     anchorSinceTime: ball.anchorSinceTime ?? 0,
     portalCooldown: ball.portalCooldown ?? 0,
+    portalBlockId: ball.portalBlockId ?? null,
     heat: ball.heat ?? 0,
   };
 }
@@ -6174,6 +6175,7 @@ export function createBallState(level) {
     anchorNormal,
     anchorSinceTime: level.time ?? 0,
     portalCooldown: 0,
+    portalBlockId: null,
     heat: 0,
   };
 }
@@ -6221,6 +6223,7 @@ function landBallOnPlanet(ball, planet, planetIndex) {
   ball.anchorNormal = landingDirection;
   ball.anchorSinceTime = ball.time ?? 0;
   ball.portalCooldown = 0;
+  ball.portalBlockId = null;
 }
 
 function findContainingLandingPlanetIndex(level, position) {
@@ -6415,11 +6418,25 @@ function resolveSunContact(level, ball, previousPosition = null) {
 }
 
 function resolvePortalContact(level, ball) {
+  // The teleport drops the ball INSIDE the exit portal's contact zone, so a
+  // blocked id keeps that portal inert until the ball has fully left it once
+  // — otherwise a slow exit ping-pongs straight back after the cooldown.
+  if (ball.portalBlockId) {
+    const blockedPortal = (level.portals ?? []).find((candidate) => candidate.id === ball.portalBlockId);
+    if (!blockedPortal) {
+      ball.portalBlockId = null;
+    } else if (distanceBetween(ball.position, blockedPortal.position) > blockedPortal.radius + COURSE.ballRadius * 1.25) {
+      ball.portalBlockId = null;
+    }
+  }
   if ((ball.portalCooldown ?? 0) > 0) {
     return null;
   }
 
   for (const portal of level.portals ?? []) {
+    if (portal.id === ball.portalBlockId) {
+      continue;
+    }
     if (distanceBetween(ball.position, portal.position) > portal.radius + COURSE.ballRadius * 0.78) {
       continue;
     }
@@ -6443,6 +6460,7 @@ function resolvePortalContact(level, ball) {
     ball.position.x = exitPortal.position.x + exitOffset.x;
     ball.position.y = exitPortal.position.y + exitOffset.y;
     ball.portalCooldown = Math.max(portal.cooldownSeconds ?? PORTAL_COOLDOWN_SECONDS, exitPortal.cooldownSeconds ?? PORTAL_COOLDOWN_SECONDS);
+    ball.portalBlockId = exitPortal.id;
     return {
       time: ball.time ?? level.time ?? 0,
       fromPortalId: portal.id,

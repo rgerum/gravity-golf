@@ -2544,6 +2544,29 @@ function startAdminReplay() {
   state.adminReplay.active = true;
   state.adminReplay.solutionIndex = selected.solutionIndex;
   state.adminReplay.shotIndex = 0;
+  // Clockwork solutions are timed from the level start: rewind the clock and
+  // clear graze progress so the replay runs the level exactly as authored —
+  // otherwise pressing Replay after scrubbing fires at the wrong moment.
+  if (getClockworkWindowSeconds() !== null) {
+    const replayStartTime = state.level.startTimeSeconds ?? 0;
+    setLevelTime(state.level, replayStartTime);
+    state.ball.time = replayStartTime;
+    state.ball.anchorSinceTime = replayStartTime;
+    for (const planetIndex of state.level.requiredVisitIndices ?? []) {
+      const planet = state.level.planets[planetIndex];
+      if (planet) {
+        planet.visited = false;
+        planet.visitedTime = null;
+      }
+    }
+    if (state.level.goalUnlockRequired) {
+      state.level.goalUnlocked = false;
+      state.level.goalUnlockTime = null;
+    }
+    syncBallToAnchor(state.level, state.ball);
+    rebuildGravityField();
+    lastGravityFieldRefreshTime = replayStartTime;
+  }
   state.adminReplay.nextLaunchTime = (state.level.time ?? 0) + selected.solution.shots[0].waitSeconds;
   state.message = 'Admin replay armed.';
   state.hint = getAdminSolutionSummary(selected.solution, selected.solutionIndex, selected.total);
